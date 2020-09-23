@@ -14,6 +14,7 @@ const Context = struct {
     protocol: Protocol,
     interface: *Interface,
     message: *Message,
+    enumeration: *Enum,
 
     character_data: std.ArrayList(u8) = std.ArrayList(u8).init(gpa),
 
@@ -43,17 +44,20 @@ const Message = struct {
 };
 
 const Arg = struct {
-    name: []const u8,
-    kind: enum {
-        new_id,
+    const Type = union(enum) {
         int,
         uint,
         fixed,
         string,
-        object,
+        new_id: []const u8,
+        object: []const u8,
         array,
         fd,
-    },
+    };
+    name: []const u8,
+    kind: Type,
+    allow_null: bool,
+    enum_name: ?[]const u8,
 };
 
 const Enum = struct {
@@ -77,7 +81,12 @@ pub fn main() !void {
     const parser = c.XML_ParserCreate(null) orelse return error.ParserCreateFailed;
     defer c.XML_ParserFree(parser);
 
-    var ctx = Context{};
+    var ctx = Context{
+        .protocol = undefined,
+        .interface = undefined,
+        .message = undefined,
+        .enumeration = undefined,
+    };
     defer ctx.deinit();
 
     c.XML_SetUserData(parser, &ctx);
@@ -97,13 +106,13 @@ pub fn main() !void {
 fn start(user_data: ?*c_void, name: ?[*:0]const u8, atts: ?[*:null]?[*:0]const u8) callconv(.C) void {
     const ctx = @intToPtr(*Context, @ptrToInt(user_data));
     handleStart(ctx, mem.span(name.?), atts.?) catch |err| {
-        std.debug.print("error reading xml: {}", .{err});
+        std.debug.warn("error reading xml: {}", .{err});
         std.os.exit(1);
     };
 }
 
 fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8) !void {
-    const atts = struct {
+    var atts = struct {
         name: ?[]const u8 = null,
         interface: ?[]const u8 = null,
         version: ?u32 = null,
@@ -111,18 +120,24 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
         @"type": ?[]const u8 = null,
         value: ?[]const u8 = null,
         summary: ?[]const u8 = null,
-        @"allow-null": ?[]const u8 = null,
+        allow_null: ?bool = null,
         @"enum": ?[]const u8 = null,
-        bitfield: ?[]const u8 = null,
+        bitfield: ?bool = null,
     }{};
 
     var i: usize = 0;
     while (raw_atts[i]) |att| : (i += 2) {
-        inline for (@typeInfo(@Type(atts)).Struct.fields) |field| {
+        inline for (@typeInfo(@TypeOf(atts)).Struct.fields) |field| {
             if (mem.eql(u8, field.name, mem.span(att))) {
-                const val = mem.span(raw_atts[i + 1]);
+                const val = mem.span(raw_atts[i + 1].?);
                 if (field.field_type == ?u32) {
                     @field(atts, field.name) = try std.fmt.parseInt(u32, val, 10);
+                } else if (field.field_type == ?bool) {
+                    // TODO: error if != true and != false
+                    if (mem.eql(u8, val, "true"))
+                        @field(atts, field.name) = true
+                    else if (mem.eql(u8, val, "false"))
+                        @field(atts, field.name) = false;
                 } else {
                     @field(atts, field.name) = val;
                 }
@@ -130,28 +145,53 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
         }
     }
 
-    if (mem.eql(name, "protocol")) {
-        ctx.protocol = Protocol{ .name = try mem.dupe(atts.name.?) };
-    } else if (mem.eql(name, "interface")) {
+    if (mem.eql(u8, name, "protocol")) {
+        ctx.protocol = Protocol{ .name = try mem.dupe(gpa, u8, atts.name.?) };
+    } else if (mem.eql(u8, name, "interface")) {
         ctx.interface = try ctx.protocol.interfaces.addOne();
         ctx.interface.* = .{
-            .name = try mem.dupe(atts.name.?),
+            .name = try mem.dupe(gpa, u8, atts.name.?),
             .version = atts.version.?,
         };
-    } else if (mem.eql(name, "event") or mem.eql(name, "request")) {
-        const list = if (mem.eql(name, "event")) &ctx.interface.events else &ctx.interface.requests;
+    } else if (mem.eql(u8, name, "event") or mem.eql(u8, name, "request")) {
+        const list = if (mem.eql(u8, name, "event")) &ctx.interface.events else &ctx.interface.requests;
         ctx.message = try list.addOne();
         ctx.message.* = .{
-            .name = try mem.dupe(atts.name.?),
+            .name = try mem.dupe(gpa, u8, atts.name.?),
             .destructor = if (atts.@"type") |t| mem.eql(u8, t, "destructor") else false,
             .since = atts.since orelse 1,
         };
-    } else if (mem.eql(name, "arg")) {
-        // TODO
-    } else if (mem.eql(name, "enum")) {
-        // TODO
-    } else if (mem.eql(name, "entry")) {
-        // TODO
+    } else if (mem.eql(u8, name, "arg")) {
+        const kind = std.meta.stringToEnum(@TagType(Arg.Type), mem.span(atts.@"type".?)) orelse
+            return error.InvalidType;
+        try ctx.message.args.append(.{
+            .name = try mem.dupe(gpa, u8, atts.name.?),
+            .kind = switch (kind) {
+                .object => .{ .object = try mem.dupe(gpa, u8, atts.name.?) },
+                .new_id => .{ .new_id = try mem.dupe(gpa, u8, atts.name.?) },
+                .int => .int,
+                .uint => .uint,
+                .fixed => .fixed,
+                .string => .string,
+                .array => .array,
+                .fd => .fd,
+            },
+            // TODO: enforce != false -> error, require if object/string/array
+            .allow_null = if (atts.allow_null) |a_n| a_n else false,
+            .enum_name = if (atts.@"enum") |e| try mem.dupe(gpa, u8, e) else null,
+        });
+    } else if (mem.eql(u8, name, "enum")) {
+        try ctx.interface.enums.append(.{
+            .name = try mem.dupe(gpa, u8, atts.name.?),
+            .since = atts.since orelse 1,
+            .bitfield = if (atts.bitfield) |b| b else false,
+        });
+    } else if (mem.eql(u8, name, "entry")) {
+        try ctx.enumeration.entries.append(.{
+            .name = try mem.dupe(gpa, u8, atts.name.?),
+            .since = atts.since orelse 1,
+            .value = try mem.dupe(gpa, u8, atts.value.?),
+        });
     }
 }
 
