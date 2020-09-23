@@ -204,3 +204,33 @@ fn characterData(user_data: ?*c_void, s: ?[*]const u8, len: i32) callconv(.C) vo
     const ctx = @intToPtr(*Context, @ptrToInt(user_data));
     ctx.character_data.appendSlice(s.?[0..@intCast(usize, len)]) catch std.os.exit(1);
 }
+
+test "parsing" {
+    const testing = std.testing;
+
+    const parser = c.XML_ParserCreate(null) orelse return error.ParserCreateFailed;
+    defer c.XML_ParserFree(parser);
+
+    var ctx = Context{
+        .protocol = undefined,
+        .interface = undefined,
+        .message = undefined,
+        .enumeration = undefined,
+    };
+    defer ctx.deinit();
+
+    c.XML_SetUserData(parser, &ctx);
+    c.XML_SetElementHandler(parser, start, end);
+    c.XML_SetCharacterDataHandler(parser, characterData);
+
+    const sample =
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<protocol name="sample">
+        \\</protocol>
+    ;
+
+    if (c.XML_Parse(parser, sample, sample.len, 1) == .XML_STATUS_ERROR)
+        return error.ParserError;
+
+    testing.expectEqualSlices(u8, ctx.protocol.name, "sample");
+}
