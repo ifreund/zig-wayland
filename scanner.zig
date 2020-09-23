@@ -49,8 +49,8 @@ const Arg = struct {
         uint,
         fixed,
         string,
-        new_id: []const u8,
-        object: []const u8,
+        new_id: ?[]const u8,
+        object: ?[]const u8,
         array,
         fd,
     };
@@ -167,8 +167,8 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
         try ctx.message.args.append(.{
             .name = try mem.dupe(gpa, u8, atts.name.?),
             .kind = switch (kind) {
-                .object => .{ .object = try mem.dupe(gpa, u8, atts.name.?) },
-                .new_id => .{ .new_id = try mem.dupe(gpa, u8, atts.name.?) },
+                .object => .{ .object = if (atts.interface) |f| try mem.dupe(gpa, u8, f) else null },
+                .new_id => .{ .new_id = if (atts.interface) |f| try mem.dupe(gpa, u8, f) else null },
                 .int => .int,
                 .uint => .uint,
                 .fixed => .fixed,
@@ -181,11 +181,12 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
             .enum_name = if (atts.@"enum") |e| try mem.dupe(gpa, u8, e) else null,
         });
     } else if (mem.eql(u8, name, "enum")) {
-        try ctx.interface.enums.append(.{
+        ctx.enumeration = try ctx.interface.enums.addOne();
+        ctx.enumeration.* = .{
             .name = try mem.dupe(gpa, u8, atts.name.?),
             .since = atts.since orelse 1,
             .bitfield = if (atts.bitfield) |b| b else false,
-        });
+        };
     } else if (mem.eql(u8, name, "entry")) {
         try ctx.enumeration.entries.append(.{
             .name = try mem.dupe(gpa, u8, atts.name.?),
@@ -223,14 +224,95 @@ test "parsing" {
     c.XML_SetElementHandler(parser, start, end);
     c.XML_SetCharacterDataHandler(parser, characterData);
 
-    const sample =
-        \\<?xml version="1.0" encoding="UTF-8"?>
-        \\<protocol name="sample">
-        \\</protocol>
-    ;
-
+    const sample = @embedFile("protocol/wayland.xml");
     if (c.XML_Parse(parser, sample, sample.len, 1) == .XML_STATUS_ERROR)
         return error.ParserError;
 
-    testing.expectEqualSlices(u8, ctx.protocol.name, "sample");
+    testing.expectEqualSlices(u8, "wayland", ctx.protocol.name);
+    testing.expectEqual(@as(usize, 22), ctx.protocol.interfaces.items.len);
+
+    {
+        const wl_display = ctx.protocol.interfaces.items[0];
+        testing.expectEqualSlices(u8, "wl_display", wl_display.name);
+        testing.expectEqual(@as(u32, 1), wl_display.version);
+        testing.expectEqual(@as(usize, 2), wl_display.requests.items.len);
+        testing.expectEqual(@as(usize, 2), wl_display.events.items.len);
+        testing.expectEqual(@as(usize, 1), wl_display.enums.items.len);
+
+        {
+            const sync = wl_display.requests.items[0];
+            testing.expectEqualSlices(u8, "sync", sync.name);
+            testing.expectEqual(@as(u32, 1), sync.since);
+            testing.expectEqual(@as(usize, 1), sync.args.items.len);
+            {
+                const callback = sync.args.items[0];
+                testing.expectEqualSlices(u8, "callback", callback.name);
+                testing.expect(callback.kind == .new_id);
+                testing.expectEqualSlices(u8, "wl_callback", callback.kind.new_id.?);
+                testing.expectEqual(false, callback.allow_null);
+                testing.expectEqual(@as(?[]const u8, null), callback.enum_name);
+            }
+            testing.expectEqual(false, sync.destructor);
+        }
+
+        {
+            const error_event = wl_display.events.items[0];
+            testing.expectEqualSlices(u8, "error", error_event.name);
+            testing.expectEqual(@as(u32, 1), error_event.since);
+            testing.expectEqual(@as(usize, 3), error_event.args.items.len);
+            {
+                const object_id = error_event.args.items[0];
+                testing.expectEqualSlices(u8, "object_id", object_id.name);
+                testing.expectEqual(Arg.Type{ .object = null }, object_id.kind);
+                testing.expectEqual(false, object_id.allow_null);
+                testing.expectEqual(@as(?[]const u8, null), object_id.enum_name);
+            }
+            {
+                const code = error_event.args.items[1];
+                testing.expectEqualSlices(u8, "code", code.name);
+                testing.expectEqual(Arg.Type.uint, code.kind);
+                testing.expectEqual(false, code.allow_null);
+                testing.expectEqual(@as(?[]const u8, null), code.enum_name);
+            }
+            {
+                const message = error_event.args.items[2];
+                testing.expectEqualSlices(u8, "message", message.name);
+                testing.expectEqual(Arg.Type.string, message.kind);
+                testing.expectEqual(false, message.allow_null);
+                testing.expectEqual(@as(?[]const u8, null), message.enum_name);
+            }
+        }
+
+        {
+            const error_enum = wl_display.enums.items[0];
+            testing.expectEqualSlices(u8, "error", error_enum.name);
+            testing.expectEqual(@as(u32, 1), error_enum.since);
+            testing.expectEqual(@as(usize, 4), error_enum.entries.items.len);
+            {
+                const invalid_object = error_enum.entries.items[0];
+                testing.expectEqualSlices(u8, "invalid_object", invalid_object.name);
+                testing.expectEqual(@as(u32, 1), invalid_object.since);
+                testing.expectEqualSlices(u8, "0", invalid_object.value);
+            }
+            {
+                const invalid_method = error_enum.entries.items[1];
+                testing.expectEqualSlices(u8, "invalid_method", invalid_method.name);
+                testing.expectEqual(@as(u32, 1), invalid_method.since);
+                testing.expectEqualSlices(u8, "1", invalid_method.value);
+            }
+            {
+                const no_memory = error_enum.entries.items[2];
+                testing.expectEqualSlices(u8, "no_memory", no_memory.name);
+                testing.expectEqual(@as(u32, 1), no_memory.since);
+                testing.expectEqualSlices(u8, "2", no_memory.value);
+            }
+            {
+                const implementation = error_enum.entries.items[3];
+                testing.expectEqualSlices(u8, "implementation", implementation.name);
+                testing.expectEqual(@as(u32, 1), implementation.since);
+                testing.expectEqualSlices(u8, "3", implementation.value);
+            }
+            testing.expectEqual(false, error_enum.bitfield);
+        }
+    }
 }
