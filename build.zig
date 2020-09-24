@@ -4,6 +4,12 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
+    const examples = b.option(
+        bool,
+        "examples",
+        "Set to true to build examples",
+    ) orelse false;
+
     {
         const scanner = b.addExecutable("scanner", "scanner.zig");
         scanner.setTarget(target);
@@ -25,5 +31,18 @@ pub fn build(b: *Builder) void {
 
         const test_step = b.step("test", "Run the tests");
         test_step.dependOn(&scanner_test.step);
+    }
+
+    if (examples) {
+        const globals = b.addExecutable("globals", "example/globals.zig");
+        globals.setTarget(target);
+        globals.setBuildMode(mode);
+
+        globals.linkLibC();
+        globals.linkSystemLibrary("wayland-client");
+
+        globals.addPackagePath("wayland-client", "client.zig");
+
+        globals.install();
     }
 }
