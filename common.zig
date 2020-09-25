@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Object = @OpaqueType();
+pub const Object = opaque{};
 
 pub const Message = extern struct {
     name: [*:0]const u8,

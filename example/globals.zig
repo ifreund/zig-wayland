@@ -12,11 +12,11 @@ pub fn main() !void {
     _ = try display.roundtrip();
 }
 
-fn global(data: *u32, registry: *wl.Registry.Impl, name: u32, interface: [*:0]const u8, version: u32) callconv(.C) void {
+fn global(data: *u32, registry: *wl.Registry, name: u32, interface: [*:0]const u8, version: u32) callconv(.C) void {
     std.debug.warn("foo is {}\n", .{data.*});
     std.debug.warn("interface is {}\n", .{interface});
 }
 
-fn global_remove(data: *u32, registry: *wl.Registry.Impl, name: u32) callconv(.C) void {
+fn global_remove(data: *u32, registry: *wl.Registry, name: u32) callconv(.C) void {
     // do nothing
 }

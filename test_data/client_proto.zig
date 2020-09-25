@@ -1,11 +1,8 @@
 const common = @import("../common.zig");
 const client = @import("../client.zig");
 
-pub const Display = struct {
+pub const Display = opaque {
     pub usingnamespace client.display_functions;
-
-    pub const Impl = @OpaqueType();
-    impl: *Impl,
 
     pub const interface = common.Interface{
         .name = "wl_display",
@@ -61,52 +58,38 @@ pub const Display = struct {
         return extern struct {
             @"error": fn (
                 data: T,
-                display: *Impl,
+                display: *Display,
                 object_id: ?*common.Object,
                 code: u32,
                 message: [*:0]const u8,
             ) callconv(.C) void,
             delete_id: fn (
                 data: T,
-                display: *Impl,
+                display: *Display,
                 id: u32,
             ) callconv(.C) void,
         };
     }
 
-    pub fn toProxy(display: Display) client.Proxy {
-        return .{ .impl = @ptrCast(*client.Proxy.Impl, display.impl) };
+    pub fn addListener(display: *Display, comptime T: type, listener: Listener(T), data: T) !void {
+        const proxy = @ptrCast(*client.Proxy, display);
+        try proxy.addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
     }
 
-    pub fn addListener(display: Display, comptime T: type, listener: Listener(T), data: T) !void {
-        try display.toProxy().addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
-    }
-
-    pub fn sync(display: Display) !Callback {
+    pub fn sync(display: *Display) !*Callback {
+        const proxy = @ptrCast(*client.Proxy, display);
         var args = [_]common.Argument{.{ .o = null }};
-        return Callback{
-            .impl = @ptrCast(
-                *Callback.Impl,
-                try display.toProxy().marshalConstructor(opcodes.sync, &args, &Callback.interface),
-            ),
-        };
+        return @ptrCast(*Callback, try proxy.marshalConstructor(opcodes.sync, &args, &Callback.interface));
     }
 
-    pub fn getRegistry(display: Display) !Registry {
+    pub fn getRegistry(display: *Display) !*Registry {
+        const proxy = @ptrCast(*client.Proxy, display);
         var args = [_]common.Argument{.{ .o = null }};
-        return Registry{
-            .impl = @ptrCast(
-                *Registry.Impl,
-                (try display.toProxy().marshalConstructor(opcodes.get_registry, &args, &Registry.interface)).impl,
-            ),
-        };
+        return @ptrCast(*Registry, try proxy.marshalConstructor(opcodes.get_registry, &args, &Registry.interface));
     }
 };
 
-pub const Registry = struct {
-    pub const Impl = @OpaqueType();
-    impl: *Impl,
-
+pub const Registry = opaque {
     pub const interface = common.Interface{
         .name = "wl_registry",
         .version = 1,
@@ -142,47 +125,37 @@ pub const Registry = struct {
         return extern struct {
             global: fn (
                 data: T,
-                registry: *Impl,
+                registry: *Registry,
                 name: u32,
                 interface: [*:0]const u8,
                 version: u32,
             ) callconv(.C) void,
             global_remove: fn (
                 data: T,
-                registry: *Impl,
+                registry: *Registry,
                 name: u32,
             ) callconv(.C) void,
         };
     }
 
-    pub fn toProxy(registry: Registry) client.Proxy {
-        return .{ .impl = @ptrCast(*client.Proxy.Impl, registry.impl) };
+    pub fn addListener(registry: *Registry, comptime T: type, listener: Listener(T), data: T) !void {
+        const proxy = @ptrCast(*client.Proxy, registry);
+        try proxy.addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
     }
 
-    pub fn addListener(registry: Registry, comptime T: type, listener: Listener(T), data: T) !void {
-        try registry.toProxy().addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
-    }
-
-    pub fn bind(registry: Registry, name: u32, comptime T: type, version: u32) !T {
+    pub fn bind(registry: *Registry, name: u32, comptime T: type, version: u32) !*T {
+        const proxy = @ptrCast(*client.Proxy, registry);
         var args = [_]common.Argument{
             .{ .u = name },
             .{ .s = T.interface.name },
             .{ .u = version },
             .{ .o = null },
         };
-        return T{
-            .impl = @ptrCast(
-                *T.Impl,
-                (try registry.toProxy().marshalConstructorVersioned(opcodes.bind, &args, T.interface, version)).impl,
-            ),
-        };
+        return @ptrCast(*T, proxy.marshalConstructorVersioned(opcodes.bind, &args, T.interface, version));
     }
 };
 
-pub const Callback = struct {
-    pub const Impl = @OpaqueType();
-    impl: *Impl,
-
+pub const Callback = opaque {
     pub const interface = common.Interface{
         .name = "wl_callback",
         .version = 1,
@@ -204,17 +177,14 @@ pub const Callback = struct {
         return extern struct {
             done: fn (
                 data: T,
-                callback: *Impl,
+                callback: *Callback,
                 callback_data: u32,
             ) callconv(.C) void,
         };
     }
 
-    pub fn toProxy(registry: Registry) client.Proxy {
-        return .{ .impl = @ptrCast(*client.Proxy.Impl, registry.impl) };
-    }
-
-    pub fn addListener(registry: Registry, comptime T: type, listener: Listener(T), data: T) !void {
-        try registry.toProxy().addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
+    pub fn addListener(callback: *Callback, comptime T: type, listener: Listener(T), data: T) !void {
+        const proxy = @ptrCast(*client.Proxy, callback);
+        try proxy.addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
     }
 };
