@@ -59,6 +59,31 @@ pub const Proxy = opaque {
         if (wl_proxy_add_listener(proxy, implementation, data) == -1) return error.AlreadyHasListener;
     }
 
+    const DispatcherFn = fn (
+        implementation: ?*const c_void,
+        proxy: *Proxy,
+        opcode: u32,
+        message: *const common.Message,
+        args: [*]common.Argument,
+    ) callconv(.C) i32;
+    extern fn wl_proxy_add_dispatcher(
+        proxy: *Proxy,
+        dispatcher: DispatcherFn,
+        implementation: ?*const c_void,
+        data: ?*c_void,
+    ) i32;
+    pub fn addDispatcher(
+        proxy: *Proxy,
+        dispatcher: DispatcherFn,
+        implementation: ?*const c_void,
+        data: ?*c_void,
+    ) !void {
+        if (wl_proxy_add_dispatcher(proxy, dispatcher, implementation, data) == -1)
+            return error.AlreadyHasListener;
+    }
+
+    // TODO: consider removing this to make setListener() on protocol objects
+    // actually type safe for data
     extern fn wl_proxy_set_user_data(proxy: *Proxy, user_data: ?*c_void) void;
     pub fn setUserData(proxy: *Proxy, user_data: ?*c_void) void {
         wl_proxy_set_user_data(proxy, user_data);

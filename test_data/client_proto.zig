@@ -54,26 +54,25 @@ pub const Display = opaque {
         implementation = 3,
     };
 
-    pub fn Listener(comptime T: type) type {
-        return extern struct {
-            @"error": fn (
-                data: T,
-                display: *Display,
-                object_id: ?*common.Object,
-                code: u32,
-                message: [*:0]const u8,
-            ) callconv(.C) void,
-            delete_id: fn (
-                data: T,
-                display: *Display,
-                id: u32,
-            ) callconv(.C) void,
-        };
-    }
+    pub const Event = struct {
+        @"error": struct {
+            object_id: ?*common.Object,
+            code: u32,
+            message: [*:0]const u8,
+        },
+        delete_id: struct {
+            id: u32,
+        },
+    };
 
-    pub fn addListener(display: *Display, comptime T: type, listener: Listener(T), data: T) !void {
-        const proxy = @ptrCast(*client.Proxy, display);
-        try proxy.addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
+    pub fn setListener(
+        display: *Display,
+        comptime T: type,
+        listener: fn (display: *Display, event: Event, data: T) void,
+        data: T,
+    ) !void {
+        const proxy = @ptrCast(*client.Proxy, callback);
+        try proxy.addDispatcher(Dispatcher(Display, T).dispatcher, listener, data);
     }
 
     pub fn sync(display: *Display) !*Callback {
@@ -121,26 +120,25 @@ pub const Registry = opaque {
         pub const bind = 1;
     };
 
-    pub fn Listener(comptime T: type) type {
-        return extern struct {
-            global: fn (
-                data: T,
-                registry: *Registry,
-                name: u32,
-                interface: [*:0]const u8,
-                version: u32,
-            ) callconv(.C) void,
-            global_remove: fn (
-                data: T,
-                registry: *Registry,
-                name: u32,
-            ) callconv(.C) void,
-        };
-    }
+    pub const Event = union(enum) {
+        global: struct {
+            name: u32,
+            interface: [*:0]const u8,
+            version: u32,
+        },
+        global_remove: struct {
+            name: u32,
+        },
+    };
 
-    pub fn addListener(registry: *Registry, comptime T: type, listener: Listener(T), data: T) !void {
+    pub fn setListener(
+        registry: *Registry,
+        comptime T: type,
+        listener: fn (registry: *Registry, event: Event, data: T) void,
+        data: T,
+    ) !void {
         const proxy = @ptrCast(*client.Proxy, registry);
-        try proxy.addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
+        try proxy.addDispatcher(Dispatcher(Registry, T).dispatcher, listener, data);
     }
 
     pub fn bind(registry: *Registry, name: u32, comptime T: type, version: u32) !*T {
@@ -173,18 +171,56 @@ pub const Callback = opaque {
         pub const done = 1;
     };
 
-    pub fn Listener(comptime T: type) type {
-        return extern struct {
-            done: fn (
-                data: T,
-                callback: *Callback,
-                callback_data: u32,
-            ) callconv(.C) void,
-        };
-    }
+    pub const Event = union(enum) {
+        done: struct {
+            callback_data: u32,
+        },
+    };
 
-    pub fn addListener(callback: *Callback, comptime T: type, listener: Listener(T), data: T) !void {
+    pub fn setListener(
+        callback: *Callback,
+        comptime T: type,
+        listener: fn (callback: *Callback, event: Event, data: T) void,
+        data: T,
+    ) !void {
         const proxy = @ptrCast(*client.Proxy, callback);
-        try proxy.addListener(@intToPtr([*]fn () callconv(.C) void, @ptrToInt(&listener)), data);
+        try proxy.addDispatcher(Dispatcher(Callback, T).dispatcher, listener, data);
     }
 };
+
+fn Dispatcher(comptime Object: type, comptime Data: type) type {
+    return struct {
+        fn dispatcher(
+            implementation: ?*const c_void,
+            proxy: *client.Proxy,
+            opcode: u32,
+            message: *const common.Message,
+            args: [*]common.Argument,
+        ) callconv(.C) i32 {
+            inline for (@typeInfo(Object.Event).Union.fields) |event_field, event_num| {
+                if (event_num == opcode) {
+                    var event_data: event_field.field_type = undefined;
+
+                    var sig: usize = 0;
+                    inline for (@typeInfo(event_field.field_type).Struct.fields) |f, i| {
+                        @field(event_data, f.name) = switch (@sizeOf(f.field_type)) {
+                            4 => @bitCast(f.field_type, args[i].u),
+                            8 => @ptrCast(f.field_type, args[i].s),
+                            else => unreachable,
+                        };
+                    }
+
+                    const listener = @ptrCast(fn (object: *Object, event: Object.Event, data: Data) void, implementation);
+                    listener(
+                        @ptrCast(*Object, proxy),
+                        @unionInit(Object.Event, event_field.name, event_data),
+                        @intToPtr(Data, @ptrToInt(proxy.getUserData())),
+                    );
+
+                    return 0;
+                }
+            }
+            unreachable;
+        }
+    };
+}
