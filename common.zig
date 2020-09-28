@@ -46,8 +46,8 @@ pub const Argument = extern union {
     i: i32,
     u: u32,
     f: Fixed,
-    s: [*:0]const u8,
+    s: ?[*:0]const u8,
     o: ?*Object,
-    a: *Array,
+    a: ?*Array,
     h: std.os.fd_t,
 };
