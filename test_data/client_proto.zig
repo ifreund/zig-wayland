@@ -200,8 +200,6 @@ fn Dispatcher(comptime Object: type, comptime Data: type) type {
             inline for (@typeInfo(Object.Event).Union.fields) |event_field, event_num| {
                 if (event_num == opcode) {
                     var event_data: event_field.field_type = undefined;
-
-                    var sig: usize = 0;
                     inline for (@typeInfo(event_field.field_type).Struct.fields) |f, i| {
                         @field(event_data, f.name) = switch (@sizeOf(f.field_type)) {
                             4 => @bitCast(f.field_type, args[i].u),
