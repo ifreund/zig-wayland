@@ -26,6 +26,16 @@ const Context = struct {
 const Protocol = struct {
     name: []const u8,
     interfaces: std.ArrayList(Interface) = std.ArrayList(Interface).init(gpa),
+
+    fn emit(protocol: Protocol, writer: anytype) !void {
+        try writer.writeAll(
+            \\const common = @import("common.zig");
+            \\const client = @import("client.zig");
+            \\
+        );
+        for (protocol.interfaces.items) |interface|
+            try interface.emit(writer);
+    }
 };
 
 const Interface = struct {
@@ -34,13 +44,91 @@ const Interface = struct {
     requests: std.ArrayList(Message) = std.ArrayList(Message).init(gpa),
     events: std.ArrayList(Message) = std.ArrayList(Message).init(gpa),
     enums: std.ArrayList(Enum) = std.ArrayList(Enum).init(gpa),
+
+    fn emit(interface: Interface, writer: anytype) !void {
+        try writer.writeAll("pub const ");
+        try printTitleCase(writer, trimPrefix(interface.name));
+        try writer.print(
+            \\= opaque {{
+            \\ pub const interface = common.Interface{{
+            \\  .name = {},
+            \\  .version = {},
+            \\  .method_count = {},
+            \\  .methods = &[_]common.Message{{
+        , .{
+            interface.name,
+            interface.version,
+            interface.requests.items.len,
+        });
+        for (interface.requests.items) |request| try request.emit(writer);
+        try writer.print(
+            \\  }},
+            \\  .event_count = {},
+            \\  .events = &[_]common.Message{{
+        , .{interface.events.items.len});
+        for (interface.events.items) |event| try event.emit(writer);
+        try writer.writeAll(
+            \\  },
+            \\ };
+            \\};
+        );
+    }
 };
+
+fn trimPrefix(s: []const u8) []const u8 {
+    return s[mem.indexOfScalar(u8, s, '_').? + 1 ..];
+}
+
+fn printTitleCase(writer: anytype, snake_case: []const u8) !void {
+    var upper = true;
+    for (snake_case) |ch| {
+        if (ch == '_') {
+            upper = true;
+            continue;
+        }
+        try writer.writeByte(if (upper) std.ascii.toUpper(ch) else ch);
+        upper = false;
+    }
+}
 
 const Message = struct {
     name: []const u8,
     since: u32,
     args: std.ArrayList(Arg) = std.ArrayList(Arg).init(gpa),
     destructor: bool,
+
+    fn emit(message: Message, writer: anytype) !void {
+        try writer.writeAll(".{ .name = {}, .signature = \"");
+        for (message.args.items) |arg| {
+            switch (arg.kind) {
+                .int => try writer.writeByte('i'),
+                .uint => try writer.writeByte('u'),
+                .fixed => try writer.writeByte('f'),
+                .string => try writer.writeByte('s'),
+                .new_id => |interface| if (interface == null)
+                    try writer.writeAll("sun")
+                else
+                    try writer.writeByte('n'),
+                .object => try writer.writeByte('o'),
+                .array => try writer.writeByte('a'),
+                .fd => try writer.writeByte('h'),
+            }
+        }
+        try writer.writeAll("\", .types = &[_]?*common.Interface{");
+        for (message.args.items) |arg| {
+            switch (arg.kind) {
+                .object, .new_id => |interface| if (interface) |i| {
+                    try writer.writeByte('&');
+                    try printTitleCase(writer, trimPrefix(i));
+                    try writer.writeAll(".interface,");
+                } else {
+                    try writer.writeAll("null,");
+                },
+                else => try writer.writeAll("null,"),
+            }
+        }
+        try writer.writeAll("}, },");
+    }
 };
 
 const Arg = struct {
@@ -101,6 +189,9 @@ pub fn main() !void {
             return error.ParserError;
         if (is_final) break;
     }
+
+    const stdout = std.io.getStdOut().writer();
+    try ctx.protocol.emit(stdout);
 }
 
 fn start(user_data: ?*c_void, name: ?[*:0]const u8, atts: ?[*:null]?[*:0]const u8) callconv(.C) void {
