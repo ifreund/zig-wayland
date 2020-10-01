@@ -72,7 +72,7 @@ pub const Display = opaque {
         data: T,
     ) !void {
         const proxy = @ptrCast(*client.Proxy, callback);
-        try proxy.addDispatcher(Dispatcher(Display, T).dispatcher, listener, data);
+        try proxy.addDispatcher(common.Dispatcher(Display, T).dispatcher, listener, data);
     }
 
     pub fn sync(display: *Display) !*Callback {
@@ -138,7 +138,7 @@ pub const Registry = opaque {
         data: T,
     ) !void {
         const proxy = @ptrCast(*client.Proxy, registry);
-        try proxy.addDispatcher(Dispatcher(Registry, T).dispatcher, listener, data);
+        try proxy.addDispatcher(common.Dispatcher(Registry, T).dispatcher, listener, data);
     }
 
     pub fn bind(registry: *Registry, name: u32, comptime T: type, version: u32) !*T {
@@ -184,41 +184,6 @@ pub const Callback = opaque {
         data: T,
     ) !void {
         const proxy = @ptrCast(*client.Proxy, callback);
-        try proxy.addDispatcher(Dispatcher(Callback, T).dispatcher, listener, data);
+        try proxy.addDispatcher(common.Dispatcher(Callback, T).dispatcher, listener, data);
     }
 };
-
-fn Dispatcher(comptime Object: type, comptime Data: type) type {
-    return struct {
-        fn dispatcher(
-            implementation: ?*const c_void,
-            proxy: *client.Proxy,
-            opcode: u32,
-            message: *const common.Message,
-            args: [*]common.Argument,
-        ) callconv(.C) i32 {
-            inline for (@typeInfo(Object.Event).Union.fields) |event_field, event_num| {
-                if (event_num == opcode) {
-                    var event_data: event_field.field_type = undefined;
-                    inline for (@typeInfo(event_field.field_type).Struct.fields) |f, i| {
-                        @field(event_data, f.name) = switch (@sizeOf(f.field_type)) {
-                            4 => @bitCast(f.field_type, args[i].u),
-                            8 => @ptrCast(f.field_type, args[i].s),
-                            else => unreachable,
-                        };
-                    }
-
-                    const listener = @ptrCast(fn (object: *Object, event: Object.Event, data: Data) void, implementation);
-                    listener(
-                        @ptrCast(*Object, proxy),
-                        @unionInit(Object.Event, event_field.name, event_data),
-                        @intToPtr(Data, @ptrToInt(proxy.getUserData())),
-                    );
-
-                    return 0;
-                }
-            }
-            unreachable;
-        }
-    };
-}
