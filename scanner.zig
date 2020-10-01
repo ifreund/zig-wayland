@@ -60,18 +60,24 @@ const Interface = struct {
             interface.version,
             interface.requests.items.len,
         });
-        for (interface.requests.items) |request| try request.emit(writer);
+        for (interface.requests.items) |request| try request.emitMessage(writer);
         try writer.print(
             \\  }},
             \\  .event_count = {},
             \\  .events = &[_]common.Message{{
         , .{interface.events.items.len});
-        for (interface.events.items) |event| try event.emit(writer);
+        for (interface.events.items) |event| try event.emitMessage(writer);
         try writer.writeAll(
             \\  },
             \\ };
         );
         for (interface.enums.items) |e| try e.emit(writer);
+
+        // Client only for now TODO: generate server code
+        try writer.writeAll("pub const Event = struct {\n");
+        for (interface.events.items) |event| try event.emitEventField(writer);
+        try writer.writeAll("};\n");
+
         try writer.writeAll("};\n");
     }
 };
@@ -82,7 +88,7 @@ const Message = struct {
     args: std.ArrayList(Arg) = std.ArrayList(Arg).init(gpa),
     destructor: bool,
 
-    fn emit(message: Message, writer: anytype) !void {
+    fn emitMessage(message: Message, writer: anytype) !void {
         try writer.writeAll(".{ .name = {}, .signature = \"");
         for (message.args.items) |arg| {
             switch (arg.kind) {
@@ -111,6 +117,24 @@ const Message = struct {
         }
         try writer.writeAll("}, },");
     }
+
+    fn emitEventField(message: Message, writer: anytype) !void {
+        try printIdentifier(writer, message.name);
+        try writer.writeAll(": struct {");
+        for (message.args.items) |arg| {
+            if (arg.kind == .new_id and arg.kind.new_id == null) {
+                // TODO
+            } else {
+                try printIdentifier(writer, arg.name);
+                try writer.writeByte(':');
+                // See notes on NULL in doc comment for wl_argument in wayland-util.h
+                if (arg.kind == .object and !arg.allow_null) try writer.writeByte('?');
+                try arg.emitType(writer);
+                try writer.writeByte(',');
+            }
+        }
+        try writer.writeAll("},\n");
+    }
 };
 
 const Arg = struct {
@@ -128,6 +152,32 @@ const Arg = struct {
     kind: Type,
     allow_null: bool,
     enum_name: ?[]const u8,
+
+    /// if of type new_id, must have non-null interface
+    fn emitType(arg: Arg, writer: anytype) !void {
+        switch (arg.kind) {
+            .int => try writer.writeAll("i32"),
+            .uint => try writer.writeAll("u32"),
+            .fixed => try writer.writeAll("common.Fixed"),
+            .string => {
+                if (arg.allow_null) try writer.writeByte('?');
+                try writer.writeAll("[*:0]const u8");
+            },
+            .new_id, .object => |interface| if (interface) |i| {
+                if (arg.allow_null) try writer.writeAll("?*") else try writer.writeByte('*');
+                try printIdentifier(writer, titleCase(trimPrefix(interface.?)));
+            } else {
+                std.debug.assert(arg.kind == .object);
+                if (arg.allow_null) try writer.writeByte('?');
+                try writer.writeAll("*common.Object");
+            },
+            .array => {
+                if (arg.allow_null) try writer.writeByte('?');
+                try writer.writeAll("*common.Array");
+            },
+            .fd => try writer.writeAll("std.os.fd_t"),
+        }
+    }
 };
 
 const Enum = struct {
