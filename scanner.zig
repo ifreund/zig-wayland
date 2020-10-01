@@ -47,7 +47,7 @@ const Interface = struct {
 
     fn emit(interface: Interface, writer: anytype) !void {
         try writer.writeAll("pub const ");
-        try printTitleCase(writer, trimPrefix(interface.name));
+        try printIdentifier(writer, titleCase(trimPrefix(interface.name)));
         try writer.print(
             \\= opaque {{
             \\ pub const interface = common.Interface{{
@@ -70,26 +70,11 @@ const Interface = struct {
         try writer.writeAll(
             \\  },
             \\ };
-            \\};
         );
+        for (interface.enums.items) |e| try e.emit(writer);
+        try writer.writeAll("};\n");
     }
 };
-
-fn trimPrefix(s: []const u8) []const u8 {
-    return s[mem.indexOfScalar(u8, s, '_').? + 1 ..];
-}
-
-fn printTitleCase(writer: anytype, snake_case: []const u8) !void {
-    var upper = true;
-    for (snake_case) |ch| {
-        if (ch == '_') {
-            upper = true;
-            continue;
-        }
-        try writer.writeByte(if (upper) std.ascii.toUpper(ch) else ch);
-        upper = false;
-    }
-}
 
 const Message = struct {
     name: []const u8,
@@ -117,13 +102,10 @@ const Message = struct {
         try writer.writeAll("\", .types = &[_]?*common.Interface{");
         for (message.args.items) |arg| {
             switch (arg.kind) {
-                .object, .new_id => |interface| if (interface) |i| {
-                    try writer.writeByte('&');
-                    try printTitleCase(writer, trimPrefix(i));
-                    try writer.writeAll(".interface,");
-                } else {
-                    try writer.writeAll("null,");
-                },
+                .object, .new_id => |interface| if (interface) |i|
+                    try writer.print("&{}.interface,", .{titleCase(trimPrefix(i))})
+                else
+                    try writer.writeAll("null,"),
                 else => try writer.writeAll("null,"),
             }
         }
@@ -153,6 +135,17 @@ const Enum = struct {
     since: u32,
     entries: std.ArrayList(Entry) = std.ArrayList(Entry).init(gpa),
     bitfield: bool,
+
+    fn emit(e: Enum, writer: anytype) !void {
+        try writer.writeAll("pub const ");
+        try printIdentifier(writer, titleCase(e.name));
+        try writer.writeAll(" = enum {");
+        for (e.entries.items) |entry| {
+            try printIdentifier(writer, entry.name);
+            try writer.print("= {},", .{entry.value});
+        }
+        try writer.writeAll("};\n");
+    }
 };
 
 const Entry = struct {
@@ -295,6 +288,44 @@ fn end(user_data: ?*c_void, name: ?[*:0]const u8) callconv(.C) void {
 fn characterData(user_data: ?*c_void, s: ?[*]const u8, len: i32) callconv(.C) void {
     const ctx = @intToPtr(*Context, @ptrToInt(user_data));
     ctx.character_data.appendSlice(s.?[0..@intCast(usize, len)]) catch std.os.exit(1);
+}
+
+fn trimPrefix(s: []const u8) []const u8 {
+    return s[mem.indexOfScalar(u8, s, '_').? + 1 ..];
+}
+
+var title_case_buf: [512]u8 = undefined;
+fn titleCase(snake_case: []const u8) []const u8 {
+    var i: usize = 0;
+    var upper = true;
+    for (snake_case) |ch| {
+        if (ch == '_') {
+            upper = true;
+            continue;
+        }
+        title_case_buf[i] = if (upper) std.ascii.toUpper(ch) else ch;
+        i += 1;
+        upper = false;
+    }
+    return title_case_buf[0..i];
+}
+
+fn printIdentifier(writer: anytype, identifier: []const u8) !void {
+    if (isValidIdentifier(identifier))
+        try writer.writeAll(identifier)
+    else
+        try writer.print("@\"{}\"", .{identifier});
+}
+
+fn isValidIdentifier(identifier: []const u8) bool {
+    // !keyword [A-Za-z_] [A-Za-z0-9_]*
+    if (identifier.len == 0) return false;
+    for (identifier) |ch, i| switch (ch) {
+        'A'...'Z', 'a'...'z', '_' => {},
+        '0'...'9' => if (i == 0) return false,
+        else => return false,
+    };
+    return std.zig.Token.getKeyword(identifier) == null;
 }
 
 test "parsing" {
