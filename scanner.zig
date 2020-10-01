@@ -46,8 +46,13 @@ const Interface = struct {
     enums: std.ArrayList(Enum) = std.ArrayList(Enum).init(gpa),
 
     fn emit(interface: Interface, writer: anytype) !void {
+        var buf: [1024]u8 = undefined;
+        var title_case = titleCase(trimPrefix(interface.name));
+        mem.copy(u8, &buf, title_case);
+        title_case = buf[0..title_case.len];
+
         try writer.writeAll("pub const ");
-        try printIdentifier(writer, titleCase(trimPrefix(interface.name)));
+        try printIdentifier(writer, title_case);
         try writer.print(
             \\= opaque {{
             \\ pub const interface = common.Interface{{
@@ -74,9 +79,28 @@ const Interface = struct {
         for (interface.enums.items) |e| try e.emit(writer);
 
         // Client only for now TODO: generate server code
-        try writer.writeAll("pub const Event = struct {\n");
+        try writer.writeAll(
+            \\ pub const Event = struct {
+        );
         for (interface.events.items) |event| try event.emitEventField(writer);
-        try writer.writeAll("};\n");
+        try writer.writeAll(
+            \\ };
+            \\
+        );
+
+        const trimmed = trimPrefix(interface.name);
+        try writer.print(
+            \\ pub fn setListener(
+            \\     {}: *{},
+            \\     comptime T: type,
+            \\     listener: fn ({}: *{}, event: Event, data: T) void,
+            \\     data: T,
+            \\ ) !void {{
+            \\     const proxy = @ptrCast(*client.Proxy, {});
+            \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
+            \\ }}
+            \\
+        , .{ trimmed, title_case, trimmed, title_case, trimmed, title_case });
 
         try writer.writeAll("};\n");
     }
