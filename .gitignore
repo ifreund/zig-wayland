@@ -1,1 +1,7 @@
 zig-cache
+client.zig
+server.zig
+common.zig
+*_client.zig
+*_server.zig
+*_common.zig
