@@ -41,7 +41,9 @@ pub fn build(b: *Builder) void {
         globals.linkLibC();
         globals.linkSystemLibrary("wayland-client");
 
-        globals.addPackagePath("wayland-client", "client.zig");
+        // this wayland.zig file is created by running the scanner on wayland.xml
+        // need to find a way to do this as part of the build system
+        globals.addPackagePath("wayland-client", "wayland.zig");
 
         globals.install();
     }

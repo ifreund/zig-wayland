@@ -48,7 +48,7 @@ const Interface = struct {
     fn emit(interface: Interface, writer: anytype) !void {
         var buf: [1024]u8 = undefined;
         var fbs = std.io.fixedBufferStream(&buf);
-        try printIdentifier(fbs.writer(), titleCase(trimPrefix(interface.name)));
+        try printIdentifier(fbs.writer(), case(.title, trimPrefix(interface.name)));
         const title_case = fbs.getWritten();
         try printIdentifier(fbs.writer(), trimPrefix(interface.name));
         const snake_case = fbs.getWritten()[title_case.len..];
@@ -81,7 +81,7 @@ const Interface = struct {
 
         // Client only for now TODO: generate server code
         try writer.writeAll(
-            \\ pub const Event = struct {
+            \\ pub const Event = union (enum) {
         );
         for (interface.events.items) |event| try event.emitEventField(writer);
         try writer.writeAll(
@@ -105,6 +105,9 @@ const Interface = struct {
         for (interface.requests.items) |request, opcode|
             try request.emitRequestFn(writer, interface, opcode);
 
+        if (mem.eql(u8, interface.name, "wl_display"))
+            try writer.writeAll(@embedFile("display_functions.zig"));
+
         try writer.writeAll("};\n");
     }
 };
@@ -126,7 +129,7 @@ const Message = struct {
         for (message.args.items) |arg| {
             switch (arg.kind) {
                 .object, .new_id => |interface| if (interface) |i|
-                    try writer.print("&{}.interface,", .{titleCase(trimPrefix(i))})
+                    try writer.print("&{}.interface,", .{case(.title, trimPrefix(i))})
                 else
                     try writer.writeAll("null,"),
                 else => try writer.writeAll("null,"),
@@ -155,14 +158,14 @@ const Message = struct {
 
     fn emitRequestFn(message: Message, writer: anytype, interface: Interface, opcode: usize) !void {
         try writer.writeAll("pub fn ");
-        try printIdentifier(writer, message.name);
+        try printIdentifier(writer, case(.camel, message.name));
         try writer.writeByte('(');
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(": *");
-        try printIdentifier(writer, titleCase(trimPrefix(interface.name)));
+        try printIdentifier(writer, case(.title, trimPrefix(interface.name)));
         for (message.args.items) |arg| {
-            if (arg.kind == .new_id and arg.kind.new_id == null) {
-                try writer.writeAll(", comptime T: type, version: u32");
+            if (arg.kind == .new_id) {
+                if (arg.kind.new_id == null) try writer.writeAll(", comptime T: type, version: u32");
             } else {
                 try writer.writeByte(',');
                 try printIdentifier(writer, arg.name);
@@ -174,7 +177,7 @@ const Message = struct {
             .normal, .destructor => try writer.writeAll(") void {"),
             .constructor => |new_iface| if (new_iface) |i| {
                 try writer.writeAll(") !*");
-                try printIdentifier(writer, titleCase(trimPrefix(i)));
+                try printIdentifier(writer, case(.title, trimPrefix(i)));
                 try writer.writeAll("{");
             } else {
                 try writer.writeAll(") !*T {");
@@ -212,9 +215,9 @@ const Message = struct {
             .constructor => |new_iface| {
                 if (new_iface) |i| {
                     try writer.writeAll("return @ptrCast(*");
-                    try printIdentifier(writer, titleCase(trimPrefix(i)));
+                    try printIdentifier(writer, case(.title, trimPrefix(i)));
                     try writer.print(", try proxy.marshalConstructor({}, &args, &", .{opcode});
-                    try printIdentifier(writer, titleCase(trimPrefix(i)));
+                    try printIdentifier(writer, case(.title, trimPrefix(i)));
                     try writer.writeAll(".interface));");
                 } else {
                     try writer.print("return @ptrCast(*T, proxy.marshalConstructorVersioned({}, &args, T.interface, version));", .{opcode});
@@ -270,7 +273,7 @@ const Arg = struct {
             },
             .new_id, .object => |interface| if (interface) |i| {
                 if (arg.allow_null) try writer.writeAll("?*") else try writer.writeByte('*');
-                try printIdentifier(writer, titleCase(trimPrefix(interface.?)));
+                try printIdentifier(writer, case(.title, trimPrefix(interface.?)));
             } else {
                 std.debug.assert(arg.kind == .object);
                 if (arg.allow_null) try writer.writeByte('?');
@@ -293,7 +296,7 @@ const Enum = struct {
 
     fn emit(e: Enum, writer: anytype) !void {
         try writer.writeAll("pub const ");
-        try printIdentifier(writer, titleCase(e.name));
+        try printIdentifier(writer, case(.title, e.name));
         try writer.writeAll(" = enum {");
         for (e.entries.items) |entry| {
             try printIdentifier(writer, entry.name);
@@ -450,20 +453,20 @@ fn trimPrefix(s: []const u8) []const u8 {
     return s[mem.indexOfScalar(u8, s, '_').? + 1 ..];
 }
 
-var title_case_buf: [512]u8 = undefined;
-fn titleCase(snake_case: []const u8) []const u8 {
+var case_buf: [512]u8 = undefined;
+fn case(out_case: enum { title, camel }, snake_case: []const u8) []const u8 {
     var i: usize = 0;
-    var upper = true;
+    var upper = out_case == .title;
     for (snake_case) |ch| {
         if (ch == '_') {
             upper = true;
             continue;
         }
-        title_case_buf[i] = if (upper) std.ascii.toUpper(ch) else ch;
+        case_buf[i] = if (upper) std.ascii.toUpper(ch) else ch;
         i += 1;
         upper = false;
     }
-    return title_case_buf[0..i];
+    return case_buf[0..i];
 }
 
 fn printIdentifier(writer: anytype, identifier: []const u8) !void {
