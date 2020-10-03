@@ -80,27 +80,28 @@ const Interface = struct {
         for (interface.enums.items) |e| try e.emit(writer);
 
         // Client only for now TODO: generate server code
-        try writer.writeAll(
-            \\ pub const Event = union (enum) {
-        );
-        for (interface.events.items) |event| try event.emitEventField(writer);
-        try writer.writeAll(
-            \\ };
-            \\
-        );
-
-        try writer.print(
-            \\ pub fn setListener(
-            \\     {}: *{},
-            \\     comptime T: type,
-            \\     listener: fn ({}: *{}, event: Event, data: T) void,
-            \\     data: T,
-            \\ ) !void {{
-            \\     const proxy = @ptrCast(*client.Proxy, {});
-            \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
-            \\ }}
-            \\
-        , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
+        if (interface.events.items.len > 0) {
+            try writer.writeAll(
+                \\ pub const Event = union (enum) {
+            );
+            for (interface.events.items) |event| try event.emitEventField(writer);
+            try writer.writeAll(
+                \\ };
+                \\
+            );
+            try writer.print(
+                \\ pub fn setListener(
+                \\     {}: *{},
+                \\     comptime T: type,
+                \\     listener: fn ({}: *{}, event: Event, data: T) void,
+                \\     data: T,
+                \\ ) !void {{
+                \\     const proxy = @ptrCast(*client.Proxy, {});
+                \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
+                \\ }}
+                \\
+            , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
+        }
 
         for (interface.requests.items) |request, opcode|
             try request.emitRequestFn(writer, interface, opcode);
