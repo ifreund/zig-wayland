@@ -47,20 +47,21 @@ const Interface = struct {
 
     fn emit(interface: Interface, writer: anytype) !void {
         var buf: [1024]u8 = undefined;
-        var title_case = titleCase(trimPrefix(interface.name));
-        mem.copy(u8, &buf, title_case);
-        title_case = buf[0..title_case.len];
+        var fbs = std.io.fixedBufferStream(&buf);
+        try printIdentifier(fbs.writer(), titleCase(trimPrefix(interface.name)));
+        const title_case = fbs.getWritten();
+        try printIdentifier(fbs.writer(), trimPrefix(interface.name));
+        const snake_case = fbs.getWritten()[title_case.len..];
 
-        try writer.writeAll("pub const ");
-        try printIdentifier(writer, title_case);
         try writer.print(
-            \\= opaque {{
+            \\pub const {} = opaque {{
             \\ pub const interface = common.Interface{{
-            \\  .name = {},
+            \\  .name = "{}",
             \\  .version = {},
             \\  .method_count = {},
             \\  .methods = &[_]common.Message{{
         , .{
+            title_case,
             interface.name,
             interface.version,
             interface.requests.items.len,
@@ -88,7 +89,6 @@ const Interface = struct {
             \\
         );
 
-        const trimmed = trimPrefix(interface.name);
         try writer.print(
             \\ pub fn setListener(
             \\     {}: *{},
@@ -100,7 +100,10 @@ const Interface = struct {
             \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
             \\ }}
             \\
-        , .{ trimmed, title_case, trimmed, title_case, trimmed, title_case });
+        , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
+
+        for (interface.requests.items) |request, opcode|
+            try request.emitRequestFn(writer, interface, opcode);
 
         try writer.writeAll("};\n");
     }
@@ -110,25 +113,15 @@ const Message = struct {
     name: []const u8,
     since: u32,
     args: std.ArrayList(Arg) = std.ArrayList(Arg).init(gpa),
-    destructor: bool,
+    kind: union(enum) {
+        normal: void,
+        constructor: ?[]const u8,
+        destructor: void,
+    },
 
     fn emitMessage(message: Message, writer: anytype) !void {
-        try writer.writeAll(".{ .name = {}, .signature = \"");
-        for (message.args.items) |arg| {
-            switch (arg.kind) {
-                .int => try writer.writeByte('i'),
-                .uint => try writer.writeByte('u'),
-                .fixed => try writer.writeByte('f'),
-                .string => try writer.writeByte('s'),
-                .new_id => |interface| if (interface == null)
-                    try writer.writeAll("sun")
-                else
-                    try writer.writeByte('n'),
-                .object => try writer.writeByte('o'),
-                .array => try writer.writeByte('a'),
-                .fd => try writer.writeByte('h'),
-            }
-        }
+        try writer.print(".{{ .name = \"{}\", .signature = \"", .{message.name});
+        for (message.args.items) |arg| try arg.emitSignature(writer);
         try writer.writeAll("\", .types = &[_]?*common.Interface{");
         for (message.args.items) |arg| {
             switch (arg.kind) {
@@ -159,6 +152,78 @@ const Message = struct {
         }
         try writer.writeAll("},\n");
     }
+
+    fn emitRequestFn(message: Message, writer: anytype, interface: Interface, opcode: usize) !void {
+        try writer.writeAll("pub fn ");
+        try printIdentifier(writer, message.name);
+        try writer.writeByte('(');
+        try printIdentifier(writer, trimPrefix(interface.name));
+        try writer.writeAll(": *");
+        try printIdentifier(writer, titleCase(trimPrefix(interface.name)));
+        for (message.args.items) |arg| {
+            if (arg.kind == .new_id and arg.kind.new_id == null) {
+                try writer.writeAll(", comptime T: type, version: u32");
+            } else {
+                try writer.writeByte(',');
+                try printIdentifier(writer, arg.name);
+                try writer.writeByte(':');
+                try arg.emitType(writer);
+            }
+        }
+        switch (message.kind) {
+            .normal, .destructor => try writer.writeAll(") void {"),
+            .constructor => |new_iface| if (new_iface) |i| {
+                try writer.writeAll(") !*");
+                try printIdentifier(writer, titleCase(trimPrefix(i)));
+                try writer.writeAll("{");
+            } else {
+                try writer.writeAll(") !*T {");
+            },
+        }
+        try writer.writeAll("const proxy = @ptrCast(*client.Proxy,");
+        try printIdentifier(writer, trimPrefix(interface.name));
+        try writer.writeAll(");");
+        if (message.kind != .destructor) {
+            try writer.writeAll("var args = [_]common.Argument{");
+            for (message.args.items) |arg| {
+                switch (arg.kind) {
+                    .int, .uint, .fixed, .string, .object, .array, .fd => {
+                        try writer.writeAll(".{ .");
+                        try arg.emitSignature(writer);
+                        try writer.writeAll(" = ");
+                        try printIdentifier(writer, arg.name);
+                        try writer.writeAll("},");
+                    },
+                    .new_id => |new_iface| {
+                        if (new_iface == null) {
+                            try writer.writeAll(
+                                \\.{ . s = T.interface.name },
+                                \\.{ . u = version },
+                            );
+                        }
+                        try writer.writeAll(".{ . o = null },");
+                    },
+                }
+            }
+            try writer.writeAll("};\n");
+        }
+        switch (message.kind) {
+            .normal => try writer.print("proxy.marshal({}, &args);", .{opcode}),
+            .constructor => |new_iface| {
+                if (new_iface) |i| {
+                    try writer.writeAll("return @ptrCast(*");
+                    try printIdentifier(writer, titleCase(trimPrefix(i)));
+                    try writer.print(", try proxy.marshalConstructor({}, &args, &", .{opcode});
+                    try printIdentifier(writer, titleCase(trimPrefix(i)));
+                    try writer.writeAll(".interface));");
+                } else {
+                    try writer.print("return @ptrCast(*T, proxy.marshalConstructorVersioned({}, &args, T.interface, version));", .{opcode});
+                }
+            },
+            .destructor => try writer.writeAll("proxy.destroy();"),
+        }
+        try writer.writeAll("}\n");
+    }
 };
 
 const Arg = struct {
@@ -176,6 +241,22 @@ const Arg = struct {
     kind: Type,
     allow_null: bool,
     enum_name: ?[]const u8,
+
+    fn emitSignature(arg: Arg, writer: anytype) !void {
+        switch (arg.kind) {
+            .int => try writer.writeByte('i'),
+            .uint => try writer.writeByte('u'),
+            .fixed => try writer.writeByte('f'),
+            .string => try writer.writeByte('s'),
+            .new_id => |interface| if (interface == null)
+                try writer.writeAll("sun")
+            else
+                try writer.writeByte('n'),
+            .object => try writer.writeByte('o'),
+            .array => try writer.writeByte('a'),
+            .fd => try writer.writeByte('h'),
+        }
+    }
 
     /// if of type new_id, must have non-null interface
     fn emitType(arg: Arg, writer: anytype) !void {
@@ -316,12 +397,13 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
         ctx.message = try list.addOne();
         ctx.message.* = .{
             .name = try mem.dupe(gpa, u8, atts.name.?),
-            .destructor = if (atts.@"type") |t| mem.eql(u8, t, "destructor") else false,
+            .kind = if (atts.@"type" != null and mem.eql(u8, atts.@"type".?, "destructor")) .destructor else .normal,
             .since = atts.since orelse 1,
         };
     } else if (mem.eql(u8, name, "arg")) {
         const kind = std.meta.stringToEnum(@TagType(Arg.Type), mem.span(atts.@"type".?)) orelse
             return error.InvalidType;
+        if (kind == .new_id) ctx.message.kind = .{ .constructor = if (atts.interface) |f| try mem.dupe(gpa, u8, f) else null };
         try ctx.message.args.append(.{
             .name = try mem.dupe(gpa, u8, atts.name.?),
             .kind = switch (kind) {
