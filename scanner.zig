@@ -27,14 +27,23 @@ const Protocol = struct {
     name: []const u8,
     interfaces: std.ArrayList(Interface) = std.ArrayList(Interface).init(gpa),
 
-    fn emit(protocol: Protocol, writer: anytype) !void {
+    fn emitClient(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
-            \\const common = @import("common.zig");
-            \\const client = @import("client.zig");
-            \\
+            \\const wayland = @import("wayland.zig");
+            \\const client = wayland.client;
+            \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
-            try interface.emit(writer);
+            try interface.emitClient(writer);
+    }
+
+    fn emitInterface(protocol: Protocol, writer: anytype) !void {
+        try writer.writeAll(
+            \\const wayland = @import("wayland.zig");
+            \\const common = wayland.common;
+        );
+        for (protocol.interfaces.items) |interface|
+            try interface.emitInterface(writer);
     }
 };
 
@@ -45,7 +54,7 @@ const Interface = struct {
     events: std.ArrayList(Message) = std.ArrayList(Message).init(gpa),
     enums: std.ArrayList(Enum) = std.ArrayList(Enum).init(gpa),
 
-    fn emit(interface: Interface, writer: anytype) !void {
+    fn emitClient(interface: Interface, writer: anytype) !void {
         var buf: [1024]u8 = undefined;
         var fbs = std.io.fixedBufferStream(&buf);
         try printIdentifier(fbs.writer(), case(.title, trimPrefix(interface.name)));
@@ -55,28 +64,9 @@ const Interface = struct {
 
         try writer.print(
             \\pub const {} = opaque {{
-            \\ pub const interface = common.Interface{{
-            \\  .name = "{}",
-            \\  .version = {},
-            \\  .method_count = {},
-            \\  .methods = &[_]common.Message{{
-        , .{
-            title_case,
-            interface.name,
-            interface.version,
-            interface.requests.items.len,
-        });
-        for (interface.requests.items) |request| try request.emitMessage(writer);
-        try writer.print(
-            \\  }},
-            \\  .event_count = {},
-            \\  .events = &[_]common.Message{{
-        , .{interface.events.items.len});
-        for (interface.events.items) |event| try event.emitMessage(writer);
-        try writer.writeAll(
-            \\  },
-            \\ };
-        );
+            \\ pub const interface = &wayland.common.{}.{};
+        , .{ title_case, prefix(interface.name), snake_case });
+
         for (interface.enums.items) |e| try e.emit(writer);
 
         // Client only for now TODO: generate server code
@@ -97,7 +87,7 @@ const Interface = struct {
                 \\     data: T,
                 \\ ) !void {{
                 \\     const proxy = @ptrCast(*client.Proxy, {});
-                \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
+                \\     try proxy.addDispatcher(client.Dispatcher({}, T).dispatcher, listener, data);
                 \\ }}
                 \\
             , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
@@ -110,6 +100,37 @@ const Interface = struct {
             try writer.writeAll(@embedFile("display_functions.zig"));
 
         try writer.writeAll("};\n");
+    }
+
+    fn emitInterface(interface: Interface, writer: anytype) !void {
+        try writer.writeAll("pub const ");
+        try printIdentifier(writer, trimPrefix(interface.name));
+        try writer.print(
+            \\ = common.Interface{{
+            \\ .name = "{}",
+            \\ .version = {},
+            \\ .method_count = {},
+        , .{
+            interface.name,
+            interface.version,
+            interface.requests.items.len,
+        });
+        if (interface.requests.items.len > 0) {
+            try writer.writeAll(".methods = &[_]common.Message{");
+            for (interface.requests.items) |request| try request.emitMessage(writer);
+            try writer.writeAll("},");
+        } else {
+            try writer.writeAll(".methods = null,");
+        }
+        try writer.print(".event_count = {},", .{interface.events.items.len});
+        if (interface.events.items.len > 0) {
+            try writer.writeAll(".events = &[_]common.Message{");
+            for (interface.events.items) |event| try event.emitMessage(writer);
+            try writer.writeAll("},");
+        } else {
+            try writer.writeAll(".events = null,");
+        }
+        try writer.writeAll("};");
     }
 };
 
@@ -126,11 +147,11 @@ const Message = struct {
     fn emitMessage(message: Message, writer: anytype) !void {
         try writer.print(".{{ .name = \"{}\", .signature = \"", .{message.name});
         for (message.args.items) |arg| try arg.emitSignature(writer);
-        try writer.writeAll("\", .types = &[_]?*common.Interface{");
+        try writer.writeAll("\", .types = &[_]?*const common.Interface{");
         for (message.args.items) |arg| {
             switch (arg.kind) {
                 .object, .new_id => |interface| if (interface) |i|
-                    try writer.print("&{}.interface,", .{case(.title, trimPrefix(i))})
+                    try writer.print("&common.{}.{},", .{ prefix(i), trimPrefix(i) })
                 else
                     try writer.writeAll("null,"),
                 else => try writer.writeAll("null,"),
@@ -217,7 +238,7 @@ const Message = struct {
                 if (new_iface) |i| {
                     try writer.writeAll("return @ptrCast(*");
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
-                    try writer.print(", try proxy.marshalConstructor({}, &args, &", .{opcode});
+                    try writer.print(", try proxy.marshalConstructor({}, &args, ", .{opcode});
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
                     try writer.writeAll(".interface));");
                 } else {
@@ -313,37 +334,96 @@ const Entry = struct {
     value: []const u8,
 };
 
+const Scanner = struct {
+    /// Map from namespace to list of generated files
+    const Map = std.hash_map.StringHashMap(std.ArrayListUnmanaged([]const u8));
+    client: Map = Map.init(gpa),
+    common: Map = Map.init(gpa),
+
+    fn scanProtocol(scanner: *Scanner, xml_filename: []const u8) !void {
+        const xml_file = try std.fs.cwd().openFile(xml_filename, .{});
+        defer xml_file.close();
+
+        const parser = c.XML_ParserCreate(null) orelse return error.ParserCreateFailed;
+        defer c.XML_ParserFree(parser);
+
+        var ctx = Context{
+            .protocol = undefined,
+            .interface = undefined,
+            .message = undefined,
+            .enumeration = undefined,
+        };
+        defer ctx.deinit();
+
+        c.XML_SetUserData(parser, &ctx);
+        c.XML_SetElementHandler(parser, start, end);
+        c.XML_SetCharacterDataHandler(parser, characterData);
+
+        while (true) {
+            var buf: [4096]u8 = undefined;
+            const read = try xml_file.readAll(&buf);
+            const is_final = read < buf.len;
+            if (c.XML_Parse(parser, &buf, @intCast(i32, read), if (is_final) 1 else 0) == .XML_STATUS_ERROR)
+                return error.ParserError;
+            if (is_final) break;
+        }
+
+        const xml_basename = std.fs.path.basename(xml_filename);
+        const protcol_name = xml_basename[0 .. xml_basename.len - 4];
+        const namespace = if (mem.eql(u8, protcol_name, "wayland")) "wl" else prefix(protcol_name);
+
+        const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protcol_name, "_client.zig" });
+        const client_file = try std.fs.cwd().createFile(client_filename, .{});
+        defer client_file.close();
+        try ctx.protocol.emitClient(client_file.writer());
+        try (try scanner.client.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, client_filename));
+
+        const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protcol_name, "_common.zig" });
+        const common_file = try std.fs.cwd().createFile(common_filename, .{});
+        defer common_file.close();
+        try ctx.protocol.emitInterface(common_file.writer());
+        try (try scanner.common.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, common_filename));
+    }
+};
+
 pub fn main() !void {
-    const filename = std.os.argv[1];
-    const file = try std.fs.cwd().openFileZ(filename, .{});
-    defer file.close();
-
-    const parser = c.XML_ParserCreate(null) orelse return error.ParserCreateFailed;
-    defer c.XML_ParserFree(parser);
-
-    var ctx = Context{
-        .protocol = undefined,
-        .interface = undefined,
-        .message = undefined,
-        .enumeration = undefined,
-    };
-    defer ctx.deinit();
-
-    c.XML_SetUserData(parser, &ctx);
-    c.XML_SetElementHandler(parser, start, end);
-    c.XML_SetCharacterDataHandler(parser, characterData);
-
-    while (true) {
-        var buf: [4096]u8 = undefined;
-        const read = try file.readAll(&buf);
-        const is_final = read < buf.len;
-        if (c.XML_Parse(parser, &buf, @intCast(i32, read), if (is_final) 1 else 0) == .XML_STATUS_ERROR)
-            return error.ParserError;
-        if (is_final) break;
+    var scanner = Scanner{};
+    const argv = std.os.argv;
+    for (argv[1..]) |xml_filename| {
+        try scanner.scanProtocol(mem.span(xml_filename));
     }
 
-    const stdout = std.io.getStdOut().writer();
-    try ctx.protocol.emit(stdout);
+    {
+        const client_file = try std.fs.cwd().createFile("client.zig", .{});
+        defer client_file.close();
+        const writer = client_file.writer();
+        try writer.writeAll(@embedFile("src/client_core.zig"));
+
+        var iter = scanner.client.iterator();
+        while (iter.next()) |entry| {
+            try writer.print("pub const {} = struct {{", .{entry.key});
+            for (entry.value.items) |generated_file| {
+                try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
+            }
+            try writer.writeAll("};\n");
+        }
+    }
+
+    {
+        const common_file = try std.fs.cwd().createFile("common.zig", .{});
+        defer common_file.close();
+        const writer = common_file.writer();
+        try writer.writeAll(@embedFile("src/common_core.zig"));
+
+        var iter = scanner.common.iterator();
+        while (iter.next()) |entry| {
+            try writer.print("pub const {} = struct {{", .{entry.key});
+            for (entry.value.items) |generated_file| {
+                try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
+            }
+            try writer.writeAll("};\n");
+        }
+    }
 }
 
 fn start(user_data: ?*c_void, name: ?[*:0]const u8, atts: ?[*:null]?[*:0]const u8) callconv(.C) void {
@@ -448,6 +528,10 @@ fn end(user_data: ?*c_void, name: ?[*:0]const u8) callconv(.C) void {
 fn characterData(user_data: ?*c_void, s: ?[*]const u8, len: i32) callconv(.C) void {
     const ctx = @intToPtr(*Context, @ptrToInt(user_data));
     ctx.character_data.appendSlice(s.?[0..@intCast(usize, len)]) catch std.os.exit(1);
+}
+
+fn prefix(s: []const u8) []const u8 {
+    return s[0..mem.indexOfScalar(u8, s, '_').?];
 }
 
 fn trimPrefix(s: []const u8) []const u8 {

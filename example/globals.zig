@@ -1,5 +1,6 @@
 const std = @import("std");
-const wl = @import("wayland-client");
+const wayland = @import("wayland");
+const wl = wayland.client.wl;
 
 pub fn main() !void {
     const display = try wl.Display.connect(null);

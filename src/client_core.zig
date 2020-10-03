@@ -1,7 +1,5 @@
-const std = @import("std");
-const os = std.os;
-
-const common = @import("common.zig");
+const wayland = @import("wayland.zig");
+const common = wayland.common;
 
 pub const Proxy = opaque {
     extern fn wl_proxy_create(factory: *Proxy, interface: *const common.Interface) *Proxy;
@@ -109,3 +107,38 @@ pub const EventQueue = opaque {
         wl_event_queue_destroy(event_queue);
     }
 };
+
+pub fn Dispatcher(comptime ObjectT: type, comptime DataT: type) type {
+    return struct {
+        pub fn dispatcher(
+            implementation: ?*const c_void,
+            proxy: *Proxy,
+            opcode: u32,
+            message: *const common.Message,
+            args: [*]common.Argument,
+        ) callconv(.C) i32 {
+            inline for (@typeInfo(ObjectT.Event).Union.fields) |event_field, event_num| {
+                if (event_num == opcode) {
+                    var event_data: event_field.field_type = undefined;
+                    inline for (@typeInfo(event_field.field_type).Struct.fields) |f, i| {
+                        @field(event_data, f.name) = switch (@sizeOf(f.field_type)) {
+                            4 => @bitCast(f.field_type, args[i].u),
+                            8 => @ptrCast(f.field_type, args[i].s),
+                            else => unreachable,
+                        };
+                    }
+
+                    const listener = @ptrCast(fn (object: *ObjectT, event: ObjectT.Event, data: DataT) void, implementation);
+                    listener(
+                        @ptrCast(*ObjectT, proxy),
+                        @unionInit(ObjectT.Event, event_field.name, event_data),
+                        @intToPtr(DataT, @ptrToInt(proxy.getUserData())),
+                    );
+
+                    return 0;
+                }
+            }
+            unreachable;
+        }
+    };
+}
