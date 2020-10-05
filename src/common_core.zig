@@ -31,11 +31,15 @@ pub const List = extern struct {
         list.* = .{ .prev = list, .next = list };
     }
 
-    pub fn insert(list: *List, elm: *List) void {
+    pub fn prepend(list: *List, elm: *List) void {
         elm.prev = list;
         elm.next = list.next;
         list.next = elm;
         elm.next.prev = elm;
+    }
+
+    pub fn append(list: *List, elm: *List) void {
+        list.prev.prepend(elm);
     }
 
     pub fn remove(elm: *elm) void {
