@@ -3,3 +3,4 @@
 pub const client = @import("client.zig");
 pub const server = @import("server.zig");
 pub const common = @import("common.zig");
+pub const util = @import("util.zig");

@@ -23,53 +23,6 @@ pub const Array = extern struct {
     data: *c_void,
 };
 
-pub const List = extern struct {
-    prev: *List,
-    next: *List,
-
-    pub fn init(list: *List) void {
-        list.* = .{ .prev = list, .next = list };
-    }
-
-    pub fn prepend(list: *List, elm: *List) void {
-        elm.prev = list;
-        elm.next = list.next;
-        list.next = elm;
-        elm.next.prev = elm;
-    }
-
-    pub fn append(list: *List, elm: *List) void {
-        list.prev.prepend(elm);
-    }
-
-    pub fn remove(elm: *elm) void {
-        elm.prev.next = elm.next;
-        elm.next.prev = elm.prev;
-        elm = undefined;
-    }
-
-    pub fn length(list: *const List) usize {
-        var count: usize = 0;
-        var current = list.next;
-        while (current != list) : (current = current.next) {
-            count += 1;
-        }
-        return count;
-    }
-
-    pub fn empty(list: *const List) bool {
-        return list.next == list;
-    }
-
-    pub fn insertList(list: *List, other: *List) void {
-        if (other.empty()) return;
-        other.next.prev = list;
-        other.prev.next = list.next;
-        list.next.prev = other.prev;
-        list.next = other.next;
-    }
-};
-
 pub const Fixed = extern enum(i32) {
     _,
 
