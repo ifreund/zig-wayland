@@ -97,7 +97,7 @@ const Interface = struct {
             try request.emitRequestFn(writer, interface, opcode);
 
         if (mem.eql(u8, interface.name, "wl_display"))
-            try writer.writeAll(@embedFile("display_functions.zig"));
+            try writer.writeAll(@embedFile("src/client_display_functions.zig"));
 
         try writer.writeAll("};\n");
     }
