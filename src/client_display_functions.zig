@@ -40,9 +40,9 @@ pub fn dispatchPending(display: *Display) !u31 {
     };
 }
 
-extern fn wl_display_dispatch_queue(display: *Display, queue: *EventQueue.Impl) c_int;
-pub fn dispatchQueue(display: *Display, queue: EventQueue) !u31 {
-    const rc = wl_display_dispatch_queue(display, queue.impl);
+extern fn wl_display_dispatch_queue(display: *Display, queue: *client.EventQueue) c_int;
+pub fn dispatchQueue(display: *Display, queue: *client.EventQueue) !u31 {
+    const rc = wl_display_dispatch_queue(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u31, rc),
         // TODO
@@ -50,9 +50,9 @@ pub fn dispatchQueue(display: *Display, queue: EventQueue) !u31 {
     };
 }
 
-extern fn wl_display_dispatch_queue_pending(display: *Display, queue: *EventQueue.Impl) c_int;
-pub fn dispatchQueuePending(display: *Display, queue: EventQueue) !u31 {
-    const rc = wl_display_dispatch_queue_pending(display, queue.impl);
+extern fn wl_display_dispatch_queue_pending(display: *Display, queue: *client.EventQueue) c_int;
+pub fn dispatchQueuePending(display: *Display, queue: *client.EventQueue) !u31 {
+    const rc = wl_display_dispatch_queue_pending(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u31, rc),
         // TODO
@@ -70,9 +70,9 @@ pub fn roundtrip(display: *Display) !u31 {
     };
 }
 
-extern fn wl_display_roundtrip_queue(display: *Display, queue: *EventQueue.Impl) c_int;
-pub fn roundtripQueue(display: *Display, queue: EventQueue) !u31 {
-    const rc = wl_display_roundtrip_queue(display, queue.impl);
+extern fn wl_display_roundtrip_queue(display: *Display, queue: *client.EventQueue) c_int;
+pub fn roundtripQueue(display: *Display, queue: *client.EventQueue) !u31 {
+    const rc = wl_display_roundtrip_queue(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u31, rc),
         // TODO
@@ -82,7 +82,7 @@ pub fn roundtripQueue(display: *Display, queue: EventQueue) !u31 {
 
 extern fn wl_display_flush(display: *Display) c_int;
 pub fn flush(display: *Display) error{WouldBlock}!u31 {
-    const rc = wl_display_dispatch_queue_pending(display, queue.impl);
+    const rc = wl_display_dispatch_queue_pending(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u31, rc),
         os.EAGAIN => error.WouldBlock,
@@ -90,9 +90,9 @@ pub fn flush(display: *Display) error{WouldBlock}!u31 {
     };
 }
 
-extern fn wl_display_create_queue(display: *Display) *EventQueue.Impl;
-pub fn createQueue(display: *Display) error{OutOfMemory}!EventQueue {
-    return .{ .impl = wl_display_create_queue(display) orelse return error.OutOfMemory };
+extern fn wl_display_create_queue(display: *Display) *client.EventQueue;
+pub fn createQueue(display: *Display) error{OutOfMemory}!*client.EventQueue {
+    return wl_display_create_queue(display) orelse error.OutOfMemory;
 }
 
 // TODO: should we interpret this return value?
