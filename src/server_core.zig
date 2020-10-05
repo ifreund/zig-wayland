@@ -10,7 +10,7 @@ pub const Global = opaque {
         version: c_int,
         data: ?*c_void,
         bind: fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void,
-    ) void;
+    ) ?*Global;
     pub fn create(
         display: *wl.Display,
         comptime ObjectT: type,
@@ -18,8 +18,9 @@ pub const Global = opaque {
         comptime T: type,
         data: T,
         bind: fn (client: *Client, data: T, version: u32, id: u32) callconv(.C) void,
-    ) void {
-        wl_global_create(display, ObjectT.interface, version, data, bind);
+    ) !*Global {
+        return wl_global_create(display, ObjectT.interface, version, data, bind) orelse
+            error.GlobalCreateFailed;
     }
 
     extern fn wl_global_remove(global: *Global) void;
@@ -76,7 +77,7 @@ pub const Resource = opaque {
         data: ?*c_void,
         destroy: DestroyFn,
     ) !void {
-        if (wl_proxy_add_dispatcher(proxy, dispatcher, implementation, data) == -1)
+        if (wl_resource_set_dispatcher(proxy, dispatcher, implementation, data) == -1)
             return error.AlreadyHasListener;
     }
 
@@ -88,5 +89,25 @@ pub const Resource = opaque {
     extern fn wl_resource_get_user_data(resource: *Resource) ?*c_void;
     pub fn getUserData(resource: *Resource) ?*c_void {
         return wl_resource_get_user_data(resource);
+    }
+};
+
+pub const ProtocolLogger = opaque {
+    pub const Type = extern enum {
+        request,
+        event,
+    };
+
+    pub const Message = extern struct {
+        resource: *Resource,
+        message_opcode: c_int,
+        message: *common.Message,
+        arguments_count: c_int,
+        arguments: ?[*]common.Argument,
+    };
+
+    extern fn wl_protocol_logger_destroy(logger: *ProtocolLogger) void;
+    pub fn destroy(logger: *ProtocolLogger) void {
+        wl_protocol_logger_destroy(logger);
     }
 };
