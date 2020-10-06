@@ -51,24 +51,19 @@ pub const Proxy = opaque {
             error.OutOfMemory;
     }
 
-    extern fn wl_proxy_add_listener(proxy: *Proxy, implementation: [*]fn () callconv(.C) void, data: ?*c_void) i32;
-    pub fn addListener(proxy: *Proxy, implementation: [*]fn () callconv(.C) void, data: ?*c_void) error{AlreadyHasListener}!void {
-        if (wl_proxy_add_listener(proxy, implementation, data) == -1) return error.AlreadyHasListener;
-    }
-
     const DispatcherFn = fn (
         implementation: ?*const c_void,
         proxy: *Proxy,
         opcode: u32,
         message: *const common.Message,
         args: [*]common.Argument,
-    ) callconv(.C) i32;
+    ) callconv(.C) c_int;
     extern fn wl_proxy_add_dispatcher(
         proxy: *Proxy,
         dispatcher: DispatcherFn,
         implementation: ?*const c_void,
         data: ?*c_void,
-    ) i32;
+    ) c_int;
     pub fn addDispatcher(
         proxy: *Proxy,
         dispatcher: DispatcherFn,
@@ -108,7 +103,7 @@ pub const EventQueue = opaque {
     }
 };
 
-pub fn Dispatcher(comptime ObjectT: type, comptime DataT: type) type {
+pub fn Dispatcher(comptime Object: type, comptime Data: type) type {
     return struct {
         pub fn dispatcher(
             implementation: ?*const c_void,
@@ -116,8 +111,8 @@ pub fn Dispatcher(comptime ObjectT: type, comptime DataT: type) type {
             opcode: u32,
             message: *const common.Message,
             args: [*]common.Argument,
-        ) callconv(.C) i32 {
-            inline for (@typeInfo(ObjectT.Event).Union.fields) |event_field, event_num| {
+        ) callconv(.C) c_int {
+            inline for (@typeInfo(Object.Event).Union.fields) |event_field, event_num| {
                 if (event_num == opcode) {
                     var event_data: event_field.field_type = undefined;
                     inline for (@typeInfo(event_field.field_type).Struct.fields) |f, i| {
@@ -128,11 +123,11 @@ pub fn Dispatcher(comptime ObjectT: type, comptime DataT: type) type {
                         };
                     }
 
-                    const listener = @ptrCast(fn (object: *ObjectT, event: ObjectT.Event, data: DataT) void, implementation);
+                    const listener = @ptrCast(fn (object: *Object, event: Object.Event, data: Data) void, implementation);
                     listener(
-                        @ptrCast(*ObjectT, proxy),
-                        @unionInit(ObjectT.Event, event_field.name, event_data),
-                        @intToPtr(DataT, @ptrToInt(proxy.getUserData())),
+                        @ptrCast(*Object, proxy),
+                        @unionInit(Object.Event, event_field.name, event_data),
+                        @intToPtr(Data, @ptrToInt(proxy.getUserData())),
                     );
 
                     return 0;

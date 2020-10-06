@@ -97,6 +97,6 @@ pub fn createQueue(display: *Display) error{OutOfMemory}!*client.EventQueue {
 
 // TODO: should we interpret this return value?
 extern fn wl_display_get_error(display: *Display) c_int;
-pub fn getError(display: *Display) i32 {
+pub fn getError(display: *Display) c_int {
     return wl_display_get_error(display);
 }

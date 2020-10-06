@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Object = opaque{};
+pub const Object = opaque {};
 
 pub const Message = extern struct {
     name: [*:0]const u8,
@@ -10,10 +10,10 @@ pub const Message = extern struct {
 
 pub const Interface = extern struct {
     name: [*:0]const u8,
-    version: i32,
-    method_count: i32,
+    version: c_int,
+    method_count: c_int,
     methods: ?[*]const Message,
-    event_count: i32,
+    event_count: c_int,
     events: ?[*]const Message,
 };
 

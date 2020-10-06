@@ -178,13 +178,13 @@ pub const Global = opaque {
     ) ?*Global;
     pub fn create(
         display: *Display,
-        comptime ObjectT: type,
+        comptime Object: type,
         version: u32,
         comptime T: type,
         data: T,
         bind: fn (client: *Client, data: T, version: u32, id: u32) callconv(.C) void,
     ) !*Global {
-        return wl_global_create(display, ObjectT.interface, version, data, bind) orelse
+        return wl_global_create(display, Object.interface, version, data, bind) orelse
             error.GlobalCreateFailed;
     }
 
@@ -206,10 +206,10 @@ pub const Global = opaque {
 
 pub const Resource = opaque {
     extern fn wl_resource_create(client: *Client, interface: *const common.Interface, version: c_int, id: u32) ?*Resource;
-    pub fn create(client: *Client, comptime ObjectT: type, version: u32, id: u32) ?*Resource {
+    pub fn create(client: *Client, comptime Object: type, version: u32, id: u32) ?*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
-        return wl_resource_create(client, ObjectT.interface, @intCast(c_int, version), id);
+        return wl_resource_create(client, Object.interface, @intCast(c_int, version), id);
     }
 
     extern fn wl_resource_destroy(resource: *Resource) void;
@@ -248,9 +248,8 @@ pub const Resource = opaque {
         implementation: ?*const c_void,
         data: ?*c_void,
         destroy: DestroyFn,
-    ) !void {
-        if (wl_resource_set_dispatcher(proxy, dispatcher, implementation, data) == -1)
-            return error.AlreadyHasListener;
+    ) void {
+        wl_resource_set_dispatcher(resource, dispatcher, implementation, data, destroy);
     }
 
     extern fn wl_resource_get_user_data(resource: *Resource) ?*c_void;
@@ -282,7 +281,7 @@ pub const Resource = opaque {
         return @intCast(u32, wl_resource_get_version(resource));
     }
 
-    extern fn wl_resource_set_destructor(resource: *Resource, destroy: fn (*Resource) void) void;
+    extern fn wl_resource_set_destructor(resource: *Resource, destroy: DestroyFn) void;
     pub const setDestructor = wl_resource_set_destructor;
 
     extern fn wl_resource_get_class(resource: *Resource) [*:0]const u8;
