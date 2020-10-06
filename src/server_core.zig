@@ -206,10 +206,10 @@ pub const Global = opaque {
 
 pub const Resource = opaque {
     extern fn wl_resource_create(client: *Client, interface: *const common.Interface, version: c_int, id: u32) ?*Resource;
-    pub fn create(client: *Client, comptime Object: type, version: u32, id: u32) ?*Resource {
+    pub fn create(client: *Client, comptime Object: type, version: u32, id: u32) !*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
-        return wl_resource_create(client, Object.interface, @intCast(c_int, version), id);
+        return wl_resource_create(client, Object.interface, @intCast(c_int, version), id) orelse error.ResourceCreateFailed;
     }
 
     extern fn wl_resource_destroy(resource: *Resource) void;
@@ -234,7 +234,7 @@ pub const Resource = opaque {
         message: *const common.Message,
         args: [*]common.Argument,
     ) callconv(.C) c_int;
-    const DestroyFn = fn (resource: *Resource) callconv(.C) void;
+    pub const DestroyFn = fn (resource: *Resource) callconv(.C) void;
     extern fn wl_resource_set_dispatcher(
         resource: *Resource,
         dispatcher: DispatcherFn,
