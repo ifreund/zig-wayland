@@ -510,3 +510,37 @@ pub const EventSource = opaque {
         }
     }
 };
+
+pub const ShmBuffer = opaque {
+    extern fn wl_shm_buffer_get(resource: *Resource) ?*ShmBuffer;
+    pub const get = wl_shm_buffer_get;
+
+    extern fn wl_shm_buffer_begin_access(buffer: *ShmBuffer) void;
+    pub const beginAccess = wl_shm_buffer_begin_access;
+
+    extern fn wl_shm_buffer_end_access(buffer: *ShmBuffer) void;
+    pub const endAccess = wl_shm_buffer_end_access;
+
+    extern fn wl_shm_buffer_get_data(buffer: *ShmBuffer) ?*c_void;
+    pub const getData = wl_shm_buffer_get_data;
+
+    extern fn wl_shm_buffer_get_format(buffer: *ShmBuffer) u32;
+    pub const getFormat = wl_shm_buffer_get_format;
+
+    extern fn wl_shm_buffer_get_height(buffer: *ShmBuffer) i32;
+    pub const getHeight = wl_shm_buffer_get_height;
+
+    extern fn wl_shm_buffer_get_width(buffer: *ShmBuffer) i32;
+    pub const getWidth = wl_shm_buffer_get_width;
+
+    extern fn wl_shm_buffer_get_stride(buffer: *ShmBuffer) i32;
+    pub const getStride = wl_shm_buffer_get_stride;
+
+    extern fn wl_shm_buffer_ref_pool(buffer: *ShmBuffer) *ShmPool;
+    pub const refPool = wl_shm_buffer_ref_pool;
+};
+
+pub const ShmPool = opaque {
+    extern fn wl_shm_pool_unref(pool: *ShmPool) void;
+    pub const unref = wl_shm_pool_unref;
+};
