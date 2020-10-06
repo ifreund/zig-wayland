@@ -1,4 +1,5 @@
 const std = @import("std");
+const wayland = @import("wayland.zig");
 
 pub const Object = opaque {};
 
@@ -51,3 +52,39 @@ pub const Argument = extern union {
     a: ?*Array,
     h: std.os.fd_t,
 };
+
+pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
+    const client = @hasDecl(Obj, "Event");
+    const Payload = if (client) Obj.Event else Obj.Request;
+    return struct {
+        pub fn dispatcher(
+            implementation: ?*const c_void,
+            object: if (client) *wayland.client.Proxy else *wayland.server.Resource,
+            opcode: u32,
+            message: *const Message,
+            args: [*]Argument,
+        ) callconv(.C) c_int {
+            inline for (@typeInfo(Payload).Union.fields) |payload_field, payload_num| {
+                if (payload_num == opcode) {
+                    var payload_data: payload_field.field_type = undefined;
+                    inline for (@typeInfo(payload_field.field_type).Struct.fields) |f, i| {
+                        @field(payload_data, f.name) = switch (@sizeOf(f.field_type)) {
+                            4 => @bitCast(f.field_type, args[i].u),
+                            8 => @ptrCast(f.field_type, args[i].s),
+                            else => unreachable,
+                        };
+                    }
+
+                    @ptrCast(fn (*Obj, Payload, Data) void, implementation)(
+                        @ptrCast(*Obj, object),
+                        @unionInit(Payload, payload_field.name, payload_data),
+                        @intToPtr(Data, @ptrToInt(object.getUserData())),
+                    );
+
+                    return 0;
+                }
+            }
+            unreachable;
+        }
+    };
+}

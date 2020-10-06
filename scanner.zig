@@ -87,7 +87,7 @@ const Interface = struct {
                 \\     data: T,
                 \\ ) !void {{
                 \\     const proxy = @ptrCast(*client.Proxy, {});
-                \\     try proxy.addDispatcher(client.Dispatcher({}, T).dispatcher, listener, data);
+                \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
                 \\ }}
                 \\
             , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
