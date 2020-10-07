@@ -22,6 +22,10 @@ const Context = struct {
         self.character_data.deinit();
     }
 };
+const Target = enum {
+    client,
+    server,
+};
 
 const Protocol = struct {
     name: []const u8,
@@ -34,7 +38,17 @@ const Protocol = struct {
             \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
-            try interface.emitClient(writer);
+            try interface.emit(.client, writer);
+    }
+
+    fn emitServer(protocol: Protocol, writer: anytype) !void {
+        try writer.writeAll(
+            \\const wayland = @import("wayland.zig");
+            \\const server = wayland.server;
+            \\const common = wayland.common;
+        );
+        for (protocol.interfaces.items) |interface|
+            try interface.emit(.server, writer);
     }
 
     fn emitInterface(protocol: Protocol, writer: anytype) !void {
@@ -54,7 +68,7 @@ const Interface = struct {
     events: std.ArrayList(Message) = std.ArrayList(Message).init(gpa),
     enums: std.ArrayList(Enum) = std.ArrayList(Enum).init(gpa),
 
-    fn emitClient(interface: Interface, writer: anytype) !void {
+    fn emit(interface: Interface, target: Target, writer: anytype) !void {
         var buf: [1024]u8 = undefined;
         var fbs = std.io.fixedBufferStream(&buf);
         try printIdentifier(fbs.writer(), case(.title, trimPrefix(interface.name)));
@@ -69,35 +83,54 @@ const Interface = struct {
 
         for (interface.enums.items) |e| try e.emit(writer);
 
-        // Client only for now TODO: generate server code
-        if (interface.events.items.len > 0) {
-            try writer.writeAll(
-                \\ pub const Event = union (enum) {
-            );
-            for (interface.events.items) |event| try event.emitEventField(writer);
-            try writer.writeAll(
-                \\ };
-                \\
-            );
-            try writer.print(
-                \\ pub fn setListener(
-                \\     {}: *{},
-                \\     comptime T: type,
-                \\     listener: fn ({}: *{}, event: Event, data: T) void,
-                \\     data: T,
-                \\ ) !void {{
-                \\     const proxy = @ptrCast(*client.Proxy, {});
-                \\     try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
-                \\ }}
-                \\
-            , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
+        if (target == .client) {
+            if (interface.events.items.len > 0) {
+                try writer.writeAll("pub const Event = union(enum) {");
+                for (interface.events.items) |event| try event.emitField(.client, writer);
+                try writer.writeAll("};\n");
+                try writer.print(
+                    \\pub fn setListener(
+                    \\    {}: *{},
+                    \\    comptime T: type,
+                    \\    listener: fn ({}: *{}, event: Event, data: T) void,
+                    \\    data: T,
+                    \\) !void {{
+                    \\    const proxy = @ptrCast(*client.Proxy, {});
+                    \\    try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
+                    \\}}
+                , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
+            }
+
+            for (interface.requests.items) |request, opcode|
+                try request.emitRequestFn(writer, interface, opcode);
+
+            if (mem.eql(u8, interface.name, "wl_display"))
+                try writer.writeAll(@embedFile("src/client_display_functions.zig"));
+        } else {
+            if (interface.requests.items.len > 0) {
+                try writer.writeAll("pub const Request = union(enum) {");
+                for (interface.requests.items) |request| try request.emitField(.server, writer);
+                try writer.writeAll("};\n");
+                @setEvalBranchQuota(1300);
+                try writer.print(
+                    \\pub fn setHandler(
+                    \\    {}: *{},
+                    \\    comptime T: type,
+                    \\    handler: fn ({}: *{}, request: Request, data: T) void,
+                    \\    data: T,
+                    \\    destroy: fn ({}: *{}) callconv(.C) void,
+                    \\) void {{
+                    \\    const resource = @ptrCast(*server.Resource, {});
+                    \\    resource.setDispatcher(
+                    \\        common.Dispatcher({}, T).dispatcher,
+                    \\        handler,
+                    \\        data,
+                    \\        @ptrCast(resource.DestroyFn, destroy),
+                    \\    );
+                    \\}}
+                , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case });
+            }
         }
-
-        for (interface.requests.items) |request, opcode|
-            try request.emitRequestFn(writer, interface, opcode);
-
-        if (mem.eql(u8, interface.name, "wl_display"))
-            try writer.writeAll(@embedFile("src/client_display_functions.zig"));
 
         try writer.writeAll("};\n");
     }
@@ -160,20 +193,28 @@ const Message = struct {
         try writer.writeAll("}, },");
     }
 
-    fn emitEventField(message: Message, writer: anytype) !void {
+    fn emitField(message: Message, target: Target, writer: anytype) !void {
         try printIdentifier(writer, message.name);
         try writer.writeAll(": struct {");
         for (message.args.items) |arg| {
-            if (arg.kind == .new_id and arg.kind.new_id == null) {
-                // TODO
+            if (target == .server and arg.kind == .new_id and arg.kind.new_id == null) {
+                try writer.writeAll("interface: [*:0]const u8, version: u32,");
+                try printIdentifier(writer, arg.name);
+                try writer.writeAll(": u32");
+            } else if (target == .client and arg.kind == .new_id) {
+                try printIdentifier(writer, arg.name);
+                try writer.writeAll(": *");
+                try printIdentifier(writer, case(.title, trimPrefix(arg.kind.new_id.?)));
+                std.debug.assert(!arg.allow_null);
             } else {
                 try printIdentifier(writer, arg.name);
                 try writer.writeByte(':');
-                // See notes on NULL in doc comment for wl_argument in wayland-util.h
-                if (arg.kind == .object and !arg.allow_null) try writer.writeByte('?');
+                // See notes on NULL in doc comment for wl_message in wayland-util.h
+                if (target == .client and arg.kind == .object and !arg.allow_null)
+                    try writer.writeByte('?');
                 try arg.emitType(writer);
-                try writer.writeByte(',');
             }
+            try writer.writeByte(',');
         }
         try writer.writeAll("},\n");
     }
@@ -287,17 +328,16 @@ const Arg = struct {
     fn emitType(arg: Arg, writer: anytype) !void {
         switch (arg.kind) {
             .int => try writer.writeAll("i32"),
-            .uint => try writer.writeAll("u32"),
+            .uint, .new_id => try writer.writeAll("u32"),
             .fixed => try writer.writeAll("common.Fixed"),
             .string => {
                 if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeAll("[*:0]const u8");
             },
-            .new_id, .object => |interface| if (interface) |i| {
+            .object => |interface| if (interface) |i| {
                 if (arg.allow_null) try writer.writeAll("?*") else try writer.writeByte('*');
-                try printIdentifier(writer, case(.title, trimPrefix(interface.?)));
+                try printIdentifier(writer, case(.title, trimPrefix(i)));
             } else {
-                std.debug.assert(arg.kind == .object);
                 if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeAll("*common.Object");
             },
@@ -338,6 +378,7 @@ const Scanner = struct {
     /// Map from namespace to list of generated files
     const Map = std.hash_map.StringHashMap(std.ArrayListUnmanaged([]const u8));
     client: Map = Map.init(gpa),
+    server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
     fn scanProtocol(scanner: *Scanner, xml_filename: []const u8) !void {
@@ -378,6 +419,12 @@ const Scanner = struct {
         try ctx.protocol.emitClient(client_file.writer());
         try (try scanner.client.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, client_filename));
 
+        const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protcol_name, "_server.zig" });
+        const server_file = try std.fs.cwd().createFile(server_filename, .{});
+        defer server_file.close();
+        try ctx.protocol.emitServer(server_file.writer());
+        try (try scanner.server.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, server_filename));
+
         const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protcol_name, "_common.zig" });
         const common_file = try std.fs.cwd().createFile(common_filename, .{});
         defer common_file.close();
@@ -389,9 +436,8 @@ const Scanner = struct {
 pub fn main() !void {
     var scanner = Scanner{};
     const argv = std.os.argv;
-    for (argv[1..]) |xml_filename| {
+    for (argv[1..]) |xml_filename|
         try scanner.scanProtocol(mem.span(xml_filename));
-    }
 
     {
         const client_file = try std.fs.cwd().createFile("client.zig", .{});
@@ -402,9 +448,23 @@ pub fn main() !void {
         var iter = scanner.client.iterator();
         while (iter.next()) |entry| {
             try writer.print("pub const {} = struct {{", .{entry.key});
-            for (entry.value.items) |generated_file| {
+            for (entry.value.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
-            }
+            try writer.writeAll("};\n");
+        }
+    }
+
+    {
+        const server_file = try std.fs.cwd().createFile("server.zig", .{});
+        defer server_file.close();
+        const writer = server_file.writer();
+        try writer.writeAll(@embedFile("src/server_core.zig"));
+
+        var iter = scanner.server.iterator();
+        while (iter.next()) |entry| {
+            try writer.print("pub const {} = struct {{", .{entry.key});
+            for (entry.value.items) |generated_file|
+                try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
     }
@@ -418,9 +478,8 @@ pub fn main() !void {
         var iter = scanner.common.iterator();
         while (iter.next()) |entry| {
             try writer.print("pub const {} = struct {{", .{entry.key});
-            for (entry.value.items) |generated_file| {
+            for (entry.value.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
-            }
             try writer.writeAll("};\n");
         }
     }
