@@ -78,10 +78,16 @@ const Interface = struct {
 
         try writer.print(
             \\pub const {} = opaque {{
-            \\ pub const interface = &wayland.common.{}.{};
+            \\ pub const interface = &wayland.common.{}.{}.interface;
         , .{ title_case, prefix(interface.name), snake_case });
 
-        for (interface.enums.items) |e| try e.emit(writer);
+        for (interface.enums.items) |e| {
+            try writer.writeAll("pub const ");
+            try printIdentifier(writer, case(.title, e.name));
+            try writer.print(" = wayland.common.{}.{}.", .{ prefix(interface.name), snake_case });
+            try printIdentifier(writer, case(.title, e.name));
+            try writer.writeAll(";\n");
+        }
 
         if (target == .client) {
             if (interface.events.items.len > 0) {
@@ -142,10 +148,11 @@ const Interface = struct {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.print(
-            \\ = common.Interface{{
-            \\ .name = "{}",
-            \\ .version = {},
-            \\ .method_count = {},
+            \\ = struct {{
+            \\ pub const interface = common.Interface{{
+            \\  .name = "{}",
+            \\  .version = {},
+            \\  .method_count = {},
         , .{
             interface.name,
             interface.version,
@@ -167,6 +174,8 @@ const Interface = struct {
             try writer.writeAll(".events = null,");
         }
         try writer.writeAll("};");
+        for (interface.enums.items) |e| try e.emit(writer);
+        try writer.writeAll("};");
     }
 };
 
@@ -187,7 +196,7 @@ const Message = struct {
         for (message.args.items) |arg| {
             switch (arg.kind) {
                 .object, .new_id => |interface| if (interface) |i|
-                    try writer.print("&common.{}.{},", .{ prefix(i), trimPrefix(i) })
+                    try writer.print("&common.{}.{}.interface,", .{ prefix(i), trimPrefix(i) })
                 else
                     try writer.writeAll("null,"),
                 else => try writer.writeAll("null,"),
