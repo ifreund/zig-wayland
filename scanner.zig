@@ -447,7 +447,10 @@ const Scanner = struct {
         }
 
         const xml_basename = std.fs.path.basename(xml_filename);
-        const protocol_name = xml_basename[0 .. xml_basename.len - 4];
+        const protocol_name = try mem.dupe(gpa, u8, xml_basename[0 .. xml_basename.len - 4]);
+        for (protocol_name) |*ch| {
+            if (ch.* == '-') ch.* = '_';
+        }
         const namespace = if (mem.eql(u8, protocol_name, "wayland")) "wl" else prefix(protocol_name);
 
         const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_client.zig" });
