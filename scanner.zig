@@ -51,13 +51,13 @@ const Protocol = struct {
             try interface.emit(.server, writer);
     }
 
-    fn emitInterface(protocol: Protocol, writer: anytype) !void {
+    fn emitCommon(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
             \\const wayland = @import("wayland.zig");
             \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
-            try interface.emitInterface(writer);
+            try interface.emitCommon(writer);
     }
 };
 
@@ -144,7 +144,7 @@ const Interface = struct {
         try writer.writeAll("};\n");
     }
 
-    fn emitInterface(interface: Interface, writer: anytype) !void {
+    fn emitCommon(interface: Interface, writer: anytype) !void {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.print(
@@ -465,7 +465,7 @@ const Scanner = struct {
         const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protcol_name, "_common.zig" });
         const common_file = try std.fs.cwd().createFile(common_filename, .{});
         defer common_file.close();
-        try ctx.protocol.emitInterface(common_file.writer());
+        try ctx.protocol.emitCommon(common_file.writer());
         try (try scanner.common.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, common_filename));
     }
 };
