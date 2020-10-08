@@ -102,7 +102,7 @@ const Interface = struct {
             }
 
             for (interface.requests.items) |request, opcode|
-                try request.emitRequestFn(writer, interface, opcode);
+                try request.emitFn(target, writer, interface, opcode);
 
             if (mem.eql(u8, interface.name, "wl_display"))
                 try writer.writeAll(@embedFile("src/client_display_functions.zig"));
@@ -130,6 +130,9 @@ const Interface = struct {
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case });
             }
+
+            for (interface.events.items) |event, opcode|
+                try event.emitFn(target, writer, interface, opcode);
         }
 
         try writer.writeAll("};\n");
@@ -219,15 +222,30 @@ const Message = struct {
         try writer.writeAll("},\n");
     }
 
-    fn emitRequestFn(message: Message, writer: anytype, interface: Interface, opcode: usize) !void {
+    fn emitFn(message: Message, target: Target, writer: anytype, interface: Interface, opcode: usize) !void {
         try writer.writeAll("pub fn ");
-        try printIdentifier(writer, case(.camel, message.name));
+        if (target == .server) {
+            try writer.writeAll("send");
+            try printIdentifier(writer, case(.title, message.name));
+        } else {
+            try printIdentifier(writer, case(.camel, message.name));
+        }
         try writer.writeByte('(');
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(": *");
         try printIdentifier(writer, case(.title, trimPrefix(interface.name)));
         for (message.args.items) |arg| {
-            if (arg.kind == .new_id) {
+            if (target == .server and arg.kind == .new_id) {
+                try writer.writeByte(',');
+                try printIdentifier(writer, arg.name);
+                try writer.writeByte(':');
+                if (arg.allow_null) try writer.writeByte('?');
+                try writer.writeByte('*');
+                if (arg.kind.new_id) |iface|
+                    try printIdentifier(writer, case(.title, trimPrefix(iface)))
+                else
+                    try writer.writeAll("server.Resource");
+            } else if (target == .client and arg.kind == .new_id) {
                 if (arg.kind.new_id == null) try writer.writeAll(", comptime T: type, version: u32");
             } else {
                 try writer.writeByte(',');
@@ -236,20 +254,22 @@ const Message = struct {
                 try arg.emitType(writer);
             }
         }
-        switch (message.kind) {
-            .normal, .destructor => try writer.writeAll(") void {"),
-            .constructor => |new_iface| if (new_iface) |i| {
-                try writer.writeAll(") !*");
-                try printIdentifier(writer, case(.title, trimPrefix(i)));
-                try writer.writeAll("{");
-            } else {
-                try writer.writeAll(") !*T {");
-            },
+        if (target == .server or message.kind != .constructor) {
+            try writer.writeAll(") void {");
+        } else if (message.kind.constructor) |new_iface| {
+            try writer.writeAll(") !*");
+            try printIdentifier(writer, case(.title, trimPrefix(new_iface)));
+            try writer.writeAll("{");
+        } else {
+            try writer.writeAll(") !*T {");
         }
-        try writer.writeAll("const proxy = @ptrCast(*client.Proxy,");
+        if (target == .server)
+            try writer.writeAll("const resource = @ptrCast(*server.Resource,")
+        else
+            try writer.writeAll("const proxy = @ptrCast(*client.Proxy,");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(");");
-        if (message.kind != .destructor) {
+        if (target == .server and message.kind != .destructor) {
             try writer.writeAll("var args = [_]common.Argument{");
             for (message.args.items) |arg| {
                 switch (arg.kind) {
@@ -261,19 +281,27 @@ const Message = struct {
                         try writer.writeAll("},");
                     },
                     .new_id => |new_iface| {
-                        if (new_iface == null) {
-                            try writer.writeAll(
-                                \\.{ . s = T.interface.name },
-                                \\.{ . u = version },
-                            );
+                        if (target == .server) {
+                            try writer.writeAll(".{ .o = ");
+                            try printIdentifier(writer, arg.name);
+                            try writer.writeAll(" },");
+                        } else {
+                            if (new_iface == null) {
+                                try writer.writeAll(
+                                    \\.{ .s = T.interface.name },
+                                    \\.{ .u = version },
+                                );
+                            }
+                            try writer.writeAll(".{ .o = null },");
                         }
-                        try writer.writeAll(".{ . o = null },");
                     },
                 }
             }
             try writer.writeAll("};\n");
         }
-        switch (message.kind) {
+        if (target == .server) {
+            try writer.print("resource.postEvent({}, &args);", .{opcode});
+        } else switch (message.kind) {
             .normal => try writer.print("proxy.marshal({}, &args);", .{opcode}),
             .constructor => |new_iface| {
                 if (new_iface) |i| {
