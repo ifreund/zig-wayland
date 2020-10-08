@@ -35,7 +35,7 @@ pub const Proxy = opaque {
         proxy: *Proxy,
         opcode: u32,
         args: [*]common.Argument,
-        interface: *common.Interface,
+        interface: *const common.Interface,
         version: u32,
     ) ?*Proxy;
     pub fn marshalConstructorVersioned(
@@ -45,7 +45,7 @@ pub const Proxy = opaque {
         interface: *const common.Interface,
         version: u32,
     ) error{OutOfMemory}!*Proxy {
-        return wl_proxy_marshal_array_constructor(proxy, opcode, args, interface, version) orelse
+        return wl_proxy_marshal_array_constructor_versioned(proxy, opcode, args, interface, version) orelse
             error.OutOfMemory;
     }
 

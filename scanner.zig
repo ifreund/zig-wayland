@@ -330,7 +330,7 @@ const Message = struct {
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
                     try writer.writeAll(".interface));");
                 } else {
-                    try writer.print("return @ptrCast(*T, proxy.marshalConstructorVersioned({}, &args, T.interface, version));", .{opcode});
+                    try writer.print("return @ptrCast(*T, try proxy.marshalConstructorVersioned({}, &args, T.interface, version));", .{opcode});
                 }
             },
         }
