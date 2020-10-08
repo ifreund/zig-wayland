@@ -6,7 +6,7 @@ pub const Object = opaque {};
 pub const Message = extern struct {
     name: [*:0]const u8,
     signature: [*:0]const u8,
-    types: [*]const ?*const Interface,
+    types: ?[*]const ?*const Interface,
 };
 
 pub const Interface = extern struct {

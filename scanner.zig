@@ -192,17 +192,23 @@ const Message = struct {
     fn emitMessage(message: Message, writer: anytype) !void {
         try writer.print(".{{ .name = \"{}\", .signature = \"", .{message.name});
         for (message.args.items) |arg| try arg.emitSignature(writer);
-        try writer.writeAll("\", .types = &[_]?*const common.Interface{");
-        for (message.args.items) |arg| {
-            switch (arg.kind) {
-                .object, .new_id => |interface| if (interface) |i|
-                    try writer.print("&common.{}.{}.interface,", .{ prefix(i), trimPrefix(i) })
-                else
-                    try writer.writeAll("null,"),
-                else => try writer.writeAll("null,"),
+        try writer.writeAll("\", .types = ");
+        if (message.args.items.len > 0) {
+            try writer.writeAll("&[_]?*const common.Interface{");
+            for (message.args.items) |arg| {
+                switch (arg.kind) {
+                    .object, .new_id => |interface| if (interface) |i|
+                        try writer.print("&common.{}.{}.interface,", .{ prefix(i), trimPrefix(i) })
+                    else
+                        try writer.writeAll("null,"),
+                    else => try writer.writeAll("null,"),
+                }
             }
+            try writer.writeAll("},");
+        } else {
+            try writer.writeAll("null,");
         }
-        try writer.writeAll("}, },");
+        try writer.writeAll("},");
     }
 
     fn emitField(message: Message, target: Target, writer: anytype) !void {
@@ -278,39 +284,42 @@ const Message = struct {
             try writer.writeAll("const proxy = @ptrCast(*client.Proxy,");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(");");
-        try writer.writeAll("var args = [_]common.Argument{");
-        for (message.args.items) |arg| {
-            switch (arg.kind) {
-                .int, .uint, .fixed, .string, .object, .array, .fd => {
-                    try writer.writeAll(".{ .");
-                    try arg.emitSignature(writer);
-                    try writer.writeAll(" = ");
-                    try printIdentifier(writer, arg.name);
-                    try writer.writeAll("},");
-                },
-                .new_id => |new_iface| {
-                    if (target == .server) {
-                        try writer.writeAll(".{ .o = ");
+        if (message.args.items.len > 0) {
+            try writer.writeAll("var args = [_]common.Argument{");
+            for (message.args.items) |arg| {
+                switch (arg.kind) {
+                    .int, .uint, .fixed, .string, .object, .array, .fd => {
+                        try writer.writeAll(".{ .");
+                        try arg.emitSignature(writer);
+                        try writer.writeAll(" = ");
                         try printIdentifier(writer, arg.name);
-                        try writer.writeAll(" },");
-                    } else {
-                        if (new_iface == null) {
-                            try writer.writeAll(
-                                \\.{ .s = T.interface.name },
-                                \\.{ .u = version },
-                            );
+                        try writer.writeAll("},");
+                    },
+                    .new_id => |new_iface| {
+                        if (target == .server) {
+                            try writer.writeAll(".{ .o = ");
+                            try printIdentifier(writer, arg.name);
+                            try writer.writeAll(" },");
+                        } else {
+                            if (new_iface == null) {
+                                try writer.writeAll(
+                                    \\.{ .s = T.interface.name },
+                                    \\.{ .u = version },
+                                );
+                            }
+                            try writer.writeAll(".{ .o = null },");
                         }
-                        try writer.writeAll(".{ .o = null },");
-                    }
-                },
+                    },
+                }
             }
+            try writer.writeAll("};\n");
         }
-        try writer.writeAll("};\n");
+        const args = if (message.args.items.len > 0) "&args" else "null";
         if (target == .server) {
-            try writer.print("resource.postEvent({}, &args);", .{opcode});
+            try writer.print("resource.postEvent({}, {});", .{ opcode, args });
         } else switch (message.kind) {
             .normal, .destructor => {
-                try writer.print("proxy.marshal({}, &args);", .{opcode});
+                try writer.print("proxy.marshal({}, {});", .{ opcode, args });
                 if (message.kind == .destructor) try writer.writeAll("proxy.destroy();");
             },
             .constructor => |new_iface| {

@@ -12,10 +12,8 @@ pub const Proxy = opaque {
         wl_proxy_destroy(proxy);
     }
 
-    extern fn wl_proxy_marshal_array(proxy: *Proxy, opcode: u32, args: [*]common.Argument) void;
-    pub fn marshal(proxy: *Proxy, opcode: u32, args: [*]common.Argument) void {
-        wl_proxy_marshal_array(proxy, opcode, args);
-    }
+    extern fn wl_proxy_marshal_array(proxy: *Proxy, opcode: u32, args: ?[*]common.Argument) void;
+    pub const marshal = wl_proxy_marshal_array;
 
     extern fn wl_proxy_marshal_array_constructor(
         proxy: *Proxy,
