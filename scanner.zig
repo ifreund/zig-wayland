@@ -269,40 +269,41 @@ const Message = struct {
             try writer.writeAll("const proxy = @ptrCast(*client.Proxy,");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(");");
-        if (target == .server and message.kind != .destructor) {
-            try writer.writeAll("var args = [_]common.Argument{");
-            for (message.args.items) |arg| {
-                switch (arg.kind) {
-                    .int, .uint, .fixed, .string, .object, .array, .fd => {
-                        try writer.writeAll(".{ .");
-                        try arg.emitSignature(writer);
-                        try writer.writeAll(" = ");
+        try writer.writeAll("var args = [_]common.Argument{");
+        for (message.args.items) |arg| {
+            switch (arg.kind) {
+                .int, .uint, .fixed, .string, .object, .array, .fd => {
+                    try writer.writeAll(".{ .");
+                    try arg.emitSignature(writer);
+                    try writer.writeAll(" = ");
+                    try printIdentifier(writer, arg.name);
+                    try writer.writeAll("},");
+                },
+                .new_id => |new_iface| {
+                    if (target == .server) {
+                        try writer.writeAll(".{ .o = ");
                         try printIdentifier(writer, arg.name);
-                        try writer.writeAll("},");
-                    },
-                    .new_id => |new_iface| {
-                        if (target == .server) {
-                            try writer.writeAll(".{ .o = ");
-                            try printIdentifier(writer, arg.name);
-                            try writer.writeAll(" },");
-                        } else {
-                            if (new_iface == null) {
-                                try writer.writeAll(
-                                    \\.{ .s = T.interface.name },
-                                    \\.{ .u = version },
-                                );
-                            }
-                            try writer.writeAll(".{ .o = null },");
+                        try writer.writeAll(" },");
+                    } else {
+                        if (new_iface == null) {
+                            try writer.writeAll(
+                                \\.{ .s = T.interface.name },
+                                \\.{ .u = version },
+                            );
                         }
-                    },
-                }
+                        try writer.writeAll(".{ .o = null },");
+                    }
+                },
             }
-            try writer.writeAll("};\n");
         }
+        try writer.writeAll("};\n");
         if (target == .server) {
             try writer.print("resource.postEvent({}, &args);", .{opcode});
         } else switch (message.kind) {
-            .normal => try writer.print("proxy.marshal({}, &args);", .{opcode}),
+            .normal, .destructor => {
+                try writer.print("proxy.marshal({}, &args);", .{opcode});
+                if (message.kind == .destructor) try writer.writeAll("proxy.destroy();");
+            },
             .constructor => |new_iface| {
                 if (new_iface) |i| {
                     try writer.writeAll("return @ptrCast(*");
@@ -314,7 +315,6 @@ const Message = struct {
                     try writer.print("return @ptrCast(*T, proxy.marshalConstructorVersioned({}, &args, T.interface, version));", .{opcode});
                 }
             },
-            .destructor => try writer.writeAll("proxy.destroy();"),
         }
         try writer.writeAll("}\n");
     }
