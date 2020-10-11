@@ -33,6 +33,7 @@ const Protocol = struct {
 
     fn emitClient(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
+            \\const os = @import("std").os;
             \\const wayland = @import("wayland.zig");
             \\const wl = wayland.client.wl;
             \\const common = wayland.common;
@@ -43,6 +44,7 @@ const Protocol = struct {
 
     fn emitServer(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
+            \\const os = @import("std").os;
             \\const wayland = @import("wayland.zig");
             \\const wl = wayland.server.wl;
             \\const common = wayland.common;
@@ -404,7 +406,7 @@ const Arg = struct {
                 if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeAll("*common.Array");
             },
-            .fd => try writer.writeAll("std.os.fd_t"),
+            .fd => try writer.writeAll("os.fd_t"),
         }
     }
 };

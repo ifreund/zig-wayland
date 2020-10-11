@@ -1,5 +1,3 @@
-const os = @import("std").os;
-
 extern fn wl_display_connect(name: ?[*:0]const u8) ?*Display;
 pub fn connect(name: ?[*:0]const u8) error{ConnectFailed}!*Display {
     return wl_display_connect(name) orelse return error.ConnectFailed;
