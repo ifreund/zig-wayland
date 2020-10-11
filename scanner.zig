@@ -78,7 +78,7 @@ const Interface = struct {
 
         try writer.print(
             \\pub const {} = opaque {{
-            \\ pub const interface = &wayland.common.{}.{}.interface;
+            \\ pub const interface = wayland.common.{}.{}.interface;
         , .{ title_case, prefix(interface.name), snake_case });
 
         for (interface.enums.items) |e| {
@@ -147,33 +147,46 @@ const Interface = struct {
     fn emitCommon(interface: Interface, writer: anytype) !void {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, trimPrefix(interface.name));
+
+        // TODO: stop linking libwayland generated interface structs when
+        // https://github.com/ziglang/zig/issues/131 is implemented
+        //
+        //try writer.print(
+        //    \\ = struct {{
+        //    \\ pub const interface = common.Interface{{
+        //    \\  .name = "{}",
+        //    \\  .version = {},
+        //    \\  .method_count = {},
+        //, .{
+        //    interface.name,
+        //    interface.version,
+        //    interface.requests.items.len,
+        //});
+        //if (interface.requests.items.len > 0) {
+        //    try writer.writeAll(".methods = &[_]common.Message{");
+        //    for (interface.requests.items) |request| try request.emitMessage(writer);
+        //    try writer.writeAll("},");
+        //} else {
+        //    try writer.writeAll(".methods = null,");
+        //}
+        //try writer.print(".event_count = {},", .{interface.events.items.len});
+        //if (interface.events.items.len > 0) {
+        //    try writer.writeAll(".events = &[_]common.Message{");
+        //    for (interface.events.items) |event| try event.emitMessage(writer);
+        //    try writer.writeAll("},");
+        //} else {
+        //    try writer.writeAll(".events = null,");
+        //}
+        //try writer.writeAll("};");
+
         try writer.print(
             \\ = struct {{
-            \\ pub const interface = common.Interface{{
-            \\  .name = "{}",
-            \\  .version = {},
-            \\  .method_count = {},
-        , .{
-            interface.name,
-            interface.version,
-            interface.requests.items.len,
-        });
-        if (interface.requests.items.len > 0) {
-            try writer.writeAll(".methods = &[_]common.Message{");
-            for (interface.requests.items) |request| try request.emitMessage(writer);
-            try writer.writeAll("},");
-        } else {
-            try writer.writeAll(".methods = null,");
-        }
-        try writer.print(".event_count = {},", .{interface.events.items.len});
-        if (interface.events.items.len > 0) {
-            try writer.writeAll(".events = &[_]common.Message{");
-            for (interface.events.items) |event| try event.emitMessage(writer);
-            try writer.writeAll("},");
-        } else {
-            try writer.writeAll(".events = null,");
-        }
-        try writer.writeAll("};");
+            \\ extern const {}_interface: common.Interface;
+            \\ pub inline fn interface() *const common.Interface {{
+            \\  return &{}_interface;
+            \\ }}
+        , .{ interface.name, interface.name });
+
         for (interface.enums.items) |e| try e.emit(writer);
         try writer.writeAll("};");
     }
@@ -303,7 +316,7 @@ const Message = struct {
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
-                                    \\.{ .s = T.interface.name },
+                                    \\.{ .s = T.interface().name },
                                     \\.{ .u = version },
                                 );
                             }
@@ -328,9 +341,9 @@ const Message = struct {
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
                     try writer.print(", try proxy.marshalConstructor({}, &args, ", .{opcode});
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
-                    try writer.writeAll(".interface));");
+                    try writer.writeAll(".interface()));");
                 } else {
-                    try writer.print("return @ptrCast(*T, try proxy.marshalConstructorVersioned({}, &args, T.interface, version));", .{opcode});
+                    try writer.print("return @ptrCast(*T, try proxy.marshalConstructorVersioned({}, &args, T.interface(), version));", .{opcode});
                 }
             },
         }
