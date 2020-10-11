@@ -71,7 +71,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
                     inline for (@typeInfo(payload_field.field_type).Struct.fields) |f, i| {
                         @field(payload_data, f.name) = switch (@sizeOf(f.field_type)) {
                             4 => @bitCast(f.field_type, args[i].u),
-                            8 => @ptrCast(f.field_type, args[i].s),
+                            8 => @intToPtr(f.field_type, @ptrToInt(args[i].s)),
                             else => unreachable,
                         };
                     }
