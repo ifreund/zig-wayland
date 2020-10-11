@@ -35,7 +35,7 @@ const Protocol = struct {
         try writer.writeAll(
             \\const os = @import("std").os;
             \\const wayland = @import("wayland.zig");
-            \\const wl = wayland.client.wl;
+            \\const client = wayland.client;
             \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
@@ -46,7 +46,7 @@ const Protocol = struct {
         try writer.writeAll(
             \\const os = @import("std").os;
             \\const wayland = @import("wayland.zig");
-            \\const wl = wayland.server.wl;
+            \\const server = wayland.server;
             \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
@@ -103,7 +103,7 @@ const Interface = struct {
                     \\    listener: fn ({}: *{}, event: Event, data: T) void,
                     \\    data: T,
                     \\) !void {{
-                    \\    const proxy = @ptrCast(*wl.Proxy, {});
+                    \\    const proxy = @ptrCast(*client.wl.Proxy, {});
                     \\    try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
@@ -128,7 +128,7 @@ const Interface = struct {
                     \\    data: T,
                     \\    destroy: fn ({}: *{}) callconv(.C) void,
                     \\) void {{
-                    \\    const resource = @ptrCast(*wl.Resource, {});
+                    \\    const resource = @ptrCast(*server.wl.Resource, {});
                     \\    resource.setDispatcher(
                     \\        common.Dispatcher({}, T).dispatcher,
                     \\        handler,
@@ -237,7 +237,7 @@ const Message = struct {
             } else if (target == .client and arg.kind == .new_id) {
                 try printIdentifier(writer, arg.name);
                 try writer.writeAll(": *");
-                try printIdentifier(writer, case(.title, trimPrefix(arg.kind.new_id.?)));
+                try printAbsolute(.client, writer, arg.kind.new_id.?);
                 std.debug.assert(!arg.allow_null);
             } else {
                 try printIdentifier(writer, arg.name);
@@ -245,7 +245,7 @@ const Message = struct {
                 // See notes on NULL in doc comment for wl_message in wayland-util.h
                 if (target == .client and arg.kind == .object and !arg.allow_null)
                     try writer.writeByte('?');
-                try arg.emitType(writer);
+                try arg.emitType(target, writer);
             }
             try writer.writeByte(',');
         }
@@ -274,14 +274,14 @@ const Message = struct {
                 if (arg.kind.new_id) |iface|
                     try printIdentifier(writer, case(.title, trimPrefix(iface)))
                 else
-                    try writer.writeAll("wl.Resource");
+                    try writer.writeAll("server.wl.Resource");
             } else if (target == .client and arg.kind == .new_id) {
                 if (arg.kind.new_id == null) try writer.writeAll(", comptime T: type, version: u32");
             } else {
                 try writer.writeByte(',');
                 try printIdentifier(writer, arg.name);
                 try writer.writeByte(':');
-                try arg.emitType(writer);
+                try arg.emitType(target, writer);
             }
         }
         if (target == .server or message.kind != .constructor) {
@@ -294,9 +294,9 @@ const Message = struct {
             try writer.writeAll(") !*T {");
         }
         if (target == .server)
-            try writer.writeAll("const resource = @ptrCast(*wl.Resource,")
+            try writer.writeAll("const resource = @ptrCast(*server.wl.Resource,")
         else
-            try writer.writeAll("const proxy = @ptrCast(*wl.Proxy,");
+            try writer.writeAll("const proxy = @ptrCast(*client.wl.Proxy,");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(");");
         if (message.args.items.len > 0) {
@@ -386,7 +386,7 @@ const Arg = struct {
     }
 
     /// if of type new_id, must have non-null interface
-    fn emitType(arg: Arg, writer: anytype) !void {
+    fn emitType(arg: Arg, target: Target, writer: anytype) !void {
         switch (arg.kind) {
             .int => try writer.writeAll("i32"),
             .uint, .new_id => try writer.writeAll("u32"),
@@ -397,7 +397,7 @@ const Arg = struct {
             },
             .object => |interface| if (interface) |i| {
                 if (arg.allow_null) try writer.writeAll("?*") else try writer.writeByte('*');
-                try printIdentifier(writer, case(.title, trimPrefix(i)));
+                try printAbsolute(target, writer, i);
             } else {
                 if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeAll("*common.Object");
@@ -677,6 +677,14 @@ fn case(out_case: enum { title, camel }, snake_case: []const u8) []const u8 {
         upper = false;
     }
     return case_buf[0..i];
+}
+
+fn printAbsolute(target: Target, writer: anytype, interface: []const u8) !void {
+    try writer.writeAll(@tagName(target));
+    try writer.writeByte('.');
+    try printIdentifier(writer, prefix(interface));
+    try writer.writeByte('.');
+    try printIdentifier(writer, case(.title, trimPrefix(interface)));
 }
 
 fn printIdentifier(writer: anytype, identifier: []const u8) !void {
