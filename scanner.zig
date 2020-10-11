@@ -303,18 +303,18 @@ const Message = struct {
             try writer.writeAll("var args = [_]common.Argument{");
             for (message.args.items) |arg| {
                 switch (arg.kind) {
-                    .int, .uint, .fixed, .string, .object, .array, .fd => {
+                    .int, .uint, .fixed, .string, .array, .fd => {
                         try writer.writeAll(".{ .");
                         try arg.emitSignature(writer);
                         try writer.writeAll(" = ");
                         try printIdentifier(writer, arg.name);
                         try writer.writeAll("},");
                     },
-                    .new_id => |new_iface| {
-                        if (target == .server) {
-                            try writer.writeAll(".{ .o = ");
+                    .object, .new_id => |new_iface| {
+                        if (arg.kind == .object or target == .server) {
+                            try writer.writeAll(".{ .o = @ptrCast(*common.Object, ");
                             try printIdentifier(writer, arg.name);
-                            try writer.writeAll(" },");
+                            try writer.writeAll(") },");
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
@@ -385,7 +385,6 @@ const Arg = struct {
         }
     }
 
-    /// if of type new_id, must have non-null interface
     fn emitType(arg: Arg, target: Target, writer: anytype) !void {
         switch (arg.kind) {
             .int => try writer.writeAll("i32"),
