@@ -3,67 +3,70 @@ const os = @import("std").os;
 const wayland = @import("wayland.zig");
 const common = wayland.common;
 
-pub const Display = opaque {
-    extern fn wl_display_create() ?*Display;
-    pub fn create() !*Display {
-        return wl_display_create() orelse error.DisplayCreateFailed;
+/// This is wayland-server's wl_display. It has been renamed as zig-wayland has
+/// decided to hide wl_resources with opaque pointers in the same way that
+/// wayland-client does with wl_proxys. This of course creates a name conflict.
+pub const Server = opaque {
+    extern fn wl_display_create() ?*Server;
+    pub fn create() !*Server {
+        return wl_display_create() orelse error.ServerCreateFailed;
     }
 
-    extern fn wl_display_destroy(display: *Display) void;
+    extern fn wl_display_destroy(server: *Server) void;
     pub const destroy = wl_display_destroy;
 
-    extern fn wl_display_get_event_loop(display: *Display) *EventLoop;
+    extern fn wl_display_get_event_loop(server: *Server) *EventLoop;
     pub const getEventLoop = wl_display_get_event_loop;
 
-    extern fn wl_display_add_socket(display: *Display, name: [*:0]const u8) c_int;
-    pub fn addSocket(display: *Display, name: [*:0]const u8) !void {
+    extern fn wl_display_add_socket(server: *Server, name: [*:0]const u8) c_int;
+    pub fn addSocket(server: *Server, name: [*:0]const u8) !void {
         if (wl_display_add_socket(display, name) == -1)
             return error.AddSocketFailed;
     }
 
     // TODO implement the non-broken version of this
-    extern fn wl_display_add_socket_auto(display: *Display) ?[*:0]const u8;
+    extern fn wl_display_add_socket_auto(server: *Server) ?[*:0]const u8;
 
-    extern fn wl_display_add_socket_fd(display: *Display, sock_fd: c_int) c_int;
-    pub fn addSocketFd(display: *Display, sock_fd: os.fd_t) !void {
+    extern fn wl_display_add_socket_fd(server: *Server, sock_fd: c_int) c_int;
+    pub fn addSocketFd(server: *Server, sock_fd: os.fd_t) !void {
         if (wl_display_add_socket_fd(display, sock_fd) == -1)
             return error.AddSocketFailed;
     }
 
-    extern fn wl_display_terminate(display: *Display) void;
+    extern fn wl_display_terminate(server: *Server) void;
     pub const terminate = wl_display_terminate;
 
-    extern fn wl_display_run(display: *Display) void;
+    extern fn wl_display_run(server: *Server) void;
     pub const run = wl_display_run;
 
-    extern fn wl_display_flush_clients(display: *Display) void;
+    extern fn wl_display_flush_clients(server: *Server) void;
     pub const flushClients = wl_display_flush_clients;
 
-    extern fn wl_display_destroy_clients(display: *Display) void;
+    extern fn wl_display_destroy_clients(server: *Server) void;
     pub const destroyClients = wl_display_destroy_clients;
 
-    extern fn wl_display_get_serial(display: *Display) u32;
+    extern fn wl_display_get_serial(server: *Server) u32;
     pub const getSerial = wl_display_get_serial;
 
-    extern fn wl_display_next_serial(display: *Display) u32;
+    extern fn wl_display_next_serial(server: *Server) u32;
     pub const nextSerial = wl_display_next_serial;
 
-    extern fn wl_display_add_destroy_listener(display: *Display, listener: *Listener) void;
+    extern fn wl_display_add_destroy_listener(server: *Server, listener: *Listener) void;
     pub const addDestroyListener = wl_display_add_destroy_listener;
 
-    extern fn wl_display_add_client_created_listener(display: *Display, listener: *Listener) void;
+    extern fn wl_display_add_client_created_listener(server: *Server, listener: *Listener) void;
     pub const addClientCreatedListener = wl_display_add_client_created_listener;
 
-    extern fn wl_display_get_destroy_listener(display: *Display, notify: Listener.NotifyFn) ?*Listener;
+    extern fn wl_display_get_destroy_listener(server: *Server, notify: Listener.NotifyFn) ?*Listener;
     pub const getDestroyListener = wl_display_get_destroy_listener;
 
     extern fn wl_display_set_global_filter(
-        display: *Display,
+        server: *Server,
         filter: fn (client: *const Client, global: *const Global, data: ?*c_void) bool,
         data: ?*c_void,
     ) void;
     pub fn setGlobalFilter(
-        display: *Display,
+        server: *Server,
         comptime T: type,
         filter: fn (client: *const Client, global: *const Global, data: T) callconv(.C) bool,
         data: T,
@@ -71,27 +74,27 @@ pub const Display = opaque {
         wl_display_set_global_filter(display, filter, data);
     }
 
-    extern fn wl_display_get_client_list(display: *Display) *List;
+    extern fn wl_display_get_client_list(server: *Server) *List;
     pub const getClientList = wl_display_get_client_list;
 
-    extern fn wl_display_init_shm(display: *Display) c_int;
-    pub fn initShm(display: *Display) !void {
+    extern fn wl_display_init_shm(server: *Server) c_int;
+    pub fn initShm(server: *Server) !void {
         if (wl_display_init_shm(display) == -1)
             return error.GlobalCreateFailed;
     }
 
-    extern fn wl_display_add_shm_format(display: *Display, format: u32) ?*u32;
-    pub fn addShmFormat(display: *Display, format: u32) !*u32 {
+    extern fn wl_display_add_shm_format(server: *Server, format: u32) ?*u32;
+    pub fn addShmFormat(server: *Server, format: u32) !*u32 {
         return wl_display_add_shm_format(display, format) orelse error.OutOfMemory;
     }
 
     extern fn wl_display_add_protocol_logger(
-        display: *Display,
+        server: *Server,
         func: fn (data: ?*c_void, direction: ProtocolLogger.Type, message: *const ProtocolLogger.Message) void,
         data: ?*c_void,
     ) void;
     pub fn addProtocolLogger(
-        display: *Display,
+        server: *Server,
         comptime T: type,
         func: fn (data: T, direction: ProtocolLogger.Type, message: *const ProtocolLogger.Message) callconv(.C) void,
         data: T,
@@ -101,7 +104,7 @@ pub const Display = opaque {
 };
 
 pub const Client = opaque {
-    extern fn wl_client_create(display: *Display, fd: os.fd_t) ?*Client;
+    extern fn wl_client_create(server: *Server, fd: os.fd_t) ?*Client;
     pub const create = wl_client_create;
 
     extern fn wl_client_destroy(client: *Client) void;
@@ -164,20 +167,20 @@ pub const Client = opaque {
     extern fn wl_client_get_fd(client: *Client) os.fd_t;
     pub const getFd = wl_client_get_fd;
 
-    extern fn wl_client_get_display(client: *Client) *Display;
+    extern fn wl_client_get_display(client: *Client) *Server;
     pub const getDisplay = wl_client_get_display;
 };
 
 pub const Global = opaque {
     extern fn wl_global_create(
-        display: *Display,
+        server: *Server,
         interface: *const common.Interface,
         version: c_int,
         data: ?*c_void,
         bind: fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void,
     ) ?*Global;
     pub fn create(
-        display: *Display,
+        server: *Server,
         comptime Object: type,
         version: u32,
         comptime T: type,
@@ -510,36 +513,38 @@ pub const EventSource = opaque {
     }
 };
 
-pub const ShmBuffer = opaque {
-    extern fn wl_shm_buffer_get(resource: *Resource) ?*ShmBuffer;
-    pub const get = wl_shm_buffer_get;
+pub const shm = struct {
+    pub const Buffer = opaque {
+        extern fn wl_shm_buffer_get(resource: *Resource) ?*Buffer;
+        pub const get = wl_shm_buffer_get;
 
-    extern fn wl_shm_buffer_begin_access(buffer: *ShmBuffer) void;
-    pub const beginAccess = wl_shm_buffer_begin_access;
+        extern fn wl_shm_buffer_begin_access(buffer: *Buffer) void;
+        pub const beginAccess = wl_shm_buffer_begin_access;
 
-    extern fn wl_shm_buffer_end_access(buffer: *ShmBuffer) void;
-    pub const endAccess = wl_shm_buffer_end_access;
+        extern fn wl_shm_buffer_end_access(buffer: *Buffer) void;
+        pub const endAccess = wl_shm_buffer_end_access;
 
-    extern fn wl_shm_buffer_get_data(buffer: *ShmBuffer) ?*c_void;
-    pub const getData = wl_shm_buffer_get_data;
+        extern fn wl_shm_buffer_get_data(buffer: *Buffer) ?*c_void;
+        pub const getData = wl_shm_buffer_get_data;
 
-    extern fn wl_shm_buffer_get_format(buffer: *ShmBuffer) u32;
-    pub const getFormat = wl_shm_buffer_get_format;
+        extern fn wl_shm_buffer_get_format(buffer: *Buffer) u32;
+        pub const getFormat = wl_shm_buffer_get_format;
 
-    extern fn wl_shm_buffer_get_height(buffer: *ShmBuffer) i32;
-    pub const getHeight = wl_shm_buffer_get_height;
+        extern fn wl_shm_buffer_get_height(buffer: *Buffer) i32;
+        pub const getHeight = wl_shm_buffer_get_height;
 
-    extern fn wl_shm_buffer_get_width(buffer: *ShmBuffer) i32;
-    pub const getWidth = wl_shm_buffer_get_width;
+        extern fn wl_shm_buffer_get_width(buffer: *Buffer) i32;
+        pub const getWidth = wl_shm_buffer_get_width;
 
-    extern fn wl_shm_buffer_get_stride(buffer: *ShmBuffer) i32;
-    pub const getStride = wl_shm_buffer_get_stride;
+        extern fn wl_shm_buffer_get_stride(buffer: *Buffer) i32;
+        pub const getStride = wl_shm_buffer_get_stride;
 
-    extern fn wl_shm_buffer_ref_pool(buffer: *ShmBuffer) *ShmPool;
-    pub const refPool = wl_shm_buffer_ref_pool;
-};
+        extern fn wl_shm_buffer_ref_pool(buffer: *Buffer) *Pool;
+        pub const refPool = wl_shm_buffer_ref_pool;
+    };
 
-pub const ShmPool = opaque {
-    extern fn wl_shm_pool_unref(pool: *ShmPool) void;
-    pub const unref = wl_shm_pool_unref;
+    pub const Pool = opaque {
+        extern fn wl_shm_pool_unref(pool: *Pool) void;
+        pub const unref = wl_shm_pool_unref;
+    };
 };

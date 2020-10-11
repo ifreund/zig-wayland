@@ -60,7 +60,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
     return struct {
         pub fn dispatcher(
             implementation: ?*const c_void,
-            object: if (client) *wayland.client.Proxy else *wayland.server.Resource,
+            object: if (client) *wayland.client.wl.Proxy else *wayland.server.wl.Resource,
             opcode: u32,
             message: *const Message,
             args: [*]Argument,

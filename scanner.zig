@@ -34,7 +34,7 @@ const Protocol = struct {
     fn emitClient(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
             \\const wayland = @import("wayland.zig");
-            \\const client = wayland.client;
+            \\const wl = wayland.client.wl;
             \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
@@ -44,7 +44,7 @@ const Protocol = struct {
     fn emitServer(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
             \\const wayland = @import("wayland.zig");
-            \\const server = wayland.server;
+            \\const wl = wayland.server.wl;
             \\const common = wayland.common;
         );
         for (protocol.interfaces.items) |interface|
@@ -101,7 +101,7 @@ const Interface = struct {
                     \\    listener: fn ({}: *{}, event: Event, data: T) void,
                     \\    data: T,
                     \\) !void {{
-                    \\    const proxy = @ptrCast(*client.Proxy, {});
+                    \\    const proxy = @ptrCast(*wl.Proxy, {});
                     \\    try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
@@ -126,7 +126,7 @@ const Interface = struct {
                     \\    data: T,
                     \\    destroy: fn ({}: *{}) callconv(.C) void,
                     \\) void {{
-                    \\    const resource = @ptrCast(*server.Resource, {});
+                    \\    const resource = @ptrCast(*wl.Resource, {});
                     \\    resource.setDispatcher(
                     \\        common.Dispatcher({}, T).dispatcher,
                     \\        handler,
@@ -259,7 +259,7 @@ const Message = struct {
                 if (arg.kind.new_id) |iface|
                     try printIdentifier(writer, case(.title, trimPrefix(iface)))
                 else
-                    try writer.writeAll("server.Resource");
+                    try writer.writeAll("wl.Resource");
             } else if (target == .client and arg.kind == .new_id) {
                 if (arg.kind.new_id == null) try writer.writeAll(", comptime T: type, version: u32");
             } else {
@@ -279,9 +279,9 @@ const Message = struct {
             try writer.writeAll(") !*T {");
         }
         if (target == .server)
-            try writer.writeAll("const resource = @ptrCast(*server.Resource,")
+            try writer.writeAll("const resource = @ptrCast(*wl.Resource,")
         else
-            try writer.writeAll("const proxy = @ptrCast(*client.Proxy,");
+            try writer.writeAll("const proxy = @ptrCast(*wl.Proxy,");
         try printIdentifier(writer, trimPrefix(interface.name));
         try writer.writeAll(");");
         if (message.args.items.len > 0) {
@@ -492,11 +492,12 @@ pub fn main() !void {
         const client_file = try std.fs.cwd().createFile("client.zig", .{});
         defer client_file.close();
         const writer = client_file.writer();
-        try writer.writeAll(@embedFile("src/client_core.zig"));
 
         var iter = scanner.client.iterator();
         while (iter.next()) |entry| {
             try writer.print("pub const {} = struct {{", .{entry.key});
+            if (mem.eql(u8, entry.key, "wl"))
+                try writer.writeAll("pub usingnamespace @import(\"wayland_client_core.zig\");\n");
             for (entry.value.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
             try writer.writeAll("};\n");
@@ -507,11 +508,12 @@ pub fn main() !void {
         const server_file = try std.fs.cwd().createFile("server.zig", .{});
         defer server_file.close();
         const writer = server_file.writer();
-        try writer.writeAll(@embedFile("src/server_core.zig"));
 
         var iter = scanner.server.iterator();
         while (iter.next()) |entry| {
             try writer.print("pub const {} = struct {{", .{entry.key});
+            if (mem.eql(u8, entry.key, "wl"))
+                try writer.writeAll("pub usingnamespace @import(\"wayland_server_core.zig\");\n");
             for (entry.value.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
             try writer.writeAll("};\n");
