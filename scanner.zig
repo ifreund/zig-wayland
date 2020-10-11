@@ -420,7 +420,7 @@ const Enum = struct {
     fn emit(e: Enum, writer: anytype) !void {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, case(.title, e.name));
-        try writer.writeAll(" = enum {");
+        try writer.writeAll(" = enum(u32) {");
         for (e.entries.items) |entry| {
             try printIdentifier(writer, entry.name);
             try writer.print("= {},", .{entry.value});
