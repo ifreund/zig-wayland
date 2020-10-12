@@ -51,13 +51,13 @@ pub const Server = opaque {
     extern fn wl_display_next_serial(server: *Server) u32;
     pub const nextSerial = wl_display_next_serial;
 
-    extern fn wl_display_add_destroy_listener(server: *Server, listener: *Listener) void;
+    extern fn wl_display_add_destroy_listener(server: *Server, listener: *Listener(*Server)) void;
     pub const addDestroyListener = wl_display_add_destroy_listener;
 
-    extern fn wl_display_add_client_created_listener(server: *Server, listener: *Listener) void;
+    extern fn wl_display_add_client_created_listener(server: *Server, listener: *Listener(*Client)) void;
     pub const addClientCreatedListener = wl_display_add_client_created_listener;
 
-    extern fn wl_display_get_destroy_listener(server: *Server, notify: Listener.NotifyFn) ?*Listener;
+    extern fn wl_display_get_destroy_listener(server: *Server, notify: Listener(*Server).NotifyFn) ?*Listener(*Server);
     pub const getDestroyListener = wl_display_get_destroy_listener;
 
     extern fn wl_display_set_global_filter(
@@ -131,10 +131,10 @@ pub const Client = opaque {
         return credentials;
     }
 
-    extern fn wl_client_add_destroy_listener(client: *Client, listener: *Listener) void;
+    extern fn wl_client_add_destroy_listener(client: *Client, listener: *Listener(*Client)) void;
     pub const addDestroyListener = wl_client_add_destroy_listener;
 
-    extern fn wl_client_get_destroy_listener(client: *Client, notify: Listener.NotifyFn) ?*Listener;
+    extern fn wl_client_get_destroy_listener(client: *Client, notify: Listener(*Client).NotifyFn) ?*Listener(*Client);
     pub const getDestroyListener = wl_client_get_destroy_listener;
 
     extern fn wl_client_get_object(client: *Client, id: u32) ?*Resource;
@@ -146,7 +146,7 @@ pub const Client = opaque {
     extern fn wl_client_post_implementation_error(client: *Client, msg: [*:0]const u8, ...) void;
     pub const postImplementationError = wl_client_post_implementation_error;
 
-    extern fn wl_client_add_resource_created_listener(client: *Client, listener: *Listener) void;
+    extern fn wl_client_add_resource_created_listener(client: *Client, listener: *Listener(*Resource)) void;
     pub const addResourceCreatedListener = wl_client_add_resource_created_listener;
 
     const IteratorResult = extern enum { stop, cont };
@@ -290,10 +290,10 @@ pub const Resource = opaque {
     extern fn wl_resource_get_class(resource: *Resource) [*:0]const u8;
     pub const getClass = wl_resource_get_class;
 
-    extern fn wl_resource_add_destroy_listener(resource: *Resource, listener: *Listener) void;
+    extern fn wl_resource_add_destroy_listener(resource: *Resource, listener: *Listener(*Resource)) void;
     pub const addDestroyListener = wl_resource_add_destroy_listener;
 
-    extern fn wl_resource_get_destroy_listener(resource: *Resource, notify: Listener.NotifyFn) ?*Listener;
+    extern fn wl_resource_get_destroy_listener(resource: *Resource, notify: Listener(*Resource).NotifyFn) ?*Listener(*Resource);
     pub const getDestroyListener = wl_resource_get_destroy_listener;
 };
 
@@ -362,32 +362,48 @@ pub const List = extern struct {
     }
 };
 
-pub const Listener = extern struct {
-    pub const NotifyFn = fn (listener: *Listener, data: ?*c_void) callconv(.C) void;
+pub fn Listener(comptime T: type) type {
+    return extern struct {
+        pub const NotifyFn = fn (listener: *Listener, data: T) callconv(.C) void;
 
-    link: List,
-    notify: NotifyFn,
-};
+        link: List,
+        notify: NotifyFn,
+    };
+}
 
-pub const Signal = extern struct {
-    listener_list: List,
+pub fn Signal(comptime T: type) type {
+    return extern struct {
+        const Self = @This();
 
-    pub fn init(signal: *Signal) void {
-        signal.listener_list.init();
-    }
+        listener_list: List,
 
-    pub fn add(signal: *Signal, listener: *Listener) void {
-        signal.listener_list.append(&listener.link);
-    }
+        pub fn init(signal: *Self) void {
+            signal.listener_list.init();
+        }
 
-    pub fn get(signal: *Signal, notify: Listener.NotifyFn) ?*Listener {
-        // TODO
-    }
+        pub fn add(signal: *Self, listener: *Listener(T)) void {
+            signal.listener_list.append(&listener.link);
+        }
 
-    pub fn emit(signal: *Signal, data: ?*c_void) void {
-        //TODO
-    }
-};
+        pub fn get(signal: *Self, notify: Listener(T).NotifyFn) ?*Listener(T) {
+            var it = signal.listener_list.next;
+            return while (it != &signal.listener_list) : (it = it.next) {
+                const listener = @fieldParentPtr(Listener(T), it, "link");
+                if (listener.notify == notify) break listener;
+            } else null;
+        }
+
+        pub fn emit(signal: *Self, data: T) void {
+            var it = signal.listener_list.next;
+            while (it != &signal.listener_list) {
+                const listener = @fieldParentPtr(Listener(T), it, "link");
+                // Must happen before notify is called in case it removes the current link
+                it = it.next;
+                listener.notify(listener, data);
+            }
+        }
+    };
+}
 
 pub const EventLoop = opaque {
     extern fn wl_event_loop_create() ?*EventLoop;
