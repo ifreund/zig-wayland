@@ -419,12 +419,13 @@ const Enum = struct {
     fn emit(e: Enum, writer: anytype) !void {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, case(.title, e.name));
-        try writer.writeAll(" = extern enum {");
+        try writer.writeAll(" = extern enum(c_int) {");
         for (e.entries.items) |entry| {
             try printIdentifier(writer, entry.name);
             try writer.print("= {},", .{entry.value});
         }
-        try writer.writeAll("};\n");
+        // Always generate non-exhaustive enums to ensure forward compatability
+        try writer.writeAll("_,};\n");
     }
 };
 
