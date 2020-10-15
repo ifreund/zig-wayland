@@ -34,9 +34,8 @@ const Protocol = struct {
     fn emitClient(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
             \\const os = @import("std").os;
-            \\const wayland = @import("wayland.zig");
-            \\const client = wayland.client;
-            \\const common = wayland.common;
+            \\const client = @import("wayland.zig").client;
+            \\const common = @import("common.zig");
         );
         for (protocol.interfaces.items) |interface|
             try interface.emit(.client, writer);
@@ -45,9 +44,8 @@ const Protocol = struct {
     fn emitServer(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
             \\const os = @import("std").os;
-            \\const wayland = @import("wayland.zig");
-            \\const server = wayland.server;
-            \\const common = wayland.common;
+            \\const server = @import("wayland.zig").server;
+            \\const common = @import("common.zig");
         );
         for (protocol.interfaces.items) |interface|
             try interface.emit(.server, writer);
@@ -55,8 +53,7 @@ const Protocol = struct {
 
     fn emitCommon(protocol: Protocol, writer: anytype) !void {
         try writer.writeAll(
-            \\const wayland = @import("wayland.zig");
-            \\const common = wayland.common;
+            \\const common = @import("common.zig");
         );
         for (protocol.interfaces.items) |interface|
             try interface.emitCommon(writer);
@@ -80,13 +77,13 @@ const Interface = struct {
 
         try writer.print(
             \\pub const {} = opaque {{
-            \\ pub const interface = wayland.common.{}.{}.interface;
+            \\ pub const interface = common.{}.{}.interface;
         , .{ title_case, prefix(interface.name), snake_case });
 
         for (interface.enums.items) |e| {
             try writer.writeAll("pub const ");
             try printIdentifier(writer, case(.title, e.name));
-            try writer.print(" = wayland.common.{}.{}.", .{ prefix(interface.name), snake_case });
+            try writer.print(" = common.{}.{}.", .{ prefix(interface.name), snake_case });
             try printIdentifier(writer, case(.title, e.name));
             try writer.writeAll(";\n");
         }

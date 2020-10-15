@@ -48,8 +48,8 @@ pub fn dispatch(display: *Display) !u32 {
     };
 }
 
-extern fn wl_display_dispatch_queue(display: *Display, queue: *client.EventQueue) c_int;
-pub fn dispatchQueue(display: *Display, queue: *client.EventQueue) !u32 {
+extern fn wl_display_dispatch_queue(display: *Display, queue: *client.wl.EventQueue) c_int;
+pub fn dispatchQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_dispatch_queue(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u32, rc),
@@ -87,8 +87,8 @@ pub fn dispatchPending(display: *Display) !u32 {
     };
 }
 
-extern fn wl_display_dispatch_queue_pending(display: *Display, queue: *client.EventQueue) c_int;
-pub fn dispatchQueuePending(display: *Display, queue: *client.EventQueue) !u32 {
+extern fn wl_display_dispatch_queue_pending(display: *Display, queue: *client.wl.EventQueue) c_int;
+pub fn dispatchQueuePending(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_dispatch_queue_pending(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u32, rc),
@@ -107,8 +107,8 @@ pub fn roundtrip(display: *Display) !u32 {
     };
 }
 
-extern fn wl_display_roundtrip_queue(display: *Display, queue: *client.EventQueue) c_int;
-pub fn roundtripQueue(display: *Display, queue: *client.EventQueue) !u32 {
+extern fn wl_display_roundtrip_queue(display: *Display, queue: *client.wl.EventQueue) c_int;
+pub fn roundtripQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_roundtrip_queue(display, queue);
     return switch (os.errno(rc)) {
         0 => @intCast(u32, rc),
@@ -127,8 +127,8 @@ pub fn flush(display: *Display) error{WouldBlock}!u32 {
     };
 }
 
-extern fn wl_display_create_queue(display: *Display) *client.EventQueue;
-pub fn createQueue(display: *Display) error{OutOfMemory}!*client.EventQueue {
+extern fn wl_display_create_queue(display: *Display) *client.wl.EventQueue;
+pub fn createQueue(display: *Display) error{OutOfMemory}!*client.wl.EventQueue {
     return wl_display_create_queue(display) orelse error.OutOfMemory;
 }
 

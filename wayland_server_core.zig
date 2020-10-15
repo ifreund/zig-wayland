@@ -1,7 +1,12 @@
 const os = @import("std").os;
 
-const wayland = @import("wayland.zig");
-const common = wayland.common;
+const common = @import("common.zig");
+pub const Object = common.Object;
+pub const Message = common.Message;
+pub const Interface = common.Interface;
+pub const Array = common.Array;
+pub const Fixed = common.Fixed;
+pub const Argument = common.Argument;
 
 /// This is wayland-server's wl_display. It has been renamed as zig-wayland has
 /// decided to hide wl_resources with opaque pointers in the same way that
@@ -174,7 +179,7 @@ pub const Client = opaque {
 pub const Global = opaque {
     extern fn wl_global_create(
         server: *Server,
-        interface: *const common.Interface,
+        interface: *const Interface,
         version: c_int,
         data: ?*c_void,
         bind: fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void,
@@ -197,7 +202,7 @@ pub const Global = opaque {
     extern fn wl_global_destroy(global: *Global) void;
     pub const destroy = wl_global_destroy;
 
-    extern fn wl_global_get_interface(global: *const Global) *const common.Interface;
+    extern fn wl_global_get_interface(global: *const Global) *const Interface;
     pub const getInterface = wl_global_get_interface;
 
     extern fn wl_global_get_user_data(global: *const Global) ?*c_void;
@@ -208,7 +213,7 @@ pub const Global = opaque {
 };
 
 pub const Resource = opaque {
-    extern fn wl_resource_create(client: *Client, interface: *const common.Interface, version: c_int, id: u32) ?*Resource;
+    extern fn wl_resource_create(client: *Client, interface: *const Interface, version: c_int, id: u32) ?*Resource;
     pub fn create(client: *Client, comptime Object: type, version: u32, id: u32) !*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
@@ -218,10 +223,10 @@ pub const Resource = opaque {
     extern fn wl_resource_destroy(resource: *Resource) void;
     pub const destroy = wl_resource_destroy;
 
-    extern fn wl_resource_post_event_array(resource: *Resource, opcode: u32, args: [*]common.Argument) void;
+    extern fn wl_resource_post_event_array(resource: *Resource, opcode: u32, args: [*]Argument) void;
     pub const postEvent = wl_resource_post_event_array;
 
-    extern fn wl_resource_queue_event_array(resource: *Resource, opcode: u32, args: [*]common.Argument) void;
+    extern fn wl_resource_queue_event_array(resource: *Resource, opcode: u32, args: [*]Argument) void;
     pub const queueEvent = wl_resource_queue_event_array;
 
     extern fn wl_resource_post_error(resource: *Resource, code: u32, message: [*:0]const u8, ...) void;
@@ -234,8 +239,8 @@ pub const Resource = opaque {
         implementation: ?*const c_void,
         resource: *Resource,
         opcode: u32,
-        message: *const common.Message,
-        args: [*]common.Argument,
+        message: *const Message,
+        args: [*]Argument,
     ) callconv(.C) c_int;
     pub const DestroyFn = fn (resource: *Resource) callconv(.C) void;
     extern fn wl_resource_set_dispatcher(
@@ -306,9 +311,9 @@ pub const ProtocolLogger = opaque {
     pub const Message = extern struct {
         resource: *Resource,
         message_opcode: c_int,
-        message: *common.Message,
+        message: *Message,
         arguments_count: c_int,
-        arguments: ?[*]common.Argument,
+        arguments: ?[*]Argument,
     };
 
     extern fn wl_protocol_logger_destroy(logger: *ProtocolLogger) void;
