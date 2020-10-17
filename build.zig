@@ -47,4 +47,16 @@ pub fn build(b: *Builder) void {
 
         globals.install();
     }
+
+    if (examples) {
+        const listener = b.addExecutable("listener", "example/listener.zig");
+        listener.setTarget(target);
+        listener.setBuildMode(mode);
+
+        // Requires the scanner to have been run for this to build
+        // TODO: integrate scanner with build system
+        listener.addPackagePath("wayland", "wayland.zig");
+
+        listener.install();
+    }
 }

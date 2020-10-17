@@ -62,7 +62,7 @@ pub const Server = opaque {
     extern fn wl_display_add_client_created_listener(server: *Server, listener: *Listener(*Client)) void;
     pub const addClientCreatedListener = wl_display_add_client_created_listener;
 
-    extern fn wl_display_get_destroy_listener(server: *Server, notify: Listener(*Server).NotifyFn) ?*Listener(*Server);
+    extern fn wl_display_get_destroy_listener(server: *Server, notify: @TypeOf(Listener(*Server).notify)) ?*Listener(*Server);
     pub const getDestroyListener = wl_display_get_destroy_listener;
 
     extern fn wl_display_set_global_filter(
@@ -139,7 +139,7 @@ pub const Client = opaque {
     extern fn wl_client_add_destroy_listener(client: *Client, listener: *Listener(*Client)) void;
     pub const addDestroyListener = wl_client_add_destroy_listener;
 
-    extern fn wl_client_get_destroy_listener(client: *Client, notify: Listener(*Client).NotifyFn) ?*Listener(*Client);
+    extern fn wl_client_get_destroy_listener(client: *Client, notify: @TypeOf(Listener(*Client).notify)) ?*Listener(*Client);
     pub const getDestroyListener = wl_client_get_destroy_listener;
 
     extern fn wl_client_get_object(client: *Client, id: u32) ?*Resource;
@@ -298,7 +298,7 @@ pub const Resource = opaque {
     extern fn wl_resource_add_destroy_listener(resource: *Resource, listener: *Listener(*Resource)) void;
     pub const addDestroyListener = wl_resource_add_destroy_listener;
 
-    extern fn wl_resource_get_destroy_listener(resource: *Resource, notify: Listener(*Resource).NotifyFn) ?*Listener(*Resource);
+    extern fn wl_resource_get_destroy_listener(resource: *Resource, notify: @TypeOf(Listener(*Resource).notify)) ?*Listener(*Resource);
     pub const getDestroyListener = wl_resource_get_destroy_listener;
 };
 
@@ -332,16 +332,16 @@ pub const List = extern struct {
         elm.prev = list;
         elm.next = list.next;
         list.next = elm;
-        elm.next.prev = elm;
+        elm.next.?.prev = elm;
     }
 
     pub fn append(list: *List, elm: *List) void {
-        list.prev.prepend(elm);
+        list.prev.?.prepend(elm);
     }
 
     pub fn remove(elm: *elm) void {
-        elm.prev.next = elm.next;
-        elm.next.prev = elm.prev;
+        elm.prev.?.next = elm.next;
+        elm.next.?.prev = elm.prev;
         elm.* = .{ .prev = null, .next = null };
     }
 
@@ -360,19 +360,39 @@ pub const List = extern struct {
 
     pub fn insertList(list: *List, other: *List) void {
         if (other.empty()) return;
-        other.next.prev = list;
-        other.prev.next = list.next;
-        list.next.prev = other.prev;
+        other.next.?.prev = list;
+        other.prev.?.next = list.next;
+        list.next.?.prev = other.prev;
         list.next = other.next;
     }
 };
 
 pub fn Listener(comptime T: type) type {
     return extern struct {
-        pub const NotifyFn = fn (listener: *Listener, data: T) callconv(.C) void;
+        const Self = @This();
+
+        pub const NotifyFn = if (T == void)
+            fn (listener: *Self) void
+        else
+            fn (listener: *Self, data: T) void;
 
         link: List,
-        notify: NotifyFn,
+        notify: fn (listener: *Self, data: ?*c_void) callconv(.C) void,
+
+        pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
+            self.notify = if (T == void)
+                struct {
+                    fn wrapper(listener: *Self, _: ?*c_void) callconv(.C) void {
+                        @call(.{ .modifier = .always_inline }, notify, .{listener});
+                    }
+                }.wrapper
+            else
+                struct {
+                    fn wrapper(listener: *Self, data: ?*c_void) callconv(.C) void {
+                        @call(.{ .modifier = .always_inline }, notify, .{ listener, @intToPtr(T, @ptrToInt(data)) });
+                    }
+                }.wrapper;
+        }
     };
 }
 
@@ -390,7 +410,7 @@ pub fn Signal(comptime T: type) type {
             signal.listener_list.append(&listener.link);
         }
 
-        pub fn get(signal: *Self, notify: Listener(T).NotifyFn) ?*Listener(T) {
+        pub fn get(signal: *Self, notify: @TypeOf(Listener(T).notify)) ?*Listener(T) {
             var it = signal.listener_list.next;
             return while (it != &signal.listener_list) : (it = it.next) {
                 const listener = @fieldParentPtr(Listener(T), it, "link");
@@ -398,15 +418,30 @@ pub fn Signal(comptime T: type) type {
             } else null;
         }
 
-        pub fn emit(signal: *Self, data: T) void {
-            var it = signal.listener_list.next;
-            while (it != &signal.listener_list) {
-                const listener = @fieldParentPtr(Listener(T), it, "link");
-                // Must happen before notify is called in case it removes the current link
-                it = it.next;
-                listener.notify(listener, data);
-            }
-        }
+        pub const emit = if (T == void)
+            struct {
+                pub fn emit(signal: *Self) void {
+                    var it = signal.listener_list.next.?;
+                    while (it != &signal.listener_list) {
+                        const listener = @fieldParentPtr(Listener(T), "link", it);
+                        // Must happen before notify is called in case it removes the current link
+                        it = it.next.?;
+                        listener.notify(listener, null);
+                    }
+                }
+            }.emit
+        else
+            struct {
+                pub fn emit(signal: *Self, data: T) void {
+                    var it = signal.listener_list.next.?;
+                    while (it != &signal.listener_list) {
+                        const listener = @fieldParentPtr(Listener(T), "link", it);
+                        // Must happen before notify is called in case it removes the current link
+                        it = it.next.?;
+                        listener.notify(listener, data);
+                    }
+                }
+            }.emit;
     };
 }
 
@@ -497,10 +532,10 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_get_fd(loop: *EventLoop) os.fd_t;
     pub const getFd = wl_event_loop_get_fd;
 
-    extern fn wl_event_loop_add_destroy_listener(loop: *EventLoop, listener: *Listener) void;
+    extern fn wl_event_loop_add_destroy_listener(loop: *EventLoop, listener: *Listener(*EventLoop)) void;
     pub const addDestroyListener = wl_event_loop_add_destroy_listener;
 
-    extern fn wl_event_loop_get_destroy_listener(loop: *EventLoop, notify: Listener.NotifyFn) ?*Listener;
+    extern fn wl_event_loop_get_destroy_listener(loop: *EventLoop, notify: @TypeOf(Listener(*EventLoop).notify)) ?*Listener;
     pub const getDestroyListener = wl_event_loop_get_destroy_listener;
 };
 
