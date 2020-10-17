@@ -321,8 +321,8 @@ pub const ProtocolLogger = opaque {
 };
 
 pub const List = extern struct {
-    prev: *List,
-    next: *List,
+    prev: ?*List,
+    next: ?*List,
 
     pub fn init(list: *List) void {
         list.* = .{ .prev = list, .next = list };
@@ -342,7 +342,7 @@ pub const List = extern struct {
     pub fn remove(elm: *elm) void {
         elm.prev.next = elm.next;
         elm.next.prev = elm.prev;
-        elm = undefined;
+        elm.* = .{ .prev = null, .next = null };
     }
 
     pub fn length(list: *const List) usize {
