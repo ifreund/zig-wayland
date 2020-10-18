@@ -748,7 +748,7 @@ test "parsing" {
                 testing.expectEqual(false, callback.allow_null);
                 testing.expectEqual(@as(?[]const u8, null), callback.enum_name);
             }
-            testing.expectEqual(false, sync.destructor);
+            testing.expect(sync.kind == .constructor);
         }
 
         {
