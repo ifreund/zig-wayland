@@ -573,7 +573,9 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
     var i: usize = 0;
     while (raw_atts[i]) |att| : (i += 2) {
         inline for (@typeInfo(@TypeOf(atts)).Struct.fields) |field| {
-            if (mem.eql(u8, field.name, mem.span(att))) {
+            if (mem.eql(u8, field.name, mem.span(att)) or (mem.eql(u8, field.name, "allow_null") and
+                mem.eql(u8, mem.span(att), "allow-null")))
+            {
                 const val = mem.span(raw_atts[i + 1].?);
                 if (field.field_type == ?u32) {
                     @field(atts, field.name) = try std.fmt.parseInt(u32, val, 10);
@@ -809,6 +811,34 @@ test "parsing" {
                 testing.expectEqualSlices(u8, "3", implementation.value);
             }
             testing.expectEqual(false, error_enum.bitfield);
+        }
+    }
+
+    {
+        const wl_data_offer = ctx.protocol.interfaces.items[7];
+        testing.expectEqualSlices(u8, "wl_data_offer", wl_data_offer.name);
+        testing.expectEqual(@as(u32, 3), wl_data_offer.version);
+        testing.expectEqual(@as(usize, 5), wl_data_offer.requests.items.len);
+        testing.expectEqual(@as(usize, 3), wl_data_offer.events.items.len);
+        testing.expectEqual(@as(usize, 1), wl_data_offer.enums.items.len);
+
+        {
+            const accept = wl_data_offer.requests.items[0];
+            testing.expectEqualSlices(u8, "accept", accept.name);
+            testing.expectEqual(@as(u32, 1), accept.since);
+            testing.expectEqual(@as(usize, 2), accept.args.items.len);
+            {
+                const serial = accept.args.items[0];
+                testing.expectEqualSlices(u8, "serial", serial.name);
+                testing.expectEqual(Arg.Type.uint, serial.kind);
+                testing.expectEqual(false, serial.allow_null);
+            }
+            {
+                const mime_type = accept.args.items[1];
+                testing.expectEqualSlices(u8, "mime_type", mime_type.name);
+                testing.expectEqual(Arg.Type.string, mime_type.kind);
+                testing.expectEqual(true, mime_type.allow_null);
+            }
         }
     }
 }
