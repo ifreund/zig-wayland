@@ -24,22 +24,24 @@ pub const Array = extern struct {
     data: *c_void,
 };
 
+/// A 24.8 signed fixed-point number.
 pub const Fixed = extern enum(i32) {
     _,
 
     pub fn toInt(f: Fixed) i24 {
-        return @enumToInt(f) >> 8;
+        return @truncate(i24, @enumToInt(f) >> 8);
     }
 
     pub fn fromInt(i: i24) Fixed {
         return @intToEnum(Fixed, @as(i32, i) << 8);
     }
 
-    pub fn toDouble() i24 {
-        // TODO
+    pub fn toDouble(f: Fixed) f64 {
+        return @intToFloat(f64, @enumToInt(f)) / 256;
     }
+
     pub fn fromDouble(d: f64) Fixed {
-        // TODO
+        return @intToEnum(Fixed, @floatToInt(i32, d * 256));
     }
 };
 
@@ -88,4 +90,21 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
             unreachable;
         }
     };
+}
+
+test "Fixed" {
+    const testing = std.testing;
+
+    {
+        const initial: f64 = 10.5301837;
+        const val = Fixed.fromDouble(initial);
+        testing.expectWithinMargin(initial, val.toDouble(), 1 / 256.);
+        testing.expectEqual(@as(i24, 10), val.toInt());
+    }
+
+    {
+        const val = Fixed.fromInt(10);
+        testing.expectEqual(@as(f64, 10.0), val.toDouble());
+        testing.expectEqual(@as(i24, 10), val.toInt());
+    }
 }
