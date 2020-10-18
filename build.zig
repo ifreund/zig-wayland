@@ -22,15 +22,19 @@ pub fn build(b: *Builder) void {
     }
 
     {
-        const scanner_test = b.addTest("scanner.zig");
-        scanner_test.setTarget(target);
-        scanner_test.setBuildMode(mode);
-
-        scanner_test.linkLibC();
-        scanner_test.linkSystemLibrary("expat");
+        const test_files = [_][]const u8{ "scanner.zig", "src/common_core.zig" };
 
         const test_step = b.step("test", "Run the tests");
-        test_step.dependOn(&scanner_test.step);
+        for (test_files) |file| {
+            const t = b.addTest(file);
+            t.setTarget(target);
+            t.setBuildMode(mode);
+
+            t.linkLibC();
+            t.linkSystemLibrary("expat");
+
+            test_step.dependOn(&t.step);
+        }
     }
 
     if (examples) {
