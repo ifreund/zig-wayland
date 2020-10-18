@@ -309,9 +309,15 @@ const Message = struct {
                     },
                     .object, .new_id => |new_iface| {
                         if (arg.kind == .object or target == .server) {
-                            try writer.writeAll(".{ .o = @ptrCast(*common.Object, ");
-                            try printIdentifier(writer, arg.name);
-                            try writer.writeAll(") },");
+                            if (arg.allow_null) {
+                                try writer.writeAll(".{ .o = if (");
+                                try printIdentifier(writer, arg.name);
+                                try writer.writeAll(") |o| @ptrCast(*common.Object, o) else null },");
+                            } else {
+                                try writer.writeAll(".{ .o = @ptrCast(*common.Object, ");
+                                try printIdentifier(writer, arg.name);
+                                try writer.writeAll(") },");
+                            }
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
