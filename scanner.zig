@@ -29,6 +29,7 @@ const Target = enum {
 
 const Protocol = struct {
     name: []const u8,
+    namespace: []const u8,
     interfaces: std.ArrayList(Interface) = std.ArrayList(Interface).init(gpa),
 
     fn emitClient(protocol: Protocol, writer: anytype) !void {
@@ -38,7 +39,7 @@ const Protocol = struct {
             \\const common = @import("common.zig");
         );
         for (protocol.interfaces.items) |interface|
-            try interface.emit(.client, writer);
+            try interface.emit(.client, protocol.namespace, writer);
     }
 
     fn emitServer(protocol: Protocol, writer: anytype) !void {
@@ -48,7 +49,7 @@ const Protocol = struct {
             \\const common = @import("common.zig");
         );
         for (protocol.interfaces.items) |interface|
-            try interface.emit(.server, writer);
+            try interface.emit(.server, protocol.namespace, writer);
     }
 
     fn emitCommon(protocol: Protocol, writer: anytype) !void {
@@ -67,7 +68,7 @@ const Interface = struct {
     events: std.ArrayList(Message) = std.ArrayList(Message).init(gpa),
     enums: std.ArrayList(Enum) = std.ArrayList(Enum).init(gpa),
 
-    fn emit(interface: Interface, target: Target, writer: anytype) !void {
+    fn emit(interface: Interface, target: Target, namespace: []const u8, writer: anytype) !void {
         var buf: [1024]u8 = undefined;
         var fbs = std.io.fixedBufferStream(&buf);
         try printIdentifier(fbs.writer(), case(.title, trimPrefix(interface.name)));
@@ -78,12 +79,12 @@ const Interface = struct {
         try writer.print(
             \\pub const {} = opaque {{
             \\ pub const interface = common.{}.{}.interface;
-        , .{ title_case, prefix(interface.name), snake_case });
+        , .{ title_case, namespace, snake_case });
 
         for (interface.enums.items) |e| {
             try writer.writeAll("pub const ");
             try printIdentifier(writer, case(.title, e.name));
-            try writer.print(" = common.{}.{}.", .{ prefix(interface.name), snake_case });
+            try writer.print(" = common.{}.{}.", .{ namespace, snake_case });
             try printIdentifier(writer, case(.title, e.name));
             try writer.writeAll(";\n");
         }
@@ -478,25 +479,24 @@ const Scanner = struct {
         for (protocol_name) |*ch| {
             if (ch.* == '-') ch.* = '_';
         }
-        const namespace = if (mem.eql(u8, protocol_name, "wayland")) "wl" else prefix(protocol_name);
 
         const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_client.zig" });
         const client_file = try std.fs.cwd().createFile(client_filename, .{});
         defer client_file.close();
         try ctx.protocol.emitClient(client_file.writer());
-        try (try scanner.client.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, client_filename));
+        try (try scanner.client.getOrPutValue(ctx.protocol.namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, client_filename));
 
         const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_server.zig" });
         const server_file = try std.fs.cwd().createFile(server_filename, .{});
         defer server_file.close();
         try ctx.protocol.emitServer(server_file.writer());
-        try (try scanner.server.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, server_filename));
+        try (try scanner.server.getOrPutValue(ctx.protocol.namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, server_filename));
 
         const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_common.zig" });
         const common_file = try std.fs.cwd().createFile(common_filename, .{});
         defer common_file.close();
         try ctx.protocol.emitCommon(common_file.writer());
-        try (try scanner.common.getOrPutValue(namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, common_filename));
+        try (try scanner.common.getOrPutValue(ctx.protocol.namespace, .{})).value.append(gpa, try mem.dupe(gpa, u8, common_filename));
     }
 };
 
@@ -599,7 +599,9 @@ fn handleStart(ctx: *Context, name: []const u8, raw_atts: [*:null]?[*:0]const u8
     }
 
     if (mem.eql(u8, name, "protocol")) {
-        ctx.protocol = Protocol{ .name = try mem.dupe(gpa, u8, atts.name.?) };
+        const protocol_name = try mem.dupe(gpa, u8, atts.name.?);
+        const namespace = if (mem.eql(u8, protocol_name, "wayland")) "wl" else prefix(protocol_name);
+        ctx.protocol = Protocol{ .name = protocol_name, .namespace = namespace };
     } else if (mem.eql(u8, name, "interface")) {
         ctx.interface = try ctx.protocol.interfaces.addOne();
         ctx.interface.* = .{
