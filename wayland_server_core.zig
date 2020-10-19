@@ -1,4 +1,5 @@
-const os = @import("std").os;
+const std = @import("std");
+const os = std.os;
 
 const common = @import("common.zig");
 pub const Object = common.Object;
@@ -25,16 +26,29 @@ pub const Server = opaque {
 
     extern fn wl_display_add_socket(server: *Server, name: [*:0]const u8) c_int;
     pub fn addSocket(server: *Server, name: [*:0]const u8) !void {
-        if (wl_display_add_socket(display, name) == -1)
+        if (wl_display_add_socket(server, name) == -1)
             return error.AddSocketFailed;
     }
 
-    // TODO implement the non-broken version of this
-    extern fn wl_display_add_socket_auto(server: *Server) ?[*:0]const u8;
+    // wayland-client will connect to wayland-0 even if WAYLAND_DISPLAY is
+    // unset due to an unfortunate piece of code that was not removed before
+    // the library was stabilized. Because of this, it is a good idea to never
+    // call the socket wayland-0. So, instead of binding to wayland-server's
+    // wl_display_add_socket_auto we implement a version which skips wayland-0.
+    pub fn addSocketAuto(server: *Server, buf: *[11]u8) ![:0]const u8 {
+        // Don't use wayland-0
+        var i: u32 = 1;
+        while (i <= 32) : (i += 1) {
+            const name = std.fmt.bufPrintZ(buf, "wayland-{}", .{i}) catch unreachable;
+            server.addSocket(name.ptr) catch continue;
+            return name;
+        }
+        return error.AddSocketFailed;
+    }
 
     extern fn wl_display_add_socket_fd(server: *Server, sock_fd: c_int) c_int;
     pub fn addSocketFd(server: *Server, sock_fd: os.fd_t) !void {
-        if (wl_display_add_socket_fd(display, sock_fd) == -1)
+        if (wl_display_add_socket_fd(server, sock_fd) == -1)
             return error.AddSocketFailed;
     }
 
