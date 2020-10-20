@@ -305,7 +305,23 @@ const Message = struct {
                         try writer.writeAll(".{ .");
                         try arg.emitSignature(writer);
                         try writer.writeAll(" = ");
-                        try printIdentifier(writer, arg.name);
+                        if (arg.enum_name != null) {
+                            try writer.writeAll("switch (@typeInfo(");
+                            try arg.emitType(target, writer);
+
+                            // TODO We know the type of the enum at scanning time, but it's
+                            //      currently a bit difficult to access it.
+                            const c_type = if (arg.kind == .uint) "u32" else "i32";
+                            try writer.print(
+                                \\ )) {{
+                                \\    .Enum => @intCast({}, @enumToInt({})),
+                                \\    .Struct => @bitCast(u32, {}),
+                                \\    else => unreachable,
+                                \\ }}
+                            , .{ c_type, arg.name, arg.name });
+                        } else {
+                            try printIdentifier(writer, arg.name);
+                        }
                         try writer.writeAll("},");
                     },
                     .object, .new_id => |new_iface| {
@@ -391,8 +407,26 @@ const Arg = struct {
 
     fn emitType(arg: Arg, target: Target, writer: anytype) !void {
         switch (arg.kind) {
-            .int => try writer.writeAll("i32"),
-            .uint, .new_id => try writer.writeAll("u32"),
+            .int, .uint => {
+                if (arg.enum_name) |name| {
+                    if (mem.indexOfScalar(u8, name, '.')) |dot_index| {
+                        // Turn a reference like wl_shm.format into common.wl.shm.Format
+                        try writer.writeAll("common.");
+                        const us_index = mem.indexOfScalar(u8, name, '_') orelse 0;
+                        try writer.writeAll(name[0..us_index]);
+                        try writer.writeAll(".");
+                        try writer.writeAll(name[us_index + 1 .. dot_index + 1]);
+                        try writer.writeAll(case(.title, name[dot_index + 1 ..]));
+                    } else {
+                        try writer.writeAll(case(.title, name));
+                    }
+                } else if (arg.kind == .int) {
+                    try writer.writeAll("i32");
+                } else {
+                    try writer.writeAll("u32");
+                }
+            },
+            .new_id => try writer.writeAll("u32"),
             .fixed => try writer.writeAll("common.Fixed"),
             .string => {
                 if (arg.allow_null) try writer.writeByte('?');
@@ -423,13 +457,28 @@ const Enum = struct {
     fn emit(e: Enum, writer: anytype) !void {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, case(.title, e.name));
-        try writer.writeAll(" = extern enum(c_int) {");
-        for (e.entries.items) |entry| {
-            try printIdentifier(writer, entry.name);
-            try writer.print("= {},", .{entry.value});
+        if (e.bitfield) {
+            var entriesEmitted: u8 = 0;
+            try writer.writeAll(" = packed struct {");
+            for (e.entries.items) |entry| {
+                const value = entry.intValue();
+                if (value != 0 and std.math.isPowerOfTwo(value)) {
+                    entriesEmitted += 1;
+                    try printIdentifier(writer, entry.name);
+                    try writer.writeAll(": bool = false,");
+                }
+            }
+            // Pad to 32 bits
+            try writer.print("_: u{} = 0,}};\n", .{32 - entriesEmitted});
+        } else {
+            try writer.writeAll(" = extern enum(c_int) {");
+            for (e.entries.items) |entry| {
+                try printIdentifier(writer, entry.name);
+                try writer.print("= {},", .{entry.value});
+            }
+            // Always generate non-exhaustive enums to ensure forward compatability
+            try writer.writeAll("_,};\n");
         }
-        // Always generate non-exhaustive enums to ensure forward compatability
-        try writer.writeAll("_,};\n");
     }
 };
 
@@ -437,6 +486,14 @@ const Entry = struct {
     name: []const u8,
     since: u32,
     value: []const u8,
+
+    // Return numeric value of enum entry. Can be base 10 and hexadecimal notation.
+    fn intValue(e: Entry) u32 {
+        return std.fmt.parseInt(u32, e.value, 10) catch blk: {
+            const index = mem.indexOfScalar(u8, e.value, 'x').?;
+            break :blk std.fmt.parseInt(u32, e.value[index + 1 ..], 16) catch @panic("Can't parse enum entry.");
+        };
+    }
 };
 
 const Scanner = struct {
