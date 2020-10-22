@@ -1,3 +1,4 @@
+const mem = @import("std").mem;
 const Builder = @import("std").build.Builder;
 
 pub fn build(b: *Builder) void {
@@ -38,29 +39,21 @@ pub fn build(b: *Builder) void {
     }
 
     if (examples) {
-        const globals = b.addExecutable("globals", "example/globals.zig");
-        globals.setTarget(target);
-        globals.setBuildMode(mode);
+        const example_names = [_][]const u8{ "globals", "listener", "seats" };
+        for (example_names) |example| {
+            const path = mem.concat(b.allocator, u8, &[_][]const u8{ "example/", example, ".zig" }) catch unreachable;
+            const exe = b.addExecutable(example, path);
+            exe.setTarget(target);
+            exe.setBuildMode(mode);
 
-        globals.linkLibC();
-        globals.linkSystemLibrary("wayland-client");
+            exe.linkLibC();
+            exe.linkSystemLibrary("wayland-client");
 
-        // Requires the scanner to have been run for this to build
-        // TODO: integrate scanner with build system
-        globals.addPackagePath("wayland", "wayland.zig");
+            // Requires the scanner to have been run for this to build
+            // TODO: integrate scanner with build system
+            exe.addPackagePath("wayland", "wayland.zig");
 
-        globals.install();
-    }
-
-    if (examples) {
-        const listener = b.addExecutable("listener", "example/listener.zig");
-        listener.setTarget(target);
-        listener.setBuildMode(mode);
-
-        // Requires the scanner to have been run for this to build
-        // TODO: integrate scanner with build system
-        listener.addPackagePath("wayland", "wayland.zig");
-
-        listener.install();
+            exe.install();
+        }
     }
 }
