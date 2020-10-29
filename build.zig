@@ -16,9 +16,6 @@ pub fn build(b: *Builder) void {
         scanner.setTarget(target);
         scanner.setBuildMode(mode);
 
-        scanner.linkLibC();
-        scanner.linkSystemLibrary("expat");
-
         scanner.install();
     }
 
@@ -30,9 +27,6 @@ pub fn build(b: *Builder) void {
             const t = b.addTest(file);
             t.setTarget(target);
             t.setBuildMode(mode);
-
-            t.linkLibC();
-            t.linkSystemLibrary("expat");
 
             test_step.dependOn(&t.step);
         }
