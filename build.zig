@@ -1,53 +1,144 @@
-const mem = @import("std").mem;
-const Builder = @import("std").build.Builder;
+const std = @import("std");
+const zbs = std.build;
 
-pub fn build(b: *Builder) void {
+pub fn build(b: *zbs.Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const examples = b.option(
-        bool,
-        "examples",
-        "Set to true to build examples",
-    ) orelse false;
+    var scanner = ScanProtocolsStep.create(b, ".", .both);
+    for ([_][]const u8{ "globals", "listener", "seats" }) |example| {
+        const path = std.mem.concat(b.allocator, u8, &[_][]const u8{ "example/", example, ".zig" }) catch unreachable;
+        const exe = b.addExecutable(example, path);
+        exe.setTarget(target);
+        exe.setBuildMode(mode);
 
-    {
-        const scanner = b.addExecutable("scanner", "scanner.zig");
-        scanner.setTarget(target);
-        scanner.setBuildMode(mode);
+        exe.step.dependOn(&scanner.step);
+        exe.addPackage(scanner.getPkg());
+        scanner.link(exe);
 
-        scanner.install();
+        exe.install();
     }
 
-    {
-        const test_files = [_][]const u8{ "scanner.zig", "src/common_core.zig" };
+    const test_step = b.step("test", "Run the tests");
+    for ([_][]const u8{ "src/scanner.zig", "src/common_core.zig" }) |file| {
+        const t = b.addTest(file);
+        t.setTarget(target);
+        t.setBuildMode(mode);
 
-        const test_step = b.step("test", "Run the tests");
-        for (test_files) |file| {
-            const t = b.addTest(file);
-            t.setTarget(target);
-            t.setBuildMode(mode);
-
-            test_step.dependOn(&t.step);
-        }
-    }
-
-    if (examples) {
-        const example_names = [_][]const u8{ "globals", "listener", "seats" };
-        for (example_names) |example| {
-            const path = mem.concat(b.allocator, u8, &[_][]const u8{ "example/", example, ".zig" }) catch unreachable;
-            const exe = b.addExecutable(example, path);
-            exe.setTarget(target);
-            exe.setBuildMode(mode);
-
-            exe.linkLibC();
-            exe.linkSystemLibrary("wayland-client");
-
-            // Requires the scanner to have been run for this to build
-            // TODO: integrate scanner with build system
-            exe.addPackagePath("wayland", "wayland.zig");
-
-            exe.install();
-        }
+        test_step.dependOn(&t.step);
     }
 }
+
+pub const ScanProtocolsStep = struct {
+    const scanner = @import("src/scanner.zig");
+
+    builder: *zbs.Builder,
+    step: zbs.Step,
+
+    /// Relative path to the root of the zig wayland repo from the user's build.zig
+    zig_wayland_path: []const u8,
+
+    /// Whether to generate bindings for wayland-client, wayland-server, or both
+    target: scanner.Target,
+
+    /// Slice of absolute paths of protocol xml files to be scanned
+    protocol_paths: std.ArrayList([]const u8),
+
+    pub fn create(builder: *zbs.Builder, zig_wayland_path: []const u8, target: scanner.Target) *ScanProtocolsStep {
+        const self = builder.allocator.create(ScanProtocolsStep) catch unreachable;
+        self.* = .{
+            .builder = builder,
+            .step = zbs.Step.init(.Custom, "Scan Protocols", builder.allocator, make),
+            .zig_wayland_path = zig_wayland_path,
+            .target = target,
+            .protocol_paths = std.ArrayList([]const u8).init(builder.allocator),
+        };
+        return self;
+    }
+
+    /// Generate bindings from the protocol xml at the given path
+    pub fn addProtocolPath(self: *ScanProtocolsStep, path: []const u8) void {
+        self.protocol_paths.append(path) catch unreachable;
+    }
+
+    /// Generate bindings from protocol xml provided by the wayland-protocols
+    /// package given the relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
+    pub fn addSystemProtocol(self: *ScanProtocolsStep, relative_path: []const u8) void {
+        const protocol_dir = std.fmt.trim(self.builder.exec(
+            &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
+        ) catch unreachable);
+        self.addProtocolPath(std.fs.path.join(
+            self.builder.allocator,
+            &[_][]const u8{ protocol_dir, relative_path },
+        ) catch unreachable);
+    }
+
+    fn make(step: *zbs.Step) !void {
+        const self = @fieldParentPtr(ScanProtocolsStep, "step", step);
+
+        const out_path = try std.fs.path.join(
+            self.builder.allocator,
+            &[_][]const u8{ self.zig_wayland_path, "generated" },
+        );
+        var out_dir = try std.fs.cwd().openDir(out_path, .{});
+        defer out_dir.close();
+
+        const wayland_dir = std.fmt.trim(try self.builder.exec(
+            &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
+        ));
+        const wayland_xml = try std.fs.path.join(
+            self.builder.allocator,
+            &[_][]const u8{ wayland_dir, "wayland.xml" },
+        );
+
+        try scanner.scan(self.target, out_dir, wayland_xml, self.protocol_paths.items);
+
+        // Once https://github.com/ziglang/zig/issues/131 is implemented
+        // we can stop generating/linking C code.
+        for (self.protocol_paths.items) |path| {
+            _ = try self.builder.exec(
+                &[_][]const u8{ "wayland-scanner", "private-code", path, self.getCodePath(path) },
+            );
+        }
+    }
+
+    /// Link the given LibExeObjStep against libwayland and compile the
+    /// necessary C code.
+    pub fn link(self: *ScanProtocolsStep, obj: *zbs.LibExeObjStep) void {
+        obj.linkLibC();
+
+        switch (self.target) {
+            .client => obj.linkSystemLibrary("wayland-client"),
+            .server => obj.linkSystemLibrary("wayland-server"),
+            .both => {
+                obj.linkSystemLibrary("wayland-client");
+                obj.linkSystemLibrary("wayland-server");
+            },
+        }
+
+        for (self.protocol_paths.items) |path|
+            obj.addCSourceFile(self.getCodePath(path), &[_][]const u8{"-std=c99"});
+    }
+
+    pub fn getPkg(self: *ScanProtocolsStep) zbs.Pkg {
+        return .{
+            .name = "wayland",
+            .path = std.fs.path.join(
+                self.builder.allocator,
+                &[_][]const u8{ self.zig_wayland_path, "generated/wayland.zig" },
+            ) catch unreachable,
+        };
+    }
+
+    fn getCodePath(self: *ScanProtocolsStep, xml_in_path: []const u8) []const u8 {
+        const allocator = self.builder.allocator;
+        // Extension is .xml, so slice off the last 4 characters
+        const basename = std.fs.path.basename(xml_in_path);
+        const basename_no_ext = basename[0..(basename.len - 4)];
+        const code_filename = std.fmt.allocPrint(allocator, "{}-protocol.c", .{basename_no_ext}) catch unreachable;
+        return std.fs.path.join(
+            allocator,
+            &[_][]const u8{ self.zig_wayland_path, "generated", code_filename },
+        ) catch unreachable;
+    }
+};
