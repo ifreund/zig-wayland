@@ -5,16 +5,17 @@ pub fn build(b: *zbs.Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    var scanner = ScanProtocolsStep.create(b, ".", .both);
-    for ([_][]const u8{ "globals", "listener", "seats" }) |example| {
-        const path = std.mem.concat(b.allocator, u8, &[_][]const u8{ "example/", example, ".zig" }) catch unreachable;
-        const exe = b.addExecutable(example, path);
+    const scanner = ScanProtocolsStep.create(b, ".");
+    inline for ([_][]const u8{ "globals", "listener", "seats" }) |example| {
+        const exe = b.addExecutable(example, "example/" ++ example ++ ".zig");
         exe.setTarget(target);
         exe.setBuildMode(mode);
 
         exe.step.dependOn(&scanner.step);
         exe.addPackage(scanner.getPkg());
-        scanner.link(exe);
+        scanner.addCSource(exe);
+        exe.linkLibC();
+        exe.linkSystemLibrary("wayland-client");
 
         exe.install();
     }
@@ -38,19 +39,15 @@ pub const ScanProtocolsStep = struct {
     /// Relative path to the root of the zig wayland repo from the user's build.zig
     zig_wayland_path: []const u8,
 
-    /// Whether to generate bindings for wayland-client, wayland-server, or both
-    target: scanner.Target,
-
     /// Slice of absolute paths of protocol xml files to be scanned
     protocol_paths: std.ArrayList([]const u8),
 
-    pub fn create(builder: *zbs.Builder, zig_wayland_path: []const u8, target: scanner.Target) *ScanProtocolsStep {
+    pub fn create(builder: *zbs.Builder, zig_wayland_path: []const u8) *ScanProtocolsStep {
         const self = builder.allocator.create(ScanProtocolsStep) catch unreachable;
         self.* = .{
             .builder = builder,
             .step = zbs.Step.init(.Custom, "Scan Protocols", builder.allocator, make),
             .zig_wayland_path = zig_wayland_path,
-            .target = target,
             .protocol_paths = std.ArrayList([]const u8).init(builder.allocator),
         };
         return self;
@@ -91,7 +88,7 @@ pub const ScanProtocolsStep = struct {
             &[_][]const u8{ wayland_dir, "wayland.xml" },
         );
 
-        try scanner.scan(self.target, out_dir, wayland_xml, self.protocol_paths.items);
+        try scanner.scan(out_dir, wayland_xml, self.protocol_paths.items);
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.
@@ -101,21 +98,9 @@ pub const ScanProtocolsStep = struct {
             );
         }
     }
-
-    /// Link the given LibExeObjStep against libwayland and compile the
-    /// necessary C code.
-    pub fn link(self: *ScanProtocolsStep, obj: *zbs.LibExeObjStep) void {
-        obj.linkLibC();
-
-        switch (self.target) {
-            .client => obj.linkSystemLibrary("wayland-client"),
-            .server => obj.linkSystemLibrary("wayland-server"),
-            .both => {
-                obj.linkSystemLibrary("wayland-client");
-                obj.linkSystemLibrary("wayland-server");
-            },
-        }
-
+    /// Add the necessary C source to the compilation unit.
+    /// Once https://github.com/ziglang/zig/issues/131 we can remove this.
+    pub fn addCSource(self: *ScanProtocolsStep, obj: *zbs.LibExeObjStep) void {
         for (self.protocol_paths.items) |path|
             obj.addCSourceFile(self.getCodePath(path), &[_][]const u8{"-std=c99"});
     }

@@ -6,24 +6,18 @@ const xml = @import("xml.zig");
 const gpa = &allocator_instance.allocator;
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub const Target = enum {
-    client,
-    server,
-    both,
-};
-
-pub fn scan(target: Target, out_dir: std.fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
+pub fn scan(out_dir: std.fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
     try wayland_file.writeAll(@embedFile("wayland.zig"));
     defer wayland_file.close();
 
     var scanner = Scanner{};
 
-    try scanner.scanProtocol(target, out_dir, wayland_xml);
+    try scanner.scanProtocol(out_dir, wayland_xml);
     for (protocols) |xml_filename|
-        try scanner.scanProtocol(target, out_dir, xml_filename);
+        try scanner.scanProtocol(out_dir, xml_filename);
 
-    if (target == .client or target == .both) {
+    {
         const client_core_file = try out_dir.createFile("wayland_client_core.zig", .{});
         defer client_core_file.close();
         try client_core_file.writeAll(@embedFile("wayland_client_core.zig"));
@@ -43,7 +37,7 @@ pub fn scan(target: Target, out_dir: std.fs.Dir, wayland_xml: []const u8, protoc
         }
     }
 
-    if (target == .server or target == .both) {
+    {
         const server_core_file = try out_dir.createFile("wayland_server_core.zig", .{});
         defer server_core_file.close();
         try server_core_file.writeAll(@embedFile("wayland_server_core.zig"));
@@ -91,7 +85,7 @@ const Scanner = struct {
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
-    fn scanProtocol(scanner: *Scanner, target: Target, out_dir: std.fs.Dir, xml_filename: []const u8) !void {
+    fn scanProtocol(scanner: *Scanner, out_dir: std.fs.Dir, xml_filename: []const u8) !void {
         const xml_file = try std.fs.openFileAbsolute(xml_filename, .{});
         defer xml_file.close();
 
@@ -108,7 +102,7 @@ const Scanner = struct {
         }
         const protocol_namespace = try gpa.dupe(u8, protocol.namespace);
 
-        if (target == .client or target == .both) {
+        {
             const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_client.zig" });
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
@@ -116,7 +110,7 @@ const Scanner = struct {
             try (try scanner.client.getOrPutValue(protocol_namespace, .{})).value.append(gpa, client_filename);
         }
 
-        if (target == .server or target == .both) {
+        {
             const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_server.zig" });
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();

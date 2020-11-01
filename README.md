@@ -17,7 +17,7 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    var scanner = ScanProtocolsStep.create(b, "zig-wayland/", .client);
+    const scanner = ScanProtocolsStep.create(b, "zig-wayland/");
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addProtocolPath("protocol/foobar.xml");
 
@@ -27,7 +27,11 @@ pub fn build(b: *Builder) void {
 
     exe.step.dependOn(&scanner.step);
     exe.addPackage(scanner.getPkg());
-    scanner.link(exe);
+    exe.linkLibC();
+    exe.linkSystemLibrary("wayland-client");
+    
+    // TODO: remove when https://github.com/ziglang/zig/issues/131 is implemented
+    scanner.addCSource(exe);
 
     exe.install();
 }
