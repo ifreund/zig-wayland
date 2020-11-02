@@ -55,7 +55,13 @@ pub const ScanProtocolsStep = struct {
 
     /// Generate bindings from the protocol xml at the given path
     pub fn addProtocolPath(self: *ScanProtocolsStep, path: []const u8) void {
-        self.protocol_paths.append(path) catch unreachable;
+        if (std.fs.path.isAbsolute(path)) {
+            self.protocol_paths.append(path) catch unreachable;
+        } else {
+            const pwd = std.os.getenv("PWD") orelse unreachable;
+            const abs_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{ pwd, path }) catch unreachable;
+            self.protocol_paths.append(abs_path) catch unreachable;
+        }
     }
 
     /// Generate bindings from protocol xml provided by the wayland-protocols
