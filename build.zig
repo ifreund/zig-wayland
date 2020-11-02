@@ -67,9 +67,13 @@ pub const ScanProtocolsStep = struct {
     /// Generate bindings from protocol xml provided by the wayland-protocols
     /// package given the relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
     pub fn addSystemProtocol(self: *ScanProtocolsStep, relative_path: []const u8) void {
-        const protocol_dir = std.fmt.trim(self.builder.exec(
-            &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
-        ) catch unreachable);
+        const protocol_dir = std.mem.trim(
+            u8,
+            self.builder.exec(
+                &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
+            ) catch unreachable,
+            &[_]u8{' ', '\t', '\n','\r'},
+        );
         self.addProtocolPath(std.fs.path.join(
             self.builder.allocator,
             &[_][]const u8{ protocol_dir, relative_path },
@@ -86,9 +90,13 @@ pub const ScanProtocolsStep = struct {
         var out_dir = try std.fs.cwd().openDir(out_path, .{});
         defer out_dir.close();
 
-        const wayland_dir = std.fmt.trim(try self.builder.exec(
-            &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
-        ));
+        const wayland_dir = std.mem.trim(
+            u8,
+            try self.builder.exec(
+                &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
+            ),
+            &[_]u8{' ', '\t', '\n','\r'},
+        );
         const wayland_xml = try std.fs.path.join(
             self.builder.allocator,
             &[_][]const u8{ wayland_dir, "wayland.xml" },
