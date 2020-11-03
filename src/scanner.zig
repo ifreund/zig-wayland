@@ -766,18 +766,26 @@ const Enum = struct {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, case(.title, e.name));
         if (e.bitfield) {
-            var entriesEmitted: u8 = 0;
+            var entries_emitted: u8 = 0;
             try writer.writeAll(" = packed struct {");
             for (e.entries.items) |entry| {
                 const value = entry.intValue();
                 if (value != 0 and std.math.isPowerOfTwo(value)) {
-                    entriesEmitted += 1;
                     try printIdentifier(writer, entry.name);
-                    try writer.writeAll(": bool = false,");
+                    if (entries_emitted == 0) {
+                        // Align the first field to ensure the entire packed
+                        // struct matches the alignment of a u32. This allows
+                        // using the packed struct as the field of an extern
+                        // struct where a u32 is expected.
+                        try writer.writeAll(": bool align(@alignOf(u32)) = false,");
+                    } else {
+                        try writer.writeAll(": bool = false,");
+                    }
+                    entries_emitted += 1;
                 }
             }
             // Pad to 32 bits
-            try writer.print("_: u{} = 0,}};\n", .{32 - entriesEmitted});
+            try writer.print("_: u{} = 0,}};\n", .{32 - entries_emitted});
         } else {
             try writer.writeAll(" = extern enum(c_int) {");
             for (e.entries.items) |entry| {
