@@ -298,9 +298,16 @@ const Interface = struct {
                     \\    return @ptrCast(*{}, try server.wl.Resource.create(client, {}, version, id));
                     \\}}
                 , .{ title_case, title_case, title_case });
+
+                for ([_][]const u8{ "destroy", "getId", "fromLink", "getLink", "getClient", "getVersion" }) |func|
+                    try writer.print(
+                        \\pub fn {}({}: *{}) void {{
+                        \\    @ptrCast(*server.wl.Resource, {}).{}();
+                        \\}}
+                    , .{ func, snake_case, title_case, snake_case, func });
                 try writer.print(
-                    \\pub fn destroy({}: *{}) void {{
-                    \\    @ptrCast(*server.wl.Resource, {}).destroy();
+                    \\pub fn getId({}: *{}) void {{
+                    \\    @ptrCast(*server.wl.Resource, {}).getId();
                     \\}}
                 , .{ snake_case, title_case, snake_case });
                 try writer.print(

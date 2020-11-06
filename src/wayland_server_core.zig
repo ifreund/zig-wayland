@@ -303,8 +303,8 @@ pub const Resource = opaque {
         return @intCast(u32, wl_resource_get_version(resource));
     }
 
+    // TOOD: unsure if this should be bound
     extern fn wl_resource_set_destructor(resource: *Resource, destroy: DestroyFn) void;
-    pub const setDestructor = wl_resource_set_destructor;
 
     extern fn wl_resource_get_class(resource: *Resource) [*:0]const u8;
     pub const getClass = wl_resource_get_class;
