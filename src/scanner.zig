@@ -294,6 +294,16 @@ const Interface = struct {
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(1300);
                 try writer.print(
+                    \\pub fn create(client: *server.wl.Client, version: u32, id: u32) !*{} {{
+                    \\    return @ptrCast(*{}, try server.wl.Resource.create(client, {}, version, id));
+                    \\}}
+                , .{ title_case, title_case, title_case });
+                try writer.print(
+                    \\pub fn destroy({}: *{}) void {{
+                    \\    @ptrCast(*server.wl.Resource, {}).destroy();
+                    \\}}
+                , .{ snake_case, title_case, snake_case });
+                try writer.print(
                     \\pub fn setHandler(
                     \\    {}: *{},
                     \\    comptime T: type,
