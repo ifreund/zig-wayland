@@ -292,7 +292,7 @@ const Interface = struct {
                 try writer.writeAll("pub const Request = union(enum) {");
                 for (interface.requests.items) |request| try request.emitField(.server, writer);
                 try writer.writeAll("};\n");
-                @setEvalBranchQuota(1300);
+                @setEvalBranchQuota(2100);
                 try writer.print(
                     \\pub fn create(client: *server.wl.Client, version: u32, id: u32) !*{} {{
                     \\    return @ptrCast(*{}, try server.wl.Resource.create(client, {}, version, id));
@@ -308,18 +308,25 @@ const Interface = struct {
                     \\    {}: *{},
                     \\    comptime T: type,
                     \\    handler: fn ({}: *{}, request: Request, data: T) void,
+                    \\    destroy: fn ({}: *{}, data: T) void,
                     \\    data: T,
-                    \\    destroy: fn ({}: *{}) callconv(.C) void,
                     \\) void {{
                     \\    const resource = @ptrCast(*server.wl.Resource, {});
                     \\    resource.setDispatcher(
                     \\        common.Dispatcher({}, T).dispatcher,
                     \\        handler,
                     \\        data,
-                    \\        @ptrCast(resource.DestroyFn, destroy),
+                    \\        struct {{
+                    \\            fn wrapper(resource: *server.wl.Resource) callconv(.C) void {{
+                    \\                @call(.{{ .modifier = .always_inline }}, destroy, .{{
+                    \\                    @ptrCast(*{}, resource),
+                    \\                    @ptrCast(T, resource.getUserData()),
+                    \\                }});
+                    \\            }}
+                    \\        }}.wrapper,
                     \\    );
                     \\}}
-                , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case });
+                , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case, title_case });
             }
 
             for (interface.events.items) |event, opcode|
