@@ -306,11 +306,6 @@ const Interface = struct {
                         \\}}
                     , .{ func, snake_case, title_case, snake_case, func });
                 try writer.print(
-                    \\pub fn getId({}: *{}) void {{
-                    \\    @ptrCast(*server.wl.Resource, {}).getId();
-                    \\}}
-                , .{ snake_case, title_case, snake_case });
-                try writer.print(
                     \\pub fn setHandler(
                     \\    {}: *{},
                     \\    comptime T: type,
