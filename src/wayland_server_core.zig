@@ -259,17 +259,17 @@ pub const Resource = opaque {
     pub const DestroyFn = fn (resource: *Resource) callconv(.C) void;
     extern fn wl_resource_set_dispatcher(
         resource: *Resource,
-        dispatcher: DispatcherFn,
+        dispatcher: ?DispatcherFn,
         implementation: ?*const c_void,
         data: ?*c_void,
-        destroy: DestroyFn,
+        destroy: ?DestroyFn,
     ) void;
     pub fn setDispatcher(
         resource: *Resource,
-        dispatcher: DispatcherFn,
+        dispatcher: ?DispatcherFn,
         implementation: ?*const c_void,
         data: ?*c_void,
-        destroy: DestroyFn,
+        destroy: ?DestroyFn,
     ) void {
         wl_resource_set_dispatcher(resource, dispatcher, implementation, data, destroy);
     }

@@ -288,23 +288,23 @@ const Interface = struct {
             if (mem.eql(u8, interface.name, "wl_display"))
                 try writer.writeAll(@embedFile("client_display_functions.zig"));
         } else {
+            try writer.print(
+                \\pub fn create(client: *server.wl.Client, version: u32, id: u32) !*{} {{
+                \\    return @ptrCast(*{}, try server.wl.Resource.create(client, {}, version, id));
+                \\}}
+            , .{ title_case, title_case, title_case });
+
+            for ([_][]const u8{ "destroy", "getId", "fromLink", "getLink", "getClient", "getVersion" }) |func|
+                try writer.print(
+                    \\pub fn {}({}: *{}) void {{
+                    \\    @ptrCast(*server.wl.Resource, {}).{}();
+                    \\}}
+                , .{ func, snake_case, title_case, snake_case, func });
             if (interface.requests.items.len > 0) {
                 try writer.writeAll("pub const Request = union(enum) {");
                 for (interface.requests.items) |request| try request.emitField(.server, writer);
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2100);
-                try writer.print(
-                    \\pub fn create(client: *server.wl.Client, version: u32, id: u32) !*{} {{
-                    \\    return @ptrCast(*{}, try server.wl.Resource.create(client, {}, version, id));
-                    \\}}
-                , .{ title_case, title_case, title_case });
-
-                for ([_][]const u8{ "destroy", "getId", "fromLink", "getLink", "getClient", "getVersion" }) |func|
-                    try writer.print(
-                        \\pub fn {}({}: *{}) void {{
-                        \\    @ptrCast(*server.wl.Resource, {}).{}();
-                        \\}}
-                    , .{ func, snake_case, title_case, snake_case, func });
                 try writer.print(
                     \\pub fn setHandler(
                     \\    {}: *{},
@@ -329,6 +329,30 @@ const Interface = struct {
                     \\    );
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case, title_case });
+            } else {
+                try writer.print(
+                    \\pub fn setHandler(
+                    \\    {}: *{},
+                    \\    comptime T: type,
+                    \\    destroy: fn ({}: *{}, data: T) void,
+                    \\    data: T,
+                    \\) void {{
+                    \\    const resource = @ptrCast(*server.wl.Resource, {});
+                    \\    resource.setDispatcher(
+                    \\        null,
+                    \\        null,
+                    \\        data,
+                    \\        struct {{
+                    \\            fn wrapper(resource: *server.wl.Resource) callconv(.C) void {{
+                    \\                @call(.{{ .modifier = .always_inline }}, destroy, .{{
+                    \\                    @ptrCast(*{}, resource),
+                    \\                    @ptrCast(T, resource.getUserData()),
+                    \\                }});
+                    \\            }}
+                    \\        }}.wrapper,
+                    \\    );
+                    \\}}
+                , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
             }
 
             for (interface.events.items) |event, opcode|
