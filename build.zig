@@ -6,7 +6,7 @@ pub fn build(b: *zbs.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const scanner = ScanProtocolsStep.create(b, ".");
-    inline for ([_][]const u8{ "globals", "listener", "seats" }) |example| {
+    inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(example, "example/" ++ example ++ ".zig");
         exe.setTarget(target);
         exe.setBuildMode(mode);

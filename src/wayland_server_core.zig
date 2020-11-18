@@ -334,52 +334,91 @@ pub const ProtocolLogger = opaque {
     pub const destroy = wl_protocol_logger_destroy;
 };
 
-pub const List = extern struct {
-    prev: ?*List,
-    next: ?*List,
+pub fn List(comptime T: type, comptime link_field: []const u8) type {
+    return extern struct {
+        const Self = @This();
 
-    pub fn init(list: *List) void {
-        list.* = .{ .prev = list, .next = list };
-    }
+        prev: ?*Self,
+        next: ?*Self,
 
-    pub fn prepend(list: *List, elm: *List) void {
-        elm.prev = list;
-        elm.next = list.next;
-        list.next = elm;
-        elm.next.?.prev = elm;
-    }
+        /// This has the same ABI as wl_list
+        pub const Head = extern struct {
+            list: Self,
 
-    pub fn append(list: *List, elm: *List) void {
-        list.prev.?.prepend(elm);
-    }
+            pub fn init(head: *Head) void {
+                head.* = .{ .list = .{ .prev = &head.list, .next = &head.list } };
+            }
 
-    pub fn remove(elm: *elm) void {
-        elm.prev.?.next = elm.next;
-        elm.next.?.prev = elm.prev;
-        elm.* = .{ .prev = null, .next = null };
-    }
+            pub fn prepend(head: *Head, link: *Link) void {
+                @fieldParentPtr(Link, "list", &head.list).insertAfter(link);
+            }
 
-    pub fn length(list: *const List) usize {
-        var count: usize = 0;
-        var current = list.next;
-        while (current != list) : (current = current.next) {
-            count += 1;
-        }
-        return count;
-    }
+            pub fn append(head: *Head, link: *Link) void {
+                @fieldParentPtr(Link, "list", head.list.prev.?).insertAfter(link);
+            }
 
-    pub fn empty(list: *const List) bool {
-        return list.next == list;
-    }
+            pub fn length(head: *const Head) usize {
+                var count: usize = 0;
+                var current = head.list.next;
+                while (current != head.list) : (current = current.next) {
+                    count += 1;
+                }
+                return count;
+            }
 
-    pub fn insertList(list: *List, other: *List) void {
-        if (other.empty()) return;
-        other.next.?.prev = list;
-        other.prev.?.next = list.next;
-        list.next.?.prev = other.prev;
-        list.next = other.next;
-    }
-};
+            pub fn empty(head: *const Head) bool {
+                return head.list.next == head.list;
+            }
+
+            pub fn insertList(head: *Head, other: *Head) void {
+                if (other.empty()) return;
+                other.list.next.?.prev = head.list;
+                other.list.prev.?.next = head.list.next;
+                head.list.next.?.prev = other.list.prev;
+                head.list.next = other.list.next;
+            }
+
+            const Direction = enum { forward, reverse };
+            fn Iterator(comptime direction: Direction) type {
+                return struct {
+                    head: *Head,
+                    current: *Self,
+
+                    pub fn next(it: *@This()) ?*T {
+                        it.current = switch (direction) {
+                            .forward => it.current.next.?,
+                            .reverse => it.current.prev.?,
+                        };
+                        if (it.current == &it.head.list) return null;
+                        return @fieldParentPtr(T, link_field, @fieldParentPtr(Link, "list", it.current));
+                    }
+                };
+            }
+
+            pub fn iterator(head: *Head, comptime direction: Direction) Iterator(direction) {
+                return .{ .head = head, .current = &head.list };
+            }
+        };
+
+        /// This has the same ABI as wl_list
+        pub const Link = extern struct {
+            list: Self,
+
+            pub fn insertAfter(link: *Link, other: *Link) void {
+                other.list.prev = &link.list;
+                other.list.next = link.list.next;
+                link.list.next = &other.list;
+                other.list.next.?.prev = &other.list;
+            }
+
+            pub fn remove(link: *Link) void {
+                link.list.prev.?.next = link.list.next;
+                link.list.next.?.prev = link.list.prev;
+                link.* = .{ .list = .{ .prev = null, .next = null } };
+            }
+        };
+    };
+}
 
 pub fn Listener(comptime T: type) type {
     return extern struct {
@@ -390,7 +429,7 @@ pub fn Listener(comptime T: type) type {
         else
             fn (listener: *Self, data: T) void;
 
-        link: List,
+        link: List(Self, "link").Link,
         notify: fn (listener: *Self, data: ?*c_void) callconv(.C) void,
 
         pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
@@ -414,7 +453,7 @@ pub fn Signal(comptime T: type) type {
     return extern struct {
         const Self = @This();
 
-        listener_list: List,
+        listener_list: List(Listener(T), "link").Head,
 
         pub fn init(signal: *Self) void {
             signal.listener_list.init();
@@ -425,37 +464,50 @@ pub fn Signal(comptime T: type) type {
         }
 
         pub fn get(signal: *Self, notify: @TypeOf(Listener(T).notify)) ?*Listener(T) {
-            var it = signal.listener_list.next;
-            return while (it != &signal.listener_list) : (it = it.next) {
-                const listener = @fieldParentPtr(Listener(T), it, "link");
+            var it = signal.listener_list.iterator(.forward);
+            return while (it.next()) |listener| {
                 if (listener.notify == notify) break listener;
             } else null;
         }
 
         pub const emit = if (T == void)
             struct {
-                pub fn emit(signal: *Self) void {
-                    var it = signal.listener_list.next.?;
-                    while (it != &signal.listener_list) {
-                        const listener = @fieldParentPtr(Listener(T), "link", it);
-                        // Must happen before notify is called in case it removes the current link
-                        it = it.next.?;
-                        listener.notify(listener, null);
-                    }
+                pub inline fn emit(signal: *Self) void {
+                    emitInner(signal, null);
                 }
             }.emit
         else
             struct {
-                pub fn emit(signal: *Self, data: T) void {
-                    var it = signal.listener_list.next.?;
-                    while (it != &signal.listener_list) {
-                        const listener = @fieldParentPtr(Listener(T), "link", it);
-                        // Must happen before notify is called in case it removes the current link
-                        it = it.next.?;
-                        listener.notify(listener, data);
-                    }
+                pub inline fn emit(signal: *Self, data: T) void {
+                    emitInner(signal, data);
                 }
             }.emit;
+
+        /// This is similar to wlroots' wlr_signal_emit_safe. It handles
+        /// removal of any element in the list during iteration and stops at
+        /// whatever the last element was when iteration started.
+        fn emitInner(signal: *Self, data: ?*c_void) void {
+            var cursor: Listener(T) = undefined;
+            signal.listener_list.prepend(&cursor.link);
+
+            var end: Listener(T) = undefined;
+            signal.listener_list.append(&end.link);
+
+            while (cursor.link.list.next != &end.link.list) {
+                // this is a little ugly, using @typeInfo here works around
+                // what I assume to be a stage1 compiler bug.
+                const pos = @ptrCast(*@typeInfo(Listener(T)).Struct.fields[0].field_type, cursor.link.list.next.?);
+                const listener = @fieldParentPtr(Listener(T), "link", pos);
+
+                cursor.link.remove();
+                pos.insertAfter(&cursor.link);
+
+                listener.notify(listener, data);
+            }
+
+            cursor.link.remove();
+            end.link.remove();
+        }
     };
 }
 
