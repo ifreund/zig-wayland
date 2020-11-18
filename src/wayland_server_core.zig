@@ -132,10 +132,10 @@ pub const Client = opaque {
     extern fn wl_client_flush(client: *Client) void;
     pub const flush = wl_client_flush;
 
-    extern fn wl_client_get_link(client: *Client) *List;
+    extern fn wl_client_get_link(client: *Client) *list.Link;
     pub const getLink = wl_client_get_link;
 
-    extern fn wl_client_from_link(link: *List) *Client;
+    extern fn wl_client_from_link(link: *list.Link) *Client;
     pub const fromLink = wl_client_from_link;
 
     const Credentials = struct {
@@ -283,12 +283,13 @@ pub const Resource = opaque {
     extern fn wl_resource_get_id(resource: *Resource) u32;
     pub const getId = wl_resource_get_id;
 
-    extern fn wl_resource_get_link(resource: *Resource) *List;
+    extern fn wl_resource_get_link(resource: *Resource) *list.Link;
     pub const getLink = wl_resource_get_link;
 
-    extern fn wl_resource_from_link(link: *List) *Resource;
+    extern fn wl_resource_from_link(link: *list.Link) *Resource;
     pub const fromLink = wl_resource_from_link;
 
+    // TODO
     extern fn wl_resource_find_for_client(list: *List, client: *Client) ?*Resource;
     pub const findForClient = wl_resource_find_for_client;
 
@@ -334,91 +335,92 @@ pub const ProtocolLogger = opaque {
     pub const destroy = wl_protocol_logger_destroy;
 };
 
-pub fn List(comptime T: type, comptime link_field: []const u8) type {
-    return extern struct {
-        const Self = @This();
+pub const list = struct {
+    pub const Link = extern struct {
+        prev: ?*Link,
+        next: ?*Link,
 
-        prev: ?*Self,
-        next: ?*Self,
+        pub fn insertAfter(link: *Link, other: *Link) void {
+            other.prev = link;
+            other.next = link.next;
+            link.next = other;
+            other.next.?.prev = other;
+        }
 
-        /// This has the same ABI as wl_list
-        pub const Head = extern struct {
-            list: Self,
+        pub fn remove(link: *Link) void {
+            link.prev.?.next = link.next;
+            link.next.?.prev = link.prev;
+            link.* = .{ .prev = null, .next = null };
+        }
+    };
 
-            pub fn init(head: *Head) void {
-                head.* = .{ .list = .{ .prev = &head.list, .next = &head.list } };
+    /// This has the same ABI as wl.list.Link/wl_list. If link_field is null, then
+    /// T.getLink()/T.fromLink() will be used. This allows for compatiability
+    /// with wl.Client and wl.Resource
+    pub fn Head(comptime T: type, comptime link_field: ?[]const u8) type {
+        return extern struct {
+            const Self = @This();
+
+            link: Link,
+
+            pub fn init(head: *Self) void {
+                head.* = .{ .link = .{ .prev = &head.link, .next = &head.link } };
             }
 
-            pub fn prepend(head: *Head, link: *Link) void {
-                @fieldParentPtr(Link, "list", &head.list).insertAfter(link);
+            pub fn prepend(head: *Self, elem: *T) void {
+                const link = if (link_field) |f| &@field(elem, f) else elem.getLink();
+                head.link.insertAfter(link);
             }
 
-            pub fn append(head: *Head, link: *Link) void {
-                @fieldParentPtr(Link, "list", head.list.prev.?).insertAfter(link);
+            pub fn append(head: *Self, elem: *T) void {
+                const link = if (link_field) |f| &@field(elem, f) else elem.getLink();
+                head.link.prev.?.insertAfter(link);
             }
 
-            pub fn length(head: *const Head) usize {
+            pub fn length(head: *const Self) usize {
                 var count: usize = 0;
-                var current = head.list.next;
-                while (current != head.list) : (current = current.next) {
+                var current = head.link.next.?;
+                while (current != &head.link) : (current = current.next.?) {
                     count += 1;
                 }
                 return count;
             }
 
-            pub fn empty(head: *const Head) bool {
-                return head.list.next == head.list;
+            pub fn empty(head: *const Self) bool {
+                return head.link.next == &head.link;
             }
 
-            pub fn insertList(head: *Head, other: *Head) void {
+            pub fn insertList(head: *Self, other: *Self) void {
                 if (other.empty()) return;
-                other.list.next.?.prev = head.list;
-                other.list.prev.?.next = head.list.next;
-                head.list.next.?.prev = other.list.prev;
-                head.list.next = other.list.next;
+                other.link.next.?.prev = head.link;
+                other.link.prev.?.next = head.link.next;
+                head.link.next.?.prev = other.link.prev;
+                head.link.next = other.link.next;
             }
 
             const Direction = enum { forward, reverse };
             fn Iterator(comptime direction: Direction) type {
                 return struct {
-                    head: *Head,
-                    current: *Self,
+                    head: *Link,
+                    current: *Link,
 
                     pub fn next(it: *@This()) ?*T {
                         it.current = switch (direction) {
                             .forward => it.current.next.?,
                             .reverse => it.current.prev.?,
                         };
-                        if (it.current == &it.head.list) return null;
-                        return @fieldParentPtr(T, link_field, @fieldParentPtr(Link, "list", it.current));
+                        if (it.current == it.head) return null;
+                        return if (link_field) |f| @fieldParentPtr(T, f, it.current) else T.fromLink(it.current);
                     }
                 };
             }
 
-            pub fn iterator(head: *Head, comptime direction: Direction) Iterator(direction) {
-                return .{ .head = head, .current = &head.list };
+            pub fn iterator(head: *Self, comptime direction: Direction) Iterator(direction) {
+                return .{ .head = &head.link, .current = &head.link };
             }
         };
-
-        /// This has the same ABI as wl_list
-        pub const Link = extern struct {
-            list: Self,
-
-            pub fn insertAfter(link: *Link, other: *Link) void {
-                other.list.prev = &link.list;
-                other.list.next = link.list.next;
-                link.list.next = &other.list;
-                other.list.next.?.prev = &other.list;
-            }
-
-            pub fn remove(link: *Link) void {
-                link.list.prev.?.next = link.list.next;
-                link.list.next.?.prev = link.list.prev;
-                link.* = .{ .list = .{ .prev = null, .next = null } };
-            }
-        };
-    };
-}
+    }
+};
 
 pub fn Listener(comptime T: type) type {
     return extern struct {
@@ -429,7 +431,7 @@ pub fn Listener(comptime T: type) type {
         else
             fn (listener: *Self, data: T) void;
 
-        link: List(Self, "link").Link,
+        link: list.Link,
         notify: fn (listener: *Self, data: ?*c_void) callconv(.C) void,
 
         pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
@@ -453,14 +455,14 @@ pub fn Signal(comptime T: type) type {
     return extern struct {
         const Self = @This();
 
-        listener_list: List(Listener(T), "link").Head,
+        listener_list: list.Head(Listener(T), "link"),
 
         pub fn init(signal: *Self) void {
             signal.listener_list.init();
         }
 
         pub fn add(signal: *Self, listener: *Listener(T)) void {
-            signal.listener_list.append(&listener.link);
+            signal.listener_list.append(listener);
         }
 
         pub fn get(signal: *Self, notify: @TypeOf(Listener(T).notify)) ?*Listener(T) {
@@ -488,15 +490,13 @@ pub fn Signal(comptime T: type) type {
         /// whatever the last element was when iteration started.
         fn emitInner(signal: *Self, data: ?*c_void) void {
             var cursor: Listener(T) = undefined;
-            signal.listener_list.prepend(&cursor.link);
+            signal.listener_list.prepend(&cursor);
 
             var end: Listener(T) = undefined;
-            signal.listener_list.append(&end.link);
+            signal.listener_list.append(&end);
 
-            while (cursor.link.list.next != &end.link.list) {
-                // this is a little ugly, using @typeInfo here works around
-                // what I assume to be a stage1 compiler bug.
-                const pos = @ptrCast(*@typeInfo(Listener(T)).Struct.fields[0].field_type, cursor.link.list.next.?);
+            while (cursor.link.next != &end.link) {
+                const pos = cursor.link.next.?;
                 const listener = @fieldParentPtr(Listener(T), "link", pos);
 
                 cursor.link.remove();
