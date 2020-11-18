@@ -93,7 +93,7 @@ pub const Server = opaque {
         wl_display_set_global_filter(display, filter, data);
     }
 
-    extern fn wl_display_get_client_list(server: *Server) *List;
+    extern fn wl_display_get_client_list(server: *Server) *list.Head(Client, null);
     pub const getClientList = wl_display_get_client_list;
 
     extern fn wl_display_init_shm(server: *Server) c_int;
@@ -289,8 +289,7 @@ pub const Resource = opaque {
     extern fn wl_resource_from_link(link: *list.Link) *Resource;
     pub const fromLink = wl_resource_from_link;
 
-    // TODO
-    extern fn wl_resource_find_for_client(list: *List, client: *Client) ?*Resource;
+    extern fn wl_resource_find_for_client(list: *list.Head(Resource, null), client: *Client) ?*Resource;
     pub const findForClient = wl_resource_find_for_client;
 
     extern fn wl_resource_get_client(resource: *Resource) *Client;
