@@ -253,7 +253,7 @@ const Interface = struct {
 
         try writer.print(
             \\pub const {} = opaque {{
-            \\ pub const interface = common.{}.{}.interface;
+            \\ pub const getInterface = common.{}.{}.getInterface;
         , .{ title_case, namespace, snake_case });
 
         for (interface.enums.items) |e| {
@@ -294,12 +294,30 @@ const Interface = struct {
                 \\}}
             , .{ title_case, title_case, title_case });
 
-            for ([_][]const u8{ "destroy", "getId", "fromLink", "getLink", "getClient", "getVersion" }) |func|
+            try writer.print(
+                \\pub fn destroy({}: *{}) void {{
+                \\    return @ptrCast(*server.wl.Resource, {}).destroy();
+                \\}}
+            , .{ snake_case, title_case, snake_case });
+
+            try writer.print(
+                \\pub fn fromLink(link: *server.wl.list.Link) *{} {{
+                \\    return @ptrCast(*{}, server.wl.Resource.fromLink(link));
+                \\}}
+            , .{ title_case, title_case });
+
+            for ([_][2][]const u8{
+                .{ "getLink", "*server.wl.list.Link" },
+                .{ "getClient", "*server.wl.Client" },
+                .{ "getId", "u32" },
+                .{ "getVersion", "u32" },
+            }) |func|
                 try writer.print(
-                    \\pub fn {}({}: *{}) void {{
-                    \\    @ptrCast(*server.wl.Resource, {}).{}();
+                    \\pub fn {}({}: *{}) {} {{
+                    \\    return @ptrCast(*server.wl.Resource, {}).{}();
                     \\}}
-                , .{ func, snake_case, title_case, snake_case, func });
+                , .{ func[0], snake_case, title_case, func[1], snake_case, func[0] });
+
             if (interface.requests.items.len > 0) {
                 try writer.writeAll("pub const Request = union(enum) {");
                 for (interface.requests.items) |request| try request.emitField(.server, writer);
@@ -400,7 +418,7 @@ const Interface = struct {
         try writer.print(
             \\ = struct {{
             \\ extern const {}_interface: common.Interface;
-            \\ pub inline fn interface() *const common.Interface {{
+            \\ pub inline fn getInterface() *const common.Interface {{
             \\  return &{}_interface;
             \\ }}
         , .{ interface.name, interface.name });
@@ -465,34 +483,35 @@ const Message = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emitMessage(message: Message, writer: anytype) !void {
-        try writer.print(".{{ .name = \"{}\", .signature = \"", .{message.name});
-        for (message.args.items) |arg| try arg.emitSignature(writer);
-        try writer.writeAll("\", .types = ");
-        if (message.args.items.len > 0) {
-            try writer.writeAll("&[_]?*const common.Interface{");
-            for (message.args.items) |arg| {
-                switch (arg.kind) {
-                    .object, .new_id => |interface| if (interface) |i|
-                        try writer.print("&common.{}.{}.interface,", .{ prefix(i), trimPrefix(i) })
-                    else
-                        try writer.writeAll("null,"),
-                    else => try writer.writeAll("null,"),
-                }
-            }
-            try writer.writeAll("},");
-        } else {
-            try writer.writeAll("null,");
-        }
-        try writer.writeAll("},");
-    }
+    // TODO: restore this code when zig issue #131 is resoleved
+    //fn emitMessage(message: Message, writer: anytype) !void {
+    //    try writer.print(".{{ .name = \"{}\", .signature = \"", .{message.name});
+    //    for (message.args.items) |arg| try arg.emitSignature(writer);
+    //    try writer.writeAll("\", .types = ");
+    //    if (message.args.items.len > 0) {
+    //        try writer.writeAll("&[_]?*const common.Interface{");
+    //        for (message.args.items) |arg| {
+    //            switch (arg.kind) {
+    //                .object, .new_id => |interface| if (interface) |i|
+    //                    try writer.print("&common.{}.{}.interface,", .{ prefix(i), trimPrefix(i) })
+    //                else
+    //                    try writer.writeAll("null,"),
+    //                else => try writer.writeAll("null,"),
+    //            }
+    //        }
+    //        try writer.writeAll("},");
+    //    } else {
+    //        try writer.writeAll("null,");
+    //    }
+    //    try writer.writeAll("},");
+    //}
 
     fn emitField(message: Message, side: Side, writer: anytype) !void {
         try printIdentifier(writer, message.name);
         try writer.writeAll(": struct {");
         for (message.args.items) |arg| {
             if (side == .server and arg.kind == .new_id and arg.kind.new_id == null) {
-                try writer.writeAll("interface: [*:0]const u8, version: u32,");
+                try writer.writeAll("interface_name: [*:0]const u8, version: u32,");
                 try printIdentifier(writer, arg.name);
                 try writer.writeAll(": u32");
             } else if (side == .client and arg.kind == .new_id) {
@@ -601,7 +620,7 @@ const Message = struct {
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
-                                    \\.{ .s = T.interface().name },
+                                    \\.{ .s = T.getInterface().name },
                                     \\.{ .u = version },
                                 );
                             }
@@ -626,9 +645,9 @@ const Message = struct {
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
                     try writer.print(", try proxy.marshalConstructor({}, &args, ", .{opcode});
                     try printIdentifier(writer, case(.title, trimPrefix(i)));
-                    try writer.writeAll(".interface()));");
+                    try writer.writeAll(".getInterface()));");
                 } else {
-                    try writer.print("return @ptrCast(*T, try proxy.marshalConstructorVersioned({}, &args, T.interface(), version));", .{opcode});
+                    try writer.print("return @ptrCast(*T, try proxy.marshalConstructorVersioned({}, &args, T.getInterface(), version));", .{opcode});
                 }
             },
         }

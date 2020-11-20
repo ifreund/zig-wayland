@@ -76,12 +76,13 @@ pub const Server = opaque {
     extern fn wl_display_add_client_created_listener(server: *Server, listener: *Listener(*Client)) void;
     pub const addClientCreatedListener = wl_display_add_client_created_listener;
 
-    extern fn wl_display_get_destroy_listener(server: *Server, notify: @TypeOf(Listener(*Server).notify)) ?*Listener(*Server);
-    pub const getDestroyListener = wl_display_get_destroy_listener;
+    // Doesn't really make sense with our Listener API as we would need to
+    // pass a pointer to the wrapper function
+    //extern fn wl_display_get_destroy_listener(server: *Server, notify: @TypeOf(Listener(*Server).notify)) ?*Listener(*Server);
 
     extern fn wl_display_set_global_filter(
         server: *Server,
-        filter: fn (client: *const Client, global: *const Global, data: ?*c_void) bool,
+        filter: fn (client: *const Client, global: *const Global, data: ?*c_void) callconv(.C) bool,
         data: ?*c_void,
     ) void;
     pub fn setGlobalFilter(
@@ -98,24 +99,23 @@ pub const Server = opaque {
 
     extern fn wl_display_init_shm(server: *Server) c_int;
     pub fn initShm(server: *Server) !void {
-        if (wl_display_init_shm(display) == -1)
-            return error.GlobalCreateFailed;
+        if (wl_display_init_shm(server) == -1) return error.OutOfMemory;
     }
 
     extern fn wl_display_add_shm_format(server: *Server, format: u32) ?*u32;
     pub fn addShmFormat(server: *Server, format: u32) !*u32 {
-        return wl_display_add_shm_format(display, format) orelse error.OutOfMemory;
+        return wl_display_add_shm_format(server, format) orelse error.OutOfMemory;
     }
 
     extern fn wl_display_add_protocol_logger(
         server: *Server,
-        func: fn (data: ?*c_void, direction: ProtocolLogger.Type, message: *const ProtocolLogger.Message) void,
+        func: fn (data: ?*c_void, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
         data: ?*c_void,
     ) void;
     pub fn addProtocolLogger(
         server: *Server,
         comptime T: type,
-        func: fn (data: T, direction: ProtocolLogger.Type, message: *const ProtocolLogger.Message) callconv(.C) void,
+        func: fn (data: T, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
         data: T,
     ) void {
         wl_display_add_protocol_logger(display, func, data);
@@ -153,8 +153,9 @@ pub const Client = opaque {
     extern fn wl_client_add_destroy_listener(client: *Client, listener: *Listener(*Client)) void;
     pub const addDestroyListener = wl_client_add_destroy_listener;
 
-    extern fn wl_client_get_destroy_listener(client: *Client, notify: @TypeOf(Listener(*Client).notify)) ?*Listener(*Client);
-    pub const getDestroyListener = wl_client_get_destroy_listener;
+    // Doesn't really make sense with our Listener API as we would need to
+    // pass a pointer to the wrapper function
+    //extern fn wl_client_get_destroy_listener(client: *Client, notify: @TypeOf(Listener(*Client).notify)) ?*Listener(*Client);
 
     extern fn wl_client_get_object(client: *Client, id: u32) ?*Resource;
     pub const getObject = wl_client_get_object;
@@ -171,7 +172,7 @@ pub const Client = opaque {
     const IteratorResult = extern enum { stop, cont };
     extern fn wl_client_for_each_resource(
         client: *Client,
-        iterator: fn (resource: *Resource, data: ?*c_void) IteratorResult,
+        iterator: fn (resource: *Resource, data: ?*c_void) callconv(.C) IteratorResult,
         data: ?*c_void,
     ) void;
     pub fn forEachResource(
@@ -206,7 +207,7 @@ pub const Global = opaque {
         data: T,
         bind: fn (client: *Client, data: T, version: u32, id: u32) callconv(.C) void,
     ) !*Global {
-        return wl_global_create(display, Object.interface, version, data, bind) orelse
+        return wl_global_create(display, Object.getInterface(), version, data, bind) orelse
             error.GlobalCreateFailed;
     }
 
@@ -228,19 +229,19 @@ pub const Global = opaque {
 
 pub const Resource = opaque {
     extern fn wl_resource_create(client: *Client, interface: *const Interface, version: c_int, id: u32) ?*Resource;
-    pub fn create(client: *Client, comptime Object: type, version: u32, id: u32) !*Resource {
+    pub fn create(client: *Client, comptime T: type, version: u32, id: u32) !*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
-        return wl_resource_create(client, Object.interface, @intCast(c_int, version), id) orelse error.ResourceCreateFailed;
+        return wl_resource_create(client, T.getInterface(), @intCast(c_int, version), id) orelse error.ResourceCreateFailed;
     }
 
     extern fn wl_resource_destroy(resource: *Resource) void;
     pub const destroy = wl_resource_destroy;
 
-    extern fn wl_resource_post_event_array(resource: *Resource, opcode: u32, args: [*]Argument) void;
+    extern fn wl_resource_post_event_array(resource: *Resource, opcode: u32, args: ?[*]Argument) void;
     pub const postEvent = wl_resource_post_event_array;
 
-    extern fn wl_resource_queue_event_array(resource: *Resource, opcode: u32, args: [*]Argument) void;
+    extern fn wl_resource_queue_event_array(resource: *Resource, opcode: u32, args: ?[*]Argument) void;
     pub const queueEvent = wl_resource_queue_event_array;
 
     extern fn wl_resource_post_error(resource: *Resource, code: u32, message: [*:0]const u8, ...) void;
@@ -262,14 +263,14 @@ pub const Resource = opaque {
         dispatcher: ?DispatcherFn,
         implementation: ?*const c_void,
         data: ?*c_void,
-        destroy: ?DestroyFn,
+        destroy_fn: ?DestroyFn,
     ) void;
     pub fn setDispatcher(
         resource: *Resource,
         dispatcher: ?DispatcherFn,
         implementation: ?*const c_void,
         data: ?*c_void,
-        destroy: ?DestroyFn,
+        destroy_fn: ?DestroyFn,
     ) void {
         wl_resource_set_dispatcher(resource, dispatcher, implementation, data, destroy);
     }
@@ -312,8 +313,9 @@ pub const Resource = opaque {
     extern fn wl_resource_add_destroy_listener(resource: *Resource, listener: *Listener(*Resource)) void;
     pub const addDestroyListener = wl_resource_add_destroy_listener;
 
-    extern fn wl_resource_get_destroy_listener(resource: *Resource, notify: @TypeOf(Listener(*Resource).notify)) ?*Listener(*Resource);
-    pub const getDestroyListener = wl_resource_get_destroy_listener;
+    // Doesn't really make sense with our Listener API as we would need to
+    // pass a pointer to the wrapper function
+    //extern fn wl_resource_get_destroy_listener(resource: *Resource, notify: @TypeOf(Listener(*Resource).notify)) ?*Listener(*Resource);
 };
 
 pub const ProtocolLogger = opaque {
@@ -322,7 +324,7 @@ pub const ProtocolLogger = opaque {
         event,
     };
 
-    pub const Message = extern struct {
+    pub const LogMessage = extern struct {
         resource: *Resource,
         message_opcode: c_int,
         message: *Message,
@@ -512,7 +514,7 @@ pub fn Signal(comptime T: type) type {
 
 pub const EventLoop = opaque {
     extern fn wl_event_loop_create() ?*EventLoop;
-    pub fn create() *EventLoop {
+    pub fn create() !*EventLoop {
         return wl_event_loop_create() orelse error.EventLoopCreateFailed;
     }
 
@@ -523,7 +525,7 @@ pub const EventLoop = opaque {
         loop: *EventLoop,
         fd: os.fd_t,
         mask: u32,
-        func: fn (fd: os.fd_t, mask: u32, data: ?*c_void) c_int,
+        func: fn (fd: os.fd_t, mask: u32, data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
     pub fn addFd(
@@ -539,7 +541,7 @@ pub const EventLoop = opaque {
 
     extern fn wl_event_loop_add_timer(
         loop: *EventLoop,
-        func: fn (data: ?*c_void) c_int,
+        func: fn (data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
     pub fn addTimer(
@@ -554,7 +556,7 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_add_signal(
         loop: *EventLoop,
         signal_number: c_int,
-        func: fn (c_int, ?*c_void) c_int,
+        func: fn (c_int, ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
     pub fn addSignal(
@@ -569,7 +571,7 @@ pub const EventLoop = opaque {
 
     extern fn wl_event_loop_add_idle(
         loop: *EventLoop,
-        func: fn (data: ?*c_void) c_int,
+        func: fn (data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
     pub fn addIdle(
@@ -587,7 +589,7 @@ pub const EventLoop = opaque {
         switch (os.errno(rc)) {
             0 => return,
             // TODO
-            else => |err| os.unexpectedErrno(err),
+            else => |err| return os.unexpectedErrno(err),
         }
     }
 
@@ -600,8 +602,8 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_add_destroy_listener(loop: *EventLoop, listener: *Listener(*EventLoop)) void;
     pub const addDestroyListener = wl_event_loop_add_destroy_listener;
 
-    extern fn wl_event_loop_get_destroy_listener(loop: *EventLoop, notify: @TypeOf(Listener(*EventLoop).notify)) ?*Listener;
-    pub const getDestroyListener = wl_event_loop_get_destroy_listener;
+    //extern fn wl_event_loop_get_destroy_listener(loop: *EventLoop, notify: @TypeOf(Listener(*EventLoop).notify)) ?*Listener;
+    //pub const getDestroyListener = wl_event_loop_get_destroy_listener;
 };
 
 pub const EventSource = opaque {
@@ -619,7 +621,7 @@ pub const EventSource = opaque {
         switch (os.errno(rc)) {
             0 => return,
             // TODO
-            else => |err| os.unexpectedErrno(err),
+            else => |err| return os.unexpectedErrno(err),
         }
     }
 
@@ -629,7 +631,7 @@ pub const EventSource = opaque {
         switch (os.errno(rc)) {
             0 => return,
             // TODO
-            else => |err| os.unexpectedErrno(err),
+            else => |err| return os.unexpectedErrno(err),
         }
     }
 };

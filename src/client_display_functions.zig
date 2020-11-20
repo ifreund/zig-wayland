@@ -119,7 +119,7 @@ pub fn roundtripQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
 
 extern fn wl_display_flush(display: *Display) c_int;
 pub fn flush(display: *Display) error{WouldBlock}!u32 {
-    const rc = wl_display_dispatch_queue_pending(display, queue);
+    const rc = wl_display_flush(display);
     return switch (os.errno(rc)) {
         0 => @intCast(u32, rc),
         os.EAGAIN => error.WouldBlock,
@@ -127,7 +127,7 @@ pub fn flush(display: *Display) error{WouldBlock}!u32 {
     };
 }
 
-extern fn wl_display_create_queue(display: *Display) *client.wl.EventQueue;
+extern fn wl_display_create_queue(display: *Display) ?*client.wl.EventQueue;
 pub fn createQueue(display: *Display) error{OutOfMemory}!*client.wl.EventQueue {
     return wl_display_create_queue(display) orelse error.OutOfMemory;
 }

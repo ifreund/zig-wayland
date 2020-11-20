@@ -7,9 +7,9 @@ pub const Fixed = common.Fixed;
 pub const Argument = common.Argument;
 
 pub const Proxy = opaque {
-    extern fn wl_proxy_create(factory: *Proxy, interface: *const Interface) *Proxy;
+    extern fn wl_proxy_create(factory: *Proxy, interface: *const Interface) ?*Proxy;
     pub fn create(factory: *Proxy, interface: *const Interface) error{OutOfMemory}!*Proxy {
-        return wl_proxy_create(factory.impl, interface) orelse error.OutOfMemory;
+        return wl_proxy_create(factory, interface) orelse error.OutOfMemory;
     }
 
     extern fn wl_proxy_destroy(proxy: *Proxy) void;

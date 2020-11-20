@@ -28,6 +28,20 @@ pub fn build(b: *zbs.Builder) void {
 
         test_step.dependOn(&t.step);
     }
+
+    {
+        const ref_all = b.addTest("src/ref_all.zig");
+        ref_all.setTarget(target);
+        ref_all.setBuildMode(mode);
+
+        ref_all.step.dependOn(&scanner.step);
+        ref_all.addPackage(scanner.getPkg());
+        scanner.addCSource(ref_all);
+        ref_all.linkLibC();
+        ref_all.linkSystemLibrary("wayland-client");
+        ref_all.linkSystemLibrary("wayland-server");
+        test_step.dependOn(&ref_all.step);
+    }
 }
 
 pub const ScanProtocolsStep = struct {
