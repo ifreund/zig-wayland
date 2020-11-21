@@ -95,11 +95,7 @@ const Scanner = struct {
         const xml_bytes = try xml_file.readToEndAlloc(&arena.allocator, 512 * 4096);
         const protocol = try Protocol.parseXML(&arena.allocator, xml_bytes);
 
-        const xml_basename = std.fs.path.basename(xml_filename);
-        const protocol_name = try gpa.dupe(u8, xml_basename[0 .. xml_basename.len - 4]);
-        for (protocol_name) |*ch| {
-            if (ch.* == '-') ch.* = '_';
-        }
+        const protocol_name = try gpa.dupe(u8, protocol.name);
         const protocol_namespace = try gpa.dupe(u8, protocol.namespace);
 
         {
@@ -143,7 +139,7 @@ const Protocol = struct {
     }
 
     fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Protocol {
-        var name: ?[]const u8 = null;
+        var raw_name: ?[]const u8 = null;
         var interfaces = std.ArrayList(Interface).init(allocator);
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
@@ -152,13 +148,32 @@ const Protocol = struct {
                     try interfaces.append(try Interface.parse(allocator, parser));
             },
             .attribute => |attr| if (mem.eql(u8, attr.name, "name")) {
-                if (name != null) return error.DuplicateName;
-                name = try attr.dupeValue(allocator);
+                if (raw_name != null) return error.DuplicateName;
+                raw_name = try attr.dupeValue(allocator);
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
+                var name = raw_name orelse return error.MissingName;
+                var namespace: []const u8 = "wl";
+
+                // If the name has a prefix, use it as the namespace
+                if (prefix(name)) |p| {
+                    name = name[p.len..];
+                    namespace = p;
+                }
+
+                // If there is an unstable_ in the name, remove it and add a
+                // leading z to the prefix.
+                if (mem.indexOf(u8, name, "unstable_")) |unstable_idx| {
+                    name = try mem.concat(allocator, u8, &[_][]const u8{
+                        name[0..unstable_idx],
+                        name[unstable_idx + "unstable_".len ..],
+                    });
+                    namespace = try mem.concat(allocator, u8, &[_][]const u8{ "z", namespace });
+                }
+
                 return Protocol{
-                    .name = name orelse return error.MissingName,
-                    .namespace = prefix(name.?) orelse "wl",
+                    .name = name,
+                    .namespace = namespace,
                     .interfaces = interfaces,
                 };
             },
