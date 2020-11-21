@@ -158,7 +158,7 @@ const Protocol = struct {
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
                 return Protocol{
                     .name = name orelse return error.MissingName,
-                    .namespace = if (mem.eql(u8, name.?, "wayland")) "wl" else prefix(name.?),
+                    .namespace = prefix(name.?) orelse "wl",
                     .interfaces = interfaces,
                 };
             },
@@ -904,8 +904,8 @@ const Entry = struct {
     }
 };
 
-fn prefix(s: []const u8) []const u8 {
-    return s[0..mem.indexOfScalar(u8, s, '_').?];
+fn prefix(s: []const u8) ?[]const u8 {
+    return s[0 .. mem.indexOfScalar(u8, s, '_') orelse return null];
 }
 
 fn trimPrefix(s: []const u8) []const u8 {
@@ -931,7 +931,7 @@ fn case(out_case: enum { title, camel }, snake_case: []const u8) []const u8 {
 fn printAbsolute(side: Side, writer: anytype, interface: []const u8) !void {
     try writer.writeAll(@tagName(side));
     try writer.writeByte('.');
-    try printIdentifier(writer, prefix(interface));
+    try printIdentifier(writer, prefix(interface) orelse return error.MissingPrefix);
     try writer.writeByte('.');
     try printIdentifier(writer, case(.title, trimPrefix(interface)));
 }
