@@ -326,6 +326,7 @@ const Interface = struct {
                 .{ "getClient", "*server.wl.Client" },
                 .{ "getId", "u32" },
                 .{ "getVersion", "u32" },
+                .{ "postNoMemory", "void" },
             }) |func|
                 try writer.print(
                     \\pub fn {}({}: *{}) {} {{
