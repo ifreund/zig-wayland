@@ -842,6 +842,7 @@ const Enum = struct {
     fn emit(e: Enum, writer: anytype) !void {
         try writer.writeAll("pub const ");
         try printIdentifier(writer, case(.title, e.name));
+
         if (e.bitfield) {
             var entries_emitted: u8 = 0;
             try writer.writeAll(" = packed struct {");
@@ -862,16 +863,23 @@ const Enum = struct {
                 }
             }
             // Pad to 32 bits
-            try writer.print("_: u{} = 0,}};\n", .{32 - entries_emitted});
-        } else {
-            try writer.writeAll(" = extern enum(c_int) {");
-            for (e.entries.items) |entry| {
-                try printIdentifier(writer, entry.name);
-                try writer.print("= {},", .{entry.value});
-            }
-            // Always generate non-exhaustive enums to ensure forward compatability
-            try writer.writeAll("_,};\n");
+            try writer.print("_: u{} = 0,\n", .{32 - entries_emitted});
+
+            // Emit the normal C abi enum as well as it may be needed to interface
+            // with C code.
+            try writer.writeAll("pub const Enum ");
         }
+
+        try writer.writeAll(" = extern enum(c_int) {");
+        for (e.entries.items) |entry| {
+            try printIdentifier(writer, entry.name);
+            try writer.print("= {},", .{entry.value});
+        }
+        // Always generate non-exhaustive enums to ensure forward compatability.
+        // Entries have been added to wl_shm.format without bumping the version.
+        try writer.writeAll("_,};\n");
+
+        if (e.bitfield) try writer.writeAll("};\n");
     }
 };
 
