@@ -791,7 +791,7 @@ const Arg = struct {
                 if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeAll("*common.Array");
             },
-            .fd => try writer.writeAll("os.fd_t"),
+            .fd => try writer.writeAll("i32"),
         }
     }
 };

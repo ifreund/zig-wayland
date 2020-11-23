@@ -47,7 +47,7 @@ pub const Server = opaque {
     }
 
     extern fn wl_display_add_socket_fd(server: *Server, sock_fd: c_int) c_int;
-    pub fn addSocketFd(server: *Server, sock_fd: os.fd_t) !void {
+    pub fn addSocketFd(server: *Server, sock_fd: c_int) !void {
         if (wl_display_add_socket_fd(server, sock_fd) == -1)
             return error.AddSocketFailed;
     }
@@ -123,7 +123,7 @@ pub const Server = opaque {
 };
 
 pub const Client = opaque {
-    extern fn wl_client_create(server: *Server, fd: os.fd_t) ?*Client;
+    extern fn wl_client_create(server: *Server, fd: c_int) ?*Client;
     pub const create = wl_client_create;
 
     extern fn wl_client_destroy(client: *Client) void;
@@ -184,7 +184,7 @@ pub const Client = opaque {
         wl_client_for_each_resource(client, iterator, data);
     }
 
-    extern fn wl_client_get_fd(client: *Client) os.fd_t;
+    extern fn wl_client_get_fd(client: *Client) c_int;
     pub const getFd = wl_client_get_fd;
 
     extern fn wl_client_get_display(client: *Client) *Server;
@@ -615,7 +615,7 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_dispatch_idle(loop: *EventLoop) void;
     pub const dispatchIdle = wl_event_loop_dispatch_idle;
 
-    extern fn wl_event_loop_get_fd(loop: *EventLoop) os.fd_t;
+    extern fn wl_event_loop_get_fd(loop: *EventLoop) c_int;
     pub const getFd = wl_event_loop_get_fd;
 
     extern fn wl_event_loop_add_destroy_listener(loop: *EventLoop, listener: *Listener(*EventLoop)) void;

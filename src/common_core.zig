@@ -1,4 +1,3 @@
-const std = @import("std");
 const wayland = @import("wayland.zig");
 
 pub const Object = opaque {};
@@ -53,7 +52,7 @@ pub const Argument = extern union {
     o: ?*Object,
     n: u32,
     a: ?*Array,
-    h: std.os.fd_t,
+    h: i32,
 };
 
 pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
@@ -97,7 +96,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
 }
 
 test "Fixed" {
-    const testing = std.testing;
+    const testing = @import("std").testing;
 
     {
         const initial: f64 = 10.5301837;

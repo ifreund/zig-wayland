@@ -4,7 +4,7 @@ pub fn connect(name: ?[*:0]const u8) error{ConnectFailed}!*Display {
 }
 
 extern fn wl_display_connect_to_fd(fd: c_int) ?*Display;
-pub fn connectToFd(fd: os.fd_t) error{ConnectFailed}!*Display {
+pub fn connectToFd(fd: c_int) error{ConnectFailed}!*Display {
     return wl_display_connect_to_fd(fd) orelse return error.ConnectFailed;
 }
 
@@ -14,7 +14,7 @@ pub fn disconnect(display: *Display) void {
 }
 
 extern fn wl_display_get_fd(display: *Display) c_int;
-pub fn getFd(display: *Display) os.fd_t {
+pub fn getFd(display: *Display) c_int {
     return wl_display_get_fd(display);
 }
 
