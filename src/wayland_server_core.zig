@@ -523,20 +523,26 @@ pub const EventLoop = opaque {
 
     extern fn wl_event_loop_add_fd(
         loop: *EventLoop,
-        fd: os.fd_t,
+        fd: c_int,
         mask: u32,
-        func: fn (fd: os.fd_t, mask: u32, data: ?*c_void) callconv(.C) c_int,
+        func: fn (fd: c_int, mask: u32, data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
     pub fn addFd(
         loop: *EventLoop,
         comptime T: type,
-        fd: os.fd_t,
+        fd: c_int,
         mask: u32,
-        func: fn (fd: os.fd_t, mask: u32, data: T) callconv(.C) c_int,
+        func: fn (fd: c_int, mask: u32, data: T) callconv(.C) c_int,
         data: T,
-    ) ?*EventSource {
-        return wl_event_loop_add_fd(loop, fd, mask, func, data);
+    ) !*EventSource {
+        return wl_event_loop_add_fd(
+            loop,
+            fd,
+            mask,
+            @ptrCast(fn (fd: c_int, mask: u32, data: T) callconv(.C) c_int, func),
+            data,
+        ) orelse error.AddFdFailed;
     }
 
     extern fn wl_event_loop_add_timer(
@@ -549,8 +555,12 @@ pub const EventLoop = opaque {
         comptime T: type,
         func: fn (data: T) callconv(.C) c_int,
         data: T,
-    ) ?*EventSource {
-        return wl_event_loop_add_timer(loop, func, data);
+    ) !*EventSource {
+        return wl_event_loop_add_timer(
+            loop,
+            @ptrCast(fn (?*c_void) callconv(.C) c_int, func),
+            data,
+        ) orelse error.AddTimerFailed;
     }
 
     extern fn wl_event_loop_add_signal(
@@ -565,8 +575,13 @@ pub const EventLoop = opaque {
         signal_number: c_int,
         func: fn (signal_number: c_int, data: T) callconv(.C) c_int,
         data: T,
-    ) ?*EventSource {
-        return wl_event_loop_add_signal(loop, signal_number, func, data);
+    ) !*EventSource {
+        return wl_event_loop_add_signal(
+            loop,
+            signal_number,
+            @ptrCast(fn (c_int, ?*c_void) callconv(.C) c_int, func),
+            data,
+        ) orelse error.AddSignalFailed;
     }
 
     extern fn wl_event_loop_add_idle(
@@ -580,7 +595,11 @@ pub const EventLoop = opaque {
         func: fn (data: T) callconv(.C) c_int,
         data: T,
     ) error{OutOfMemory}!*EventSource {
-        return wl_event_loop_add_idle(loop, func, data) orelse error.OutOfMemory;
+        return wl_event_loop_add_idle(
+            loop,
+            @ptrCast(fn (?*c_void) callconv(.C) c_int, func),
+            data,
+        ) orelse error.OutOfMemory;
     }
 
     extern fn wl_event_loop_dispatch(loop: *EventLoop, timeout: c_int) c_int;
