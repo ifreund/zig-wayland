@@ -156,19 +156,17 @@ const Protocol = struct {
                 var namespace: []const u8 = "wl";
 
                 // If the name has a prefix, use it as the namespace
-                if (prefix(name)) |p| {
-                    name = name[p.len..];
-                    namespace = p;
-                }
+                if (prefix(name)) |p| namespace = p;
 
                 // If there is an unstable_ in the name, remove it and add a
                 // leading z to the prefix.
                 if (mem.indexOf(u8, name, "unstable_")) |unstable_idx| {
                     name = try mem.concat(allocator, u8, &[_][]const u8{
+                        "z",
                         name[0..unstable_idx],
                         name[unstable_idx + "unstable_".len ..],
                     });
-                    namespace = try mem.concat(allocator, u8, &[_][]const u8{ "z", namespace });
+                    namespace = prefix(name) orelse return error.MissingPrefix;
                 }
 
                 return Protocol{
