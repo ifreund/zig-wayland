@@ -91,7 +91,7 @@ pub const Server = opaque {
         filter: fn (client: *const Client, global: *const Global, data: T) callconv(.C) bool,
         data: T,
     ) void {
-        wl_display_set_global_filter(display, filter, data);
+        wl_display_set_global_filter(server, filter, data);
     }
 
     extern fn wl_display_get_client_list(server: *Server) *list.Head(Client, null);
@@ -118,7 +118,7 @@ pub const Server = opaque {
         func: fn (data: T, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
         data: T,
     ) void {
-        wl_display_add_protocol_logger(display, func, data);
+        wl_display_add_protocol_logger(server, func, data);
     }
 };
 
@@ -201,14 +201,19 @@ pub const Global = opaque {
     ) ?*Global;
     pub fn create(
         server: *Server,
-        comptime Object: type,
-        version: u32,
         comptime T: type,
-        data: T,
-        bind: fn (client: *Client, data: T, version: u32, id: u32) callconv(.C) void,
+        version: u32,
+        comptime DataT: type,
+        data: DataT,
+        bind: fn (client: *Client, data: DataT, version: u32, id: u32) callconv(.C) void,
     ) !*Global {
-        return wl_global_create(display, Object.getInterface(), version, data, bind) orelse
-            error.GlobalCreateFailed;
+        return wl_global_create(
+            server,
+            T.getInterface(),
+            @intCast(c_int, version),
+            data,
+            @ptrCast(fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void, bind),
+        ) orelse error.GlobalCreateFailed;
     }
 
     extern fn wl_global_remove(global: *Global) void;
