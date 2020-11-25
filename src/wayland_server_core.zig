@@ -545,7 +545,7 @@ pub const EventLoop = opaque {
             loop,
             fd,
             mask,
-            @ptrCast(fn (fd: c_int, mask: u32, data: T) callconv(.C) c_int, func),
+            @ptrCast(fn (fd: c_int, mask: u32, data: ?*c_void) callconv(.C) c_int, func),
             data,
         ) orelse error.AddFdFailed;
     }
