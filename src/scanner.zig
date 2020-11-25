@@ -522,6 +522,10 @@ const Message = struct {
 
     fn emitField(message: Message, side: Side, writer: anytype) !void {
         try printIdentifier(writer, message.name);
+        if (message.args.items.len == 0) {
+            try writer.writeAll(": void,");
+            return;
+        }
         try writer.writeAll(": struct {");
         for (message.args.items) |arg| {
             if (side == .server and arg.kind == .new_id and arg.kind.new_id == null) {
