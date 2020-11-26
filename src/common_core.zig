@@ -69,15 +69,17 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
             inline for (@typeInfo(Payload).Union.fields) |payload_field, payload_num| {
                 if (payload_num == opcode) {
                     var payload_data: payload_field.field_type = undefined;
-                    inline for (@typeInfo(payload_field.field_type).Struct.fields) |f, i| {
-                        if (@typeInfo(f.field_type) == .Enum) {
-                            @field(payload_data, f.name) = @intToEnum(f.field_type, args[i].i);
-                        } else {
-                            @field(payload_data, f.name) = switch (@sizeOf(f.field_type)) {
-                                4 => @bitCast(f.field_type, args[i].u),
-                                8 => @intToPtr(f.field_type, @ptrToInt(args[i].s)),
+                    if (payload_field.field_type != void) {
+                        inline for (@typeInfo(payload_field.field_type).Struct.fields) |f, i| {
+                            switch (@typeInfo(f.field_type)) {
+                                // signed/unsigned ints, fds, new_ids, bitfield enums
+                                .Int, .Struct => @field(payload_data, f.name) = @bitCast(f.field_type, args[i].u),
+                                // objects, strings, arrays
+                                .Pointer => @field(payload_data, f.name) = @ptrCast(f.field_type, args[i].o),
+                                // non-bitfield enums
+                                .Enum => @field(payload_data, f.name) = @intToEnum(f.field_type, args[i].i),
                                 else => unreachable,
-                            };
+                            }
                         }
                     }
 
