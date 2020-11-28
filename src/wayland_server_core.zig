@@ -277,7 +277,7 @@ pub const Resource = opaque {
         data: ?*c_void,
         destroy_fn: ?DestroyFn,
     ) void {
-        wl_resource_set_dispatcher(resource, dispatcher, implementation, data, destroy);
+        wl_resource_set_dispatcher(resource, dispatcher, implementation, data, destroy_fn);
     }
 
     extern fn wl_resource_get_user_data(resource: *Resource) ?*c_void;
