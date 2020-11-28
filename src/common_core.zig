@@ -24,7 +24,7 @@ pub const Array = extern struct {
     data: ?*c_void,
 
     /// Does not clone memory
-    fn fromArrayList(comptime T: type, list: std.ArrayList(T)) Array {
+    pub fn fromArrayList(comptime T: type, list: std.ArrayList(T)) Array {
         return Array{
             .size = list.items.len * @sizeOf(T),
             .alloc = list.capacity * @sizeOf(T),
