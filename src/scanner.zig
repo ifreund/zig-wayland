@@ -336,13 +336,13 @@ const Interface = struct {
                 try writer.writeAll("pub const Request = union(enum) {");
                 for (interface.requests.items) |request| try request.emitField(.server, writer);
                 try writer.writeAll("};\n");
-                @setEvalBranchQuota(2300);
+                @setEvalBranchQuota(2400);
                 try writer.print(
                     \\pub fn setHandler(
                     \\    {}: *{},
                     \\    comptime T: type,
                     \\    handle_request: fn ({}: *{}, request: Request, data: T) void,
-                    \\    comptime handle_destroy: fn ({}: *{}, data: T) void,
+                    \\    comptime handle_destroy: ?fn ({}: *{}, data: T) void,
                     \\    data: T,
                     \\) void {{
                     \\    const resource = @ptrCast(*server.wl.Resource, {});
@@ -350,14 +350,14 @@ const Interface = struct {
                     \\        common.Dispatcher({}, T).dispatcher,
                     \\        handle_request,
                     \\        data,
-                    \\        struct {{
+                    \\        if (handle_destroy) |handler| struct {{
                     \\            fn wrapper(_resource: *server.wl.Resource) callconv(.C) void {{
-                    \\                @call(.{{ .modifier = .always_inline }}, handle_destroy, .{{
+                    \\                @call(.{{ .modifier = .always_inline }}, handler, .{{
                     \\                    @ptrCast(*{}, _resource),
                     \\                    @intToPtr(T, @ptrToInt(_resource.getUserData())),
                     \\                }});
                     \\            }}
-                    \\        }}.wrapper,
+                    \\        }}.wrapper else null,
                     \\    );
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case, title_case });
@@ -366,7 +366,7 @@ const Interface = struct {
                     \\pub fn setHandler(
                     \\    {}: *{},
                     \\    comptime T: type,
-                    \\    comptime handle_destroy: fn ({}: *{}, data: T) void,
+                    \\    comptime handle_destroy: ?fn ({}: *{}, data: T) void,
                     \\    data: T,
                     \\) void {{
                     \\    const resource = @ptrCast(*server.wl.Resource, {});
@@ -374,14 +374,14 @@ const Interface = struct {
                     \\        null,
                     \\        null,
                     \\        data,
-                    \\        struct {{
+                    \\        if (handle_destroy) |handler| struct {{
                     \\            fn wrapper(_resource: *server.wl.Resource) callconv(.C) void {{
-                    \\                @call(.{{ .modifier = .always_inline }}, handle_destroy, .{{
+                    \\                @call(.{{ .modifier = .always_inline }}, handler, .{{
                     \\                    @ptrCast(*{}, _resource),
                     \\                    @intToPtr(T, @ptrToInt(_resource.getUserData())),
                     \\                }});
                     \\            }}
-                    \\        }}.wrapper,
+                    \\        }}.wrapper else null,
                     \\    );
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
