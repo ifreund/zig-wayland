@@ -1,3 +1,4 @@
+const std = @import("std");
 const wayland = @import("wayland.zig");
 
 pub const Object = opaque {};
@@ -20,7 +21,16 @@ pub const Interface = extern struct {
 pub const Array = extern struct {
     size: usize,
     alloc: usize,
-    data: *c_void,
+    data: ?*c_void,
+
+    /// Does not clone memory
+    fn fromArrayList(comptime T: type, list: std.ArrayList(T)) Array {
+        return Array{
+            .size = list.items.len * @sizeOf(T),
+            .alloc = list.capacity * @sizeOf(T),
+            .data = list.items.ptr,
+        };
+    }
 };
 
 /// A 24.8 signed fixed-point number.
