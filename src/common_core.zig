@@ -31,6 +31,11 @@ pub const Array = extern struct {
             .data = list.items.ptr,
         };
     }
+
+    pub fn slice(array: Array, comptime T: type) []T {
+        const ptr = @intToPtr([*]T, @ptrToInt(array.data orelse return &[0]T{}));
+        return ptr[0 .. array.size / @sizeOf(T)];
+    }
 };
 
 /// A 24.8 signed fixed-point number.
