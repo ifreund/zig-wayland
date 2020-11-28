@@ -90,7 +90,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
                                 // signed/unsigned ints, fds, new_ids, bitfield enums
                                 .Int, .Struct => @field(payload_data, f.name) = @bitCast(f.field_type, args[i].u),
                                 // objects, strings, arrays
-                                .Pointer => @field(payload_data, f.name) = @ptrCast(f.field_type, args[i].o),
+                                .Pointer, .Optional => @field(payload_data, f.name) = @intToPtr(f.field_type, @ptrToInt(args[i].o)),
                                 // non-bitfield enums
                                 .Enum => @field(payload_data, f.name) = @intToEnum(f.field_type, args[i].i),
                                 else => unreachable,
