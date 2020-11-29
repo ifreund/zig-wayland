@@ -1,3 +1,5 @@
+const debug = @import("std").debug;
+const client = @import("wayland.zig").client;
 const common = @import("common.zig");
 pub const Object = common.Object;
 pub const Message = common.Message;
@@ -104,4 +106,22 @@ pub const EventQueue = opaque {
     pub fn destroy(event_queue: *EventQueue) void {
         wl_event_queue_destroy(event_queue);
     }
+};
+
+pub const EglWindow = opaque {
+    extern fn wl_egl_window_create(surface: *client.wl.Surface, width: c_int, height: c_int) ?*EglWindow;
+    pub fn create(surface: *client.wl.Surface, width: c_int, height: c_int) !*EglWindow {
+        // Why do people use int when they require a positive number?
+        debug.assert(width > 0 and height > 0);
+        return wl_egl_window_create(surface, width, height) orelse error.OutOfMemory;
+    }
+
+    extern fn wl_egl_window_destroy(egl_window: *EglWindow) void;
+    pub const destroy = wl_egl_window_destroy;
+
+    extern fn wl_egl_window_resize(egl_window: *EglWindow, width: c_int, height: c_int, dx: c_int, dy: c_int) void;
+    pub const resize = wl_egl_window_resize;
+
+    extern fn wl_egl_window_get_attached_size(egl_window: *EglWindow, width: *c_int, height: *c_int) void;
+    pub const getAttachedSize = wl_egl_window_get_attached_size;
 };
