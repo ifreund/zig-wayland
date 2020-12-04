@@ -125,3 +125,41 @@ pub const EglWindow = opaque {
     extern fn wl_egl_window_get_attached_size(egl_window: *EglWindow, width: *c_int, height: *c_int) void;
     pub const getAttachedSize = wl_egl_window_get_attached_size;
 };
+
+pub const CursorTheme = opaque {
+    extern fn wl_cursor_theme_load(name: ?[*:0]const u8, size: c_int, shm: *client.wl.Shm) ?*CursorTheme;
+    pub fn load(name: ?[*:0]const u8, size: i32, shm: *client.wl.Shm) error{LoadThemeFailed}!*CursorTheme {
+        return wl_cursor_theme_load(name, @intCast(c_int, size), shm) orelse error.LoadThemeFailed;
+    }
+
+    extern fn wl_cursor_theme_destroy(wl_cursor_theme: *CursorTheme) void;
+    pub const destroy = wl_cursor_theme_destroy;
+
+    extern fn wl_cursor_theme_get_cursor(theme: *CursorTheme, name: [*:0]const u8) ?*Cursor;
+    pub const getCursor = wl_cursor_theme_get_cursor;
+};
+
+pub const Cursor = extern struct {
+    image_count: c_uint,
+    images: [*]*CursorImage,
+    name: [*:0]u8,
+
+    extern fn wl_cursor_frame(cursor: *Cursor, time: u32) c_int;
+    pub const frame = wl_cursor_frame;
+
+    extern fn wl_cursor_frame_and_duration(cursor: *Cursor, time: u32, duration: *u32) c_int;
+    pub const frameAndDuration = wl_cursor_frame_and_duration;
+};
+
+pub const CursorImage = extern struct {
+    width: u32,
+    height: u32,
+    hotspot_x: u32,
+    hotspot_y: u32,
+    delay: u32,
+
+    extern fn wl_cursor_image_get_buffer(image: *CursorImage) ?*client.wl.Buffer;
+    pub fn getBuffer(image: *CursorImage) error{OutOfMemory}!*client.wl.Buffer {
+        return wl_cursor_image_get_buffer(image) orelse error.OutOfMemory;
+    }
+};
