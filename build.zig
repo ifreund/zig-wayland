@@ -41,6 +41,7 @@ pub fn build(b: *zbs.Builder) void {
         ref_all.linkSystemLibrary("wayland-client");
         ref_all.linkSystemLibrary("wayland-server");
         ref_all.linkSystemLibrary("wayland-egl");
+        ref_all.linkSystemLibrary("wayland-cursor");
         test_step.dependOn(&ref_all.step);
     }
 }
