@@ -1,0 +1,58 @@
+# Build river and run the test suite every time a commit is pushed to master or
+# a pull request is opened against master.
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+name: voidlinux
+
+jobs:
+  default_build:
+    name: build and test
+    runs-on: ubuntu-latest
+    container: voidlinux/voidlinux:latest
+
+    steps:
+      - name: install deps
+        run: |
+          xbps-install -S
+          xbps-install -uy xbps
+          xbps-install -uy zig wayland-devel wayland-protocols pkgconf git
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: build
+        run: |
+          zig build
+
+      - name: test
+        run: |
+          zig build test
+
+  zig_fmt:
+    name: zig fmt
+    runs-on: ubuntu-latest
+    container: voidlinux/voidlinux:latest
+
+    steps:
+      - name: install deps
+        run: |
+          xbps-install -S
+          xbps-install -uy xbps
+          xbps-install -uy
+          xbps-install -uy zig git
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: fmt
+        run: |
+          zig fmt --check src/
+          zig fmt --check example/
+          zig fmt --check build.zig
