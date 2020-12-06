@@ -1,11 +1,13 @@
 const std = @import("std");
 const zbs = std.build;
+const fs = std.fs;
+const mem = std.mem;
 
 pub fn build(b: *zbs.Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const scanner = ScanProtocolsStep.create(b, ".");
+    const scanner = ScanProtocolsStep.create(b);
     inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(example, "example/" ++ example ++ ".zig");
         exe.setTarget(target);
@@ -52,41 +54,40 @@ pub const ScanProtocolsStep = struct {
     builder: *zbs.Builder,
     step: zbs.Step,
 
-    /// Relative path to the root of the zig wayland repo from the user's build.zig
-    zig_wayland_path: []const u8,
+    /// zig-cache/zig-wayland of the importing project
+    out_path: []const u8,
 
     /// Slice of absolute paths of protocol xml files to be scanned
     protocol_paths: std.ArrayList([]const u8),
 
-    pub fn create(builder: *zbs.Builder, zig_wayland_path: []const u8) *ScanProtocolsStep {
-        const self = builder.allocator.create(ScanProtocolsStep) catch unreachable;
+    pub fn create(builder: *zbs.Builder) *ScanProtocolsStep {
+        const ally = builder.allocator;
+        const self = ally.create(ScanProtocolsStep) catch unreachable;
         self.* = .{
             .builder = builder,
-            .step = zbs.Step.init(.Custom, "Scan Protocols", builder.allocator, make),
-            .zig_wayland_path = zig_wayland_path,
-            .protocol_paths = std.ArrayList([]const u8).init(builder.allocator),
+            .step = zbs.Step.init(.Custom, "Scan Protocols", ally, make),
+            .out_path = fs.path.resolve(ally, &[_][]const u8{
+                builder.build_root,
+                builder.cache_root,
+                "zig-wayland",
+            }) catch unreachable,
+            .protocol_paths = std.ArrayList([]const u8).init(ally),
         };
         return self;
     }
 
     /// Generate bindings from the protocol xml at the given absolute or relative path
     pub fn addProtocolPath(self: *ScanProtocolsStep, path: []const u8) void {
-        if (std.fs.path.isAbsolute(path)) {
-            self.protocol_paths.append(path) catch unreachable;
-        } else {
-            const pwd = std.process.getCwdAlloc(self.builder.allocator) catch unreachable;
-            const abs_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{ pwd, path }) catch unreachable;
-            self.protocol_paths.append(abs_path) catch unreachable;
-        }
+        self.protocol_paths.append(path) catch unreachable;
     }
 
     /// Generate bindings from protocol xml provided by the wayland-protocols
     /// package given the relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
     pub fn addSystemProtocol(self: *ScanProtocolsStep, relative_path: []const u8) void {
-        const protocol_dir = std.mem.trim(u8, self.builder.exec(
+        const protocol_dir = mem.trim(u8, self.builder.exec(
             &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
         ) catch unreachable, &std.ascii.spaces);
-        self.addProtocolPath(std.fs.path.join(
+        self.addProtocolPath(fs.path.join(
             self.builder.allocator,
             &[_][]const u8{ protocol_dir, relative_path },
         ) catch unreachable);
@@ -94,23 +95,14 @@ pub const ScanProtocolsStep = struct {
 
     fn make(step: *zbs.Step) !void {
         const self = @fieldParentPtr(ScanProtocolsStep, "step", step);
+        const ally = self.builder.allocator;
 
-        const out_path = try std.fs.path.join(
-            self.builder.allocator,
-            &[_][]const u8{ self.zig_wayland_path, "generated" },
-        );
-        var out_dir = try std.fs.cwd().openDir(out_path, .{});
-        defer out_dir.close();
-
-        const wayland_dir = std.mem.trim(u8, try self.builder.exec(
+        const wayland_dir = mem.trim(u8, try self.builder.exec(
             &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
         ), &std.ascii.spaces);
-        const wayland_xml = try std.fs.path.join(
-            self.builder.allocator,
-            &[_][]const u8{ wayland_dir, "wayland.xml" },
-        );
+        const wayland_xml = try fs.path.join(ally, &[_][]const u8{ wayland_dir, "wayland.xml" });
 
-        try scanner.scan(out_dir, wayland_xml, self.protocol_paths.items);
+        try scanner.scan(self.out_path, wayland_xml, self.protocol_paths.items);
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.
@@ -128,24 +120,19 @@ pub const ScanProtocolsStep = struct {
     }
 
     pub fn getPkg(self: *ScanProtocolsStep) zbs.Pkg {
+        const ally = self.builder.allocator;
         return .{
             .name = "wayland",
-            .path = std.fs.path.join(
-                self.builder.allocator,
-                &[_][]const u8{ self.zig_wayland_path, "generated/wayland.zig" },
-            ) catch unreachable,
+            .path = fs.path.join(ally, &[_][]const u8{ self.out_path, "wayland.zig" }) catch unreachable,
         };
     }
 
     fn getCodePath(self: *ScanProtocolsStep, xml_in_path: []const u8) []const u8 {
-        const allocator = self.builder.allocator;
+        const ally = self.builder.allocator;
         // Extension is .xml, so slice off the last 4 characters
-        const basename = std.fs.path.basename(xml_in_path);
+        const basename = fs.path.basename(xml_in_path);
         const basename_no_ext = basename[0..(basename.len - 4)];
-        const code_filename = std.fmt.allocPrint(allocator, "{}-protocol.c", .{basename_no_ext}) catch unreachable;
-        return std.fs.path.join(
-            allocator,
-            &[_][]const u8{ self.zig_wayland_path, "generated", code_filename },
-        ) catch unreachable;
+        const code_filename = std.fmt.allocPrint(ally, "{}-protocol.c", .{basename_no_ext}) catch unreachable;
+        return fs.path.join(ally, &[_][]const u8{ self.out_path, code_filename }) catch unreachable;
     }
 };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const fs = std.fs;
 const mem = std.mem;
 
 const xml = @import("xml.zig");
@@ -6,7 +7,10 @@ const xml = @import("xml.zig");
 const gpa = &allocator_instance.allocator;
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn scan(out_dir: std.fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
+pub fn scan(out_path: []const u8, wayland_xml: []const u8, protocols: []const []const u8) !void {
+    var out_dir = try fs.cwd().makeOpenPath(out_path, .{});
+    defer out_dir.close();
+
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
     try wayland_file.writeAll(@embedFile("wayland.zig"));
     defer wayland_file.close();
@@ -14,8 +18,8 @@ pub fn scan(out_dir: std.fs.Dir, wayland_xml: []const u8, protocols: []const []c
     var scanner = Scanner{};
 
     try scanner.scanProtocol(out_dir, wayland_xml);
-    for (protocols) |xml_filename|
-        try scanner.scanProtocol(out_dir, xml_filename);
+    for (protocols) |xml_path|
+        try scanner.scanProtocol(out_dir, xml_path);
 
     {
         const client_core_file = try out_dir.createFile("wayland_client_core.zig", .{});
@@ -85,8 +89,8 @@ const Scanner = struct {
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
-    fn scanProtocol(scanner: *Scanner, out_dir: std.fs.Dir, xml_filename: []const u8) !void {
-        const xml_file = try std.fs.openFileAbsolute(xml_filename, .{});
+    fn scanProtocol(scanner: *Scanner, out_dir: std.fs.Dir, xml_path: []const u8) !void {
+        const xml_file = try std.fs.cwd().openFile(xml_path, .{});
         defer xml_file.close();
 
         var arena = std.heap.ArenaAllocator.init(gpa);

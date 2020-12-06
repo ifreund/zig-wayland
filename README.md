@@ -4,7 +4,7 @@ Zig bindings and protocol scanner for libwayland.
 
 ## Usage
 
-A `ScanProtocolsStep` is provided which you may intergrate with your
+A `ScanProtocolsStep` is provided which you may integrate with your
 `build.zig`:
 
 ```zig
@@ -17,7 +17,7 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const scanner = ScanProtocolsStep.create(b, "zig-wayland/");
+    const scanner = ScanProtocolsStep.create(b);
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addProtocolPath("protocol/foobar.xml");
 
@@ -50,4 +50,4 @@ There is an example project using zig-wayland here:
 
 ## License
 
-zig-wayland is relased under the MIT (expat) license.
+zig-wayland is released under the MIT (expat) license.
