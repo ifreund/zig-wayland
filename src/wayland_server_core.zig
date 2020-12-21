@@ -360,6 +360,11 @@ pub const list = struct {
         }
     };
 
+    pub const Direction = enum {
+        forward,
+        reverse,
+    };
+
     /// This has the same ABI as wl.list.Link/wl_list. If link_field is null, then
     /// T.getLink()/T.fromLink() will be used. This allows for compatiability
     /// with wl.Client and wl.Resource
@@ -404,8 +409,7 @@ pub const list = struct {
                 head.link.next = other.link.next;
             }
 
-            const Direction = enum { forward, reverse };
-            fn Iterator(comptime direction: Direction) type {
+            pub fn Iterator(comptime direction: Direction) type {
                 return struct {
                     head: *Link,
                     current: *Link,
