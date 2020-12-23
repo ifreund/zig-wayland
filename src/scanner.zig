@@ -869,8 +869,11 @@ const Enum = struct {
                     entries_emitted += 1;
                 }
             }
-            // Pad to 32 bits
-            try writer.print("_: u{} = 0,\n", .{32 - entries_emitted});
+            // Pad to 32 bits. Use only bools to avoid zig stage1 packed
+            // struct bugs.
+            while (entries_emitted < 32) : (entries_emitted += 1) {
+                try writer.print("_paddding{}: bool = false,\n", .{entries_emitted});
+            }
 
             // Emit the normal C abi enum as well as it may be needed to interface
             // with C code.
