@@ -287,7 +287,7 @@ const Interface = struct {
                 for (interface.events.items) |event| try event.emitField(.client, writer);
                 try writer.writeAll("};\n");
                 try writer.print(
-                    \\pub fn setListener(
+                    \\pub inline fn setListener(
                     \\    {}: *{},
                     \\    comptime T: type,
                     \\    listener: fn ({}: *{}, event: Event, data: T) void,
@@ -342,7 +342,7 @@ const Interface = struct {
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2400);
                 try writer.print(
-                    \\pub fn setHandler(
+                    \\pub inline fn setHandler(
                     \\    {}: *{},
                     \\    comptime T: type,
                     \\    handle_request: fn ({}: *{}, request: Request, data: T) void,
@@ -367,7 +367,7 @@ const Interface = struct {
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case, title_case });
             } else {
                 try writer.print(
-                    \\pub fn setHandler(
+                    \\pub inline fn setHandler(
                     \\    {}: *{},
                     \\    comptime T: type,
                     \\    comptime handle_destroy: ?fn ({}: *{}, data: T) void,

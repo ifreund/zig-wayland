@@ -85,7 +85,7 @@ pub const Server = opaque {
         filter: fn (client: *const Client, global: *const Global, data: ?*c_void) callconv(.C) bool,
         data: ?*c_void,
     ) void;
-    pub fn setGlobalFilter(
+    pub inline fn setGlobalFilter(
         server: *Server,
         comptime T: type,
         filter: fn (client: *const Client, global: *const Global, data: T) callconv(.C) bool,
@@ -112,7 +112,7 @@ pub const Server = opaque {
         func: fn (data: ?*c_void, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
         data: ?*c_void,
     ) void;
-    pub fn addProtocolLogger(
+    pub inline fn addProtocolLogger(
         server: *Server,
         comptime T: type,
         func: fn (data: T, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
@@ -175,7 +175,7 @@ pub const Client = opaque {
         iterator: fn (resource: *Resource, data: ?*c_void) callconv(.C) IteratorResult,
         data: ?*c_void,
     ) void;
-    pub fn forEachResource(
+    pub inline fn forEachResource(
         client: *Client,
         comptime T: type,
         iterator: fn (resource: *Resource, data: T) callconv(.C) IteratorResult,
@@ -199,7 +199,7 @@ pub const Global = opaque {
         data: ?*c_void,
         bind: fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void,
     ) ?*Global;
-    pub fn create(
+    pub inline fn create(
         server: *Server,
         comptime T: type,
         version: u32,
@@ -234,7 +234,7 @@ pub const Global = opaque {
 
 pub const Resource = opaque {
     extern fn wl_resource_create(client: *Client, interface: *const Interface, version: c_int, id: u32) ?*Resource;
-    pub fn create(client: *Client, comptime T: type, version: u32, id: u32) !*Resource {
+    pub inline fn create(client: *Client, comptime T: type, version: u32, id: u32) !*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
         return wl_resource_create(client, T.getInterface(), @intCast(c_int, version), id) orelse error.ResourceCreateFailed;
@@ -537,7 +537,7 @@ pub const EventLoop = opaque {
         func: fn (fd: c_int, mask: u32, data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub fn addFd(
+    pub inline fn addFd(
         loop: *EventLoop,
         comptime T: type,
         fd: c_int,
@@ -559,7 +559,7 @@ pub const EventLoop = opaque {
         func: fn (data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub fn addTimer(
+    pub inline fn addTimer(
         loop: *EventLoop,
         comptime T: type,
         func: fn (data: T) callconv(.C) c_int,
@@ -578,7 +578,7 @@ pub const EventLoop = opaque {
         func: fn (c_int, ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub fn addSignal(
+    pub inline fn addSignal(
         loop: *EventLoop,
         comptime T: type,
         signal_number: c_int,
@@ -598,7 +598,7 @@ pub const EventLoop = opaque {
         func: fn (data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub fn addIdle(
+    pub inline fn addIdle(
         loop: *EventLoop,
         comptime T: type,
         func: fn (data: T) callconv(.C) c_int,
@@ -654,7 +654,7 @@ pub const EventSource = opaque {
     }
 
     extern fn wl_event_source_timer_update(source: *EventSource, ms_delay: c_int) c_int;
-    pub fn timerUpdate(source: *EventSource, ms_delay: u31) !void {
+    pub fn timerUpdate(source: *EventSource, ms_delay: c_int) !void {
         const rc = wl_event_source_timer_update(source, ms_delay);
         switch (os.errno(rc)) {
             0 => return,
