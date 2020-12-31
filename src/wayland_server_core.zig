@@ -444,6 +444,12 @@ pub fn Listener(comptime T: type) type {
         link: list.Link,
         notify: fn (listener: *Self, data: ?*c_void) callconv(.C) void,
 
+        pub fn init(comptime notify: NotifyFn) Self {
+            var self: Self = undefined;
+            self.setNotify(notify);
+            return self;
+        }
+
         pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
             self.notify = if (T == void)
                 struct {
