@@ -336,6 +336,17 @@ const Interface = struct {
                     \\}}
                 , .{ func[0], snake_case, title_case, func[1], snake_case, func[0] });
 
+            const has_error = for (interface.enums.items) |e| {
+                if (mem.eql(u8, e.name, "error")) break true;
+            } else false;
+            if (has_error) {
+                try writer.print(
+                    \\pub fn postError({}: *{}, err: Error, message: [*:0]const u8) void {{
+                    \\    return @ptrCast(*server.wl.Resource, {}).postError(@intCast(u32, @enumToInt(err)), message);
+                    \\}}
+                , .{ snake_case, title_case, snake_case });
+            }
+
             if (interface.requests.items.len > 0) {
                 try writer.writeAll("pub const Request = union(enum) {");
                 for (interface.requests.items) |request| try request.emitField(.server, writer);
