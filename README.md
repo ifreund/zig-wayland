@@ -1,6 +1,6 @@
 # zig-wayland
 
-Zig bindings and protocol scanner for libwayland.
+Zig 0.7.1 bindings and protocol scanner for libwayland.
 
 ## Usage
 
@@ -29,7 +29,7 @@ pub fn build(b: *Builder) void {
     exe.addPackage(scanner.getPkg());
     exe.linkLibC();
     exe.linkSystemLibrary("wayland-client");
-    
+
     // TODO: remove when https://github.com/ziglang/zig/issues/131 is implemented
     scanner.addCSource(exe);
 
