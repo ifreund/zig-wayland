@@ -409,6 +409,7 @@ pub const list = struct {
                 head.link.next = other.link.next;
             }
 
+            /// Removal of elements during iteration is illegal
             pub fn Iterator(comptime direction: Direction) type {
                 return struct {
                     head: *Link,
@@ -425,8 +426,42 @@ pub const list = struct {
                 };
             }
 
+            /// Removal of elements during iteration is illegal
             pub fn iterator(head: *Self, comptime direction: Direction) Iterator(direction) {
                 return .{ .head = &head.link, .current = &head.link };
+            }
+
+            /// Removal of the current element during iteration is permitted.
+            /// Removal of other elements is illegal.
+            pub fn SafeIterator(comptime direction: Direction) type {
+                return struct {
+                    head: *Link,
+                    current: *Link,
+                    future: *Link,
+
+                    pub fn next(it: *@This()) ?*T {
+                        it.current = it.future;
+                        it.future = switch (direction) {
+                            .forward => it.future.next.?,
+                            .reverse => it.future.prev.?,
+                        };
+                        if (it.current == it.head) return null;
+                        return if (link_field) |f| @fieldParentPtr(T, f, it.current) else T.fromLink(it.current);
+                    }
+                };
+            }
+
+            /// Removal of the current element during iteration is permitted.
+            /// Removal of other elements is illegal.
+            pub fn safeIterator(head: *Self, comptime direction: Direction) SafeIterator(direction) {
+                return .{
+                    .head = &head.link,
+                    .current = &head.link,
+                    .future = switch (direction) {
+                        .forward => head.link.next.?,
+                        .reverse => head.link.prev.?,
+                    },
+                };
             }
         };
     }
