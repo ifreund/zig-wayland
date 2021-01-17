@@ -294,7 +294,8 @@ const Interface = struct {
                     \\    data: T,
                     \\) !void {{
                     \\    const proxy = @ptrCast(*client.wl.Proxy, {});
-                    \\    try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, data);
+                    \\    const mut_data = @intToPtr(?*c_void, @ptrToInt(data));
+                    \\    try proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, listener, mut_data);
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
             }
@@ -351,7 +352,7 @@ const Interface = struct {
                 try writer.writeAll("pub const Request = union(enum) {");
                 for (interface.requests.items) |request| try request.emitField(.server, writer);
                 try writer.writeAll("};\n");
-                @setEvalBranchQuota(2400);
+                @setEvalBranchQuota(2500);
                 try writer.print(
                     \\pub inline fn setHandler(
                     \\    {}: *{},
@@ -364,7 +365,7 @@ const Interface = struct {
                     \\    resource.setDispatcher(
                     \\        common.Dispatcher({}, T).dispatcher,
                     \\        handle_request,
-                    \\        data,
+                    \\        @intToPtr(?*c_void, @ptrToInt(data)),
                     \\        if (handle_destroy) |handler| struct {{
                     \\            fn wrapper(_resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, handler, .{{
@@ -388,7 +389,7 @@ const Interface = struct {
                     \\    resource.setDispatcher(
                     \\        null,
                     \\        null,
-                    \\        data,
+                    \\        @intToPtr(?*c_void, @ptrToInt(data)),
                     \\        if (handle_destroy) |handler| struct {{
                     \\            fn wrapper(_resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, handler, .{{
