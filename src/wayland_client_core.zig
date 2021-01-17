@@ -79,12 +79,6 @@ pub const Proxy = opaque {
             return error.AlreadyHasListener;
     }
 
-    // TODO: consider removing this to make setListener() on protocol objects
-    // actually type safe for data
-    extern fn wl_proxy_set_user_data(proxy: *Proxy, user_data: ?*c_void) void;
-    pub fn setUserData(proxy: *Proxy, user_data: ?*c_void) void {
-        wl_proxy_set_user_data(proxy, user_data);
-    }
     extern fn wl_proxy_get_user_data(proxy: *Proxy) ?*c_void;
     pub fn getUserData(proxy: *Proxy) ?*c_void {
         return wl_proxy_get_user_data(proxy);

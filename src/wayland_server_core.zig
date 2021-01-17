@@ -227,9 +227,6 @@ pub const Global = opaque {
 
     extern fn wl_global_get_user_data(global: *const Global) ?*c_void;
     pub const getUserData = wl_global_get_user_data;
-
-    // TODO: should we expose this making the signature of create unsafe?
-    extern fn wl_global_set_user_data(global: *Global, data: ?*c_void) void;
 };
 
 pub const Resource = opaque {
@@ -282,9 +279,6 @@ pub const Resource = opaque {
 
     extern fn wl_resource_get_user_data(resource: *Resource) ?*c_void;
     pub const getUserData = wl_resource_get_user_data;
-
-    // TODO: should we expose this and lose type safety of the setDispatcher API?
-    extern fn wl_resource_set_user_data(resource: *Resource, data: ?*c_void) void;
 
     extern fn wl_resource_get_id(resource: *Resource) u32;
     pub const getId = wl_resource_get_id;
