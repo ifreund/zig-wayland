@@ -143,7 +143,7 @@ const Protocol = struct {
     }
 
     fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Protocol {
-        var raw_name: ?[]const u8 = null;
+        var name: ?[]const u8 = null;
         var interfaces = std.ArrayList(Interface).init(allocator);
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
@@ -152,30 +152,15 @@ const Protocol = struct {
                     try interfaces.append(try Interface.parse(allocator, parser));
             },
             .attribute => |attr| if (mem.eql(u8, attr.name, "name")) {
-                if (raw_name != null) return error.DuplicateName;
-                raw_name = try attr.dupeValue(allocator);
+                if (name != null) return error.DuplicateName;
+                name = try attr.dupeValue(allocator);
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
-                var name = raw_name orelse return error.MissingName;
-                var namespace: []const u8 = "wl";
-
-                // If the name has a prefix, use it as the namespace
-                if (prefix(name)) |p| namespace = p;
-
-                // If there is an unstable_ in the name, remove it and add a
-                // leading z to the prefix.
-                if (mem.indexOf(u8, name, "unstable_")) |unstable_idx| {
-                    name = try mem.concat(allocator, u8, &[_][]const u8{
-                        "z",
-                        name[0..unstable_idx],
-                        name[unstable_idx + "unstable_".len ..],
-                    });
-                    namespace = prefix(name) orelse return error.MissingPrefix;
-                }
-
+                if (interfaces.items.len == 0) return error.NoInterfaces;
                 return Protocol{
-                    .name = name,
-                    .namespace = namespace,
+                    .name = name orelse return error.MissingName,
+                    // TODO: support mixing namespaces in a protocol
+                    .namespace = prefix(interfaces.items[0].name) orelse return error.NoNamespace,
                     .interfaces = interfaces,
                 };
             },
