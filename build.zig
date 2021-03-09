@@ -102,7 +102,9 @@ pub const ScanProtocolsStep = struct {
         ), &std.ascii.spaces);
         const wayland_xml = try fs.path.join(ally, &[_][]const u8{ wayland_dir, "wayland.xml" });
 
-        try scanner.scan(self.out_path, wayland_xml, self.protocol_paths.items);
+        var root = try fs.cwd().openDir(self.builder.build_root, .{});
+        defer root.close();
+        try scanner.scan(root, self.out_path, wayland_xml, self.protocol_paths.items);
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.

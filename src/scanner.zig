@@ -7,8 +7,8 @@ const xml = @import("xml.zig");
 const gpa = &allocator_instance.allocator;
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn scan(out_path: []const u8, wayland_xml: []const u8, protocols: []const []const u8) !void {
-    var out_dir = try fs.cwd().makeOpenPath(out_path, .{});
+pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, protocols: []const []const u8) !void {
+    var out_dir = try root_dir.makeOpenPath(out_path, .{});
     defer out_dir.close();
 
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
@@ -17,9 +17,9 @@ pub fn scan(out_path: []const u8, wayland_xml: []const u8, protocols: []const []
 
     var scanner = Scanner{};
 
-    try scanner.scanProtocol(out_dir, wayland_xml);
+    try scanner.scanProtocol(root_dir, out_dir, wayland_xml);
     for (protocols) |xml_path|
-        try scanner.scanProtocol(out_dir, xml_path);
+        try scanner.scanProtocol(root_dir, out_dir, xml_path);
 
     {
         const client_core_file = try out_dir.createFile("wayland_client_core.zig", .{});
@@ -89,8 +89,8 @@ const Scanner = struct {
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
-    fn scanProtocol(scanner: *Scanner, out_dir: std.fs.Dir, xml_path: []const u8) !void {
-        const xml_file = try std.fs.cwd().openFile(xml_path, .{});
+    fn scanProtocol(scanner: *Scanner, root_dir: fs.Dir, out_dir: fs.Dir, xml_path: []const u8) !void {
+        const xml_file = try root_dir.openFile(xml_path, .{});
         defer xml_file.close();
 
         var arena = std.heap.ArenaAllocator.init(gpa);
