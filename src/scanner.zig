@@ -131,6 +131,8 @@ const Scanner = struct {
 const Protocol = struct {
     name: []const u8,
     namespace: []const u8,
+    copyright: ?[]const u8,
+    toplevel_description: ?[]const u8,
     interfaces: std.ArrayList(Interface),
 
     fn parseXML(allocator: *mem.Allocator, xml_bytes: []const u8) !Protocol {
@@ -144,12 +146,30 @@ const Protocol = struct {
 
     fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Protocol {
         var name: ?[]const u8 = null;
+        var copyright: ?[]const u8 = null;
+        var toplevel_description: ?[]const u8 = null;
         var interfaces = std.ArrayList(Interface).init(allocator);
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
-                // TODO: parse copyright and description
-                if (mem.eql(u8, tag, "interface"))
+                if (mem.eql(u8, tag, "copyright")) {
+                    if (copyright != null)
+                        return error.DuplicateCopyright;
+                    const e = parser.next() orelse return error.UnexpectedEndOfFile;
+                    switch (e) {
+                        .character_data => |data| copyright = try allocator.dupe(u8, data),
+                        else => return error.BadCopyright,
+                    }
+                } else if (mem.eql(u8, tag, "description")) {
+                    if (toplevel_description != null)
+                        return error.DuplicateToplevelDescription;
+                    const e = parser.next() orelse return error.UnexpectedEndOfFile;
+                    switch (e) {
+                        .character_data => |data| toplevel_description = try allocator.dupe(u8, data),
+                        else => return error.BadToplevelDescription,
+                    }
+                } else if (mem.eql(u8, tag, "interface")) {
                     try interfaces.append(try Interface.parse(allocator, parser));
+                }
             },
             .attribute => |attr| if (mem.eql(u8, attr.name, "name")) {
                 if (name != null) return error.DuplicateName;
@@ -162,6 +182,10 @@ const Protocol = struct {
                     // TODO: support mixing namespaces in a protocol
                     .namespace = prefix(interfaces.items[0].name) orelse return error.NoNamespace,
                     .interfaces = interfaces,
+
+                    // Missing copyright or toplevel description is bad style, but not illegal.
+                    .copyright = copyright,
+                    .toplevel_description = toplevel_description,
                 };
             },
             else => {},
@@ -169,7 +193,25 @@ const Protocol = struct {
         return error.UnexpectedEndOfFile;
     }
 
+    fn emitCopyrightAndToplevelDescription(protocol: Protocol, writer: anytype) !void {
+        if (protocol.copyright) |copyright| {
+            var it = mem.split(copyright, "\n");
+            while (it.next()) |line| {
+                try writer.print("// {}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+            }
+            try writer.writeByte('\n');
+        }
+        if (protocol.toplevel_description) |toplevel_description| {
+            var it = mem.split(toplevel_description, "\n");
+            while (it.next()) |line| {
+                try writer.print("// {}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+            }
+            try writer.writeByte('\n');
+        }
+    }
+
     fn emitClient(protocol: Protocol, writer: anytype) !void {
+        try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
             \\const os = @import("std").os;
             \\const client = @import("wayland.zig").client;
@@ -180,6 +222,7 @@ const Protocol = struct {
     }
 
     fn emitServer(protocol: Protocol, writer: anytype) !void {
+        try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
             \\const os = @import("std").os;
             \\const server = @import("wayland.zig").server;
@@ -190,6 +233,7 @@ const Protocol = struct {
     }
 
     fn emitCommon(protocol: Protocol, writer: anytype) !void {
+        try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
             \\const common = @import("common.zig");
         );
