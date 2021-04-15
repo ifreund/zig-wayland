@@ -162,10 +162,17 @@ const Protocol = struct {
                 } else if (mem.eql(u8, tag, "description")) {
                     if (toplevel_description != null)
                         return error.DuplicateToplevelDescription;
-                    const e = parser.next() orelse return error.UnexpectedEndOfFile;
-                    switch (e) {
-                        .character_data => |data| toplevel_description = try allocator.dupe(u8, data),
-                        else => return error.BadToplevelDescription,
+                    while (parser.next()) |e| {
+                        switch (e) {
+                            .character_data => |data| {
+                                toplevel_description = try allocator.dupe(u8, data);
+                                break;
+                            },
+                            .attribute => continue,
+                            else => return error.BadToplevelDescription,
+                        }
+                    } else {
+                        return error.UnexpectedEndOfFile;
                     }
                 } else if (mem.eql(u8, tag, "interface")) {
                     try interfaces.append(try Interface.parse(allocator, parser));
