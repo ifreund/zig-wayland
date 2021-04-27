@@ -6,7 +6,7 @@ pub fn main() !void {
     const display = try wl.Display.connect(null);
     const registry = try display.getRegistry();
     var running: bool = true;
-    try registry.setListener(*bool, listener, &running);
+    registry.setListener(*bool, listener, &running);
     while (running) {
         _ = try display.dispatch();
     }
@@ -17,7 +17,7 @@ fn listener(registry: *wl.Registry, event: wl.Registry.Event, running: *bool) vo
         .global => |global| {
             if (std.cstr.cmp(global.interface, wl.Seat.getInterface().name) == 0) {
                 const seat = registry.bind(global.name, wl.Seat, 1) catch return;
-                seat.setListener(*bool, seatListener, running) catch return;
+                seat.setListener(*bool, seatListener, running);
             }
         },
         .global_remove => {},

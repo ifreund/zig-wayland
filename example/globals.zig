@@ -6,7 +6,7 @@ pub fn main() !void {
     const display = try wl.Display.connect(null);
     const registry = try display.getRegistry();
     var foo: u32 = 42;
-    try registry.setListener(*u32, listener, &foo);
+    registry.setListener(*u32, listener, &foo);
     _ = try display.roundtrip();
 }
 
