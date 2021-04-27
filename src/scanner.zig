@@ -329,10 +329,10 @@ const Interface = struct {
                     \\    comptime T: type,
                     \\    _listener: fn ({}: *{}, event: Event, data: T) void,
                     \\    _data: T,
-                    \\) !void {{
+                    \\) void {{
                     \\    const _proxy = @ptrCast(*client.wl.Proxy, _{});
                     \\    const _mut_data = @intToPtr(?*c_void, @ptrToInt(_data));
-                    \\    try _proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, _listener, _mut_data);
+                    \\    _proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
             }

@@ -1,4 +1,4 @@
-const debug = @import("std").debug;
+const assert = @import("std").debug.assert;
 const client = @import("wayland.zig").client;
 const common = @import("common.zig");
 pub const Object = common.Object;
@@ -74,9 +74,12 @@ pub const Proxy = opaque {
         dispatcher: DispatcherFn,
         implementation: ?*const c_void,
         data: ?*c_void,
-    ) !void {
-        if (wl_proxy_add_dispatcher(proxy, dispatcher, implementation, data) == -1)
-            return error.AlreadyHasListener;
+    ) void {
+        const ret = wl_proxy_add_dispatcher(proxy, dispatcher, implementation, data);
+        // Since there is no way to remove listeners, adding a listener to
+        // the same proxy twice is always a bug, so assert instead of returning
+        // an error.
+        assert(ret != -1); // If this fails, a listener was already added
     }
 
     extern fn wl_proxy_get_user_data(proxy: *Proxy) ?*c_void;
@@ -106,7 +109,7 @@ pub const EglWindow = opaque {
     extern fn wl_egl_window_create(surface: *client.wl.Surface, width: c_int, height: c_int) ?*EglWindow;
     pub fn create(surface: *client.wl.Surface, width: c_int, height: c_int) !*EglWindow {
         // Why do people use int when they require a positive number?
-        debug.assert(width > 0 and height > 0);
+        assert(width > 0 and height > 0);
         return wl_egl_window_create(surface, width, height) orelse error.OutOfMemory;
     }
 
