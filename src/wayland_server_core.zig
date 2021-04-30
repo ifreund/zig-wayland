@@ -85,12 +85,12 @@ pub const Server = opaque {
         filter: fn (client: *const Client, global: *const Global, data: ?*c_void) callconv(.C) bool,
         data: ?*c_void,
     ) void;
-    pub inline fn setGlobalFilter(
+    pub fn setGlobalFilter(
         server: *Server,
         comptime T: type,
         filter: fn (client: *const Client, global: *const Global, data: T) callconv(.C) bool,
         data: T,
-    ) void {
+    ) callconv(.Inline) void {
         wl_display_set_global_filter(server, filter, data);
     }
 
@@ -112,12 +112,12 @@ pub const Server = opaque {
         func: fn (data: ?*c_void, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
         data: ?*c_void,
     ) void;
-    pub inline fn addProtocolLogger(
+    pub fn addProtocolLogger(
         server: *Server,
         comptime T: type,
         func: fn (data: T, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
         data: T,
-    ) void {
+    ) callconv(.Inline) void {
         wl_display_add_protocol_logger(server, func, data);
     }
 };
@@ -175,12 +175,12 @@ pub const Client = opaque {
         iterator: fn (resource: *Resource, data: ?*c_void) callconv(.C) IteratorResult,
         data: ?*c_void,
     ) void;
-    pub inline fn forEachResource(
+    pub fn forEachResource(
         client: *Client,
         comptime T: type,
         iterator: fn (resource: *Resource, data: T) callconv(.C) IteratorResult,
         data: T,
-    ) void {
+    ) callconv(.Inline) void {
         wl_client_for_each_resource(client, iterator, data);
     }
 
@@ -199,14 +199,14 @@ pub const Global = opaque {
         data: ?*c_void,
         bind: fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void,
     ) ?*Global;
-    pub inline fn create(
+    pub fn create(
         server: *Server,
         comptime T: type,
         version: u32,
         comptime DataT: type,
         data: DataT,
         bind: fn (client: *Client, data: DataT, version: u32, id: u32) callconv(.C) void,
-    ) !*Global {
+    ) callconv(.Inline) !*Global {
         return wl_global_create(
             server,
             T.getInterface(),
@@ -231,7 +231,7 @@ pub const Global = opaque {
 
 pub const Resource = opaque {
     extern fn wl_resource_create(client: *Client, interface: *const Interface, version: c_int, id: u32) ?*Resource;
-    pub inline fn create(client: *Client, comptime T: type, version: u32, id: u32) !*Resource {
+    pub fn create(client: *Client, comptime T: type, version: u32, id: u32) callconv(.Inline) !*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
         return wl_resource_create(client, T.getInterface(), @intCast(c_int, version), id) orelse error.ResourceCreateFailed;
@@ -519,13 +519,13 @@ pub fn Signal(comptime T: type) type {
 
         pub const emit = if (T == void)
             struct {
-                pub inline fn emit(signal: *Self) void {
+                pub fn emit(signal: *Self) callconv(.Inline) void {
                     emitInner(signal, null);
                 }
             }.emit
         else
             struct {
-                pub inline fn emit(signal: *Self, data: T) void {
+                pub fn emit(signal: *Self, data: T) callconv(.Inline) void {
                     emitInner(signal, data);
                 }
             }.emit;
@@ -572,14 +572,14 @@ pub const EventLoop = opaque {
         func: fn (fd: c_int, mask: u32, data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub inline fn addFd(
+    pub fn addFd(
         loop: *EventLoop,
         comptime T: type,
         fd: c_int,
         mask: u32,
         func: fn (fd: c_int, mask: u32, data: T) callconv(.C) c_int,
         data: T,
-    ) !*EventSource {
+    ) callconv(.Inline) !*EventSource {
         return wl_event_loop_add_fd(
             loop,
             fd,
@@ -594,12 +594,12 @@ pub const EventLoop = opaque {
         func: fn (data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub inline fn addTimer(
+    pub fn addTimer(
         loop: *EventLoop,
         comptime T: type,
         func: fn (data: T) callconv(.C) c_int,
         data: T,
-    ) !*EventSource {
+    ) callconv(.Inline) !*EventSource {
         return wl_event_loop_add_timer(
             loop,
             @ptrCast(fn (?*c_void) callconv(.C) c_int, func),
@@ -613,13 +613,13 @@ pub const EventLoop = opaque {
         func: fn (c_int, ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub inline fn addSignal(
+    pub fn addSignal(
         loop: *EventLoop,
         comptime T: type,
         signal_number: c_int,
         func: fn (signal_number: c_int, data: T) callconv(.C) c_int,
         data: T,
-    ) !*EventSource {
+    ) callconv(.Inline) !*EventSource {
         return wl_event_loop_add_signal(
             loop,
             signal_number,
@@ -633,12 +633,12 @@ pub const EventLoop = opaque {
         func: fn (data: ?*c_void) callconv(.C) c_int,
         data: ?*c_void,
     ) ?*EventSource;
-    pub inline fn addIdle(
+    pub fn addIdle(
         loop: *EventLoop,
         comptime T: type,
         func: fn (data: T) callconv(.C) c_int,
         data: T,
-    ) error{OutOfMemory}!*EventSource {
+    ) callconv(.Inline) error{OutOfMemory}!*EventSource {
         return wl_event_loop_add_idle(
             loop,
             @ptrCast(fn (?*c_void) callconv(.C) c_int, func),
