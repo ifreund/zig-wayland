@@ -134,7 +134,7 @@ pub const ScanProtocolsStep = struct {
         // Extension is .xml, so slice off the last 4 characters
         const basename = fs.path.basename(xml_in_path);
         const basename_no_ext = basename[0..(basename.len - 4)];
-        const code_filename = std.fmt.allocPrint(ally, "{}-protocol.c", .{basename_no_ext}) catch unreachable;
+        const code_filename = std.fmt.allocPrint(ally, "{s}-protocol.c", .{basename_no_ext}) catch unreachable;
         return fs.path.join(ally, &[_][]const u8{ self.out_path, code_filename }) catch unreachable;
     }
 };

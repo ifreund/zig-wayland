@@ -37,5 +37,5 @@ fn not(listen: *wl.Listener(void)) void {
 }
 
 fn not2(listen: *wl.Listener(*Foo), foo: *Foo) void {
-    std.debug.print("{}\n", .{foo.bar});
+    std.debug.print("{s}\n", .{foo.bar});
 }

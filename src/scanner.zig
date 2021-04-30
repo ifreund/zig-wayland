@@ -32,11 +32,11 @@ pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, pro
 
         var iter = scanner.client.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {} = struct {{", .{entry.key});
+            try writer.print("pub const {s} = struct {{", .{entry.key});
             if (mem.eql(u8, entry.key, "wl"))
                 try writer.writeAll("pub usingnamespace @import(\"wayland_client_core.zig\");\n");
             for (entry.value.items) |generated_file|
-                try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
+                try writer.print("pub usingnamespace @import(\"{s}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
     }
@@ -52,11 +52,11 @@ pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, pro
 
         var iter = scanner.server.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {} = struct {{", .{entry.key});
+            try writer.print("pub const {s} = struct {{", .{entry.key});
             if (mem.eql(u8, entry.key, "wl"))
                 try writer.writeAll("pub usingnamespace @import(\"wayland_server_core.zig\");\n");
             for (entry.value.items) |generated_file|
-                try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
+                try writer.print("pub usingnamespace @import(\"{s}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
     }
@@ -69,9 +69,9 @@ pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, pro
 
         var iter = scanner.common.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {} = struct {{", .{entry.key});
+            try writer.print("pub const {s} = struct {{", .{entry.key});
             for (entry.value.items) |generated_file|
-                try writer.print("pub usingnamespace @import(\"{}\");", .{generated_file});
+                try writer.print("pub usingnamespace @import(\"{s}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
     }
@@ -205,14 +205,14 @@ const Protocol = struct {
         if (protocol.copyright) |copyright| {
             var it = mem.split(copyright, "\n");
             while (it.next()) |line| {
-                try writer.print("// {}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
             }
             try writer.writeByte('\n');
         }
         if (protocol.toplevel_description) |toplevel_description| {
             var it = mem.split(toplevel_description, "\n");
             while (it.next()) |line| {
-                try writer.print("// {}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
             }
             try writer.writeByte('\n');
         }
@@ -306,14 +306,14 @@ const Interface = struct {
         const snake_case = fbs.getWritten()[title_case.len..];
 
         try writer.print(
-            \\pub const {} = opaque {{
-            \\ pub const getInterface = common.{}.{}.getInterface;
+            \\pub const {s} = opaque {{
+            \\ pub const getInterface = common.{s}.{s}.getInterface;
         , .{ title_case, namespace, snake_case });
 
         for (interface.enums.items) |e| {
             try writer.writeAll("pub const ");
             try printIdentifier(writer, case(.title, e.name));
-            try writer.print(" = common.{}.{}.", .{ namespace, snake_case });
+            try writer.print(" = common.{s}.{s}.", .{ namespace, snake_case });
             try printIdentifier(writer, case(.title, e.name));
             try writer.writeAll(";\n");
         }
@@ -324,15 +324,15 @@ const Interface = struct {
                 for (interface.events.items) |event| try event.emitField(.client, writer);
                 try writer.writeAll("};\n");
                 try writer.print(
-                    \\pub inline fn setListener(
-                    \\    _{}: *{},
+                    \\pub fn setListener(
+                    \\    _{s}: *{s},
                     \\    comptime T: type,
-                    \\    _listener: fn ({}: *{}, event: Event, data: T) void,
+                    \\    _listener: fn ({s}: *{s}, event: Event, data: T) void,
                     \\    _data: T,
-                    \\) void {{
-                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{});
+                    \\) callconv(.Inline) void {{
+                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{s});
                     \\    const _mut_data = @intToPtr(?*c_void, @ptrToInt(_data));
-                    \\    _proxy.addDispatcher(common.Dispatcher({}, T).dispatcher, _listener, _mut_data);
+                    \\    _proxy.addDispatcher(common.Dispatcher({s}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case });
             }
@@ -344,20 +344,20 @@ const Interface = struct {
                 try writer.writeAll(@embedFile("client_display_functions.zig"));
         } else {
             try writer.print(
-                \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{} {{
-                \\    return @ptrCast(*{}, try server.wl.Resource.create(_client, {}, _version, _id));
+                \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{s} {{
+                \\    return @ptrCast(*{s}, try server.wl.Resource.create(_client, {s}, _version, _id));
                 \\}}
             , .{ title_case, title_case, title_case });
 
             try writer.print(
-                \\pub fn destroy(_{}: *{}) void {{
-                \\    return @ptrCast(*server.wl.Resource, _{}).destroy();
+                \\pub fn destroy(_{s}: *{s}) void {{
+                \\    return @ptrCast(*server.wl.Resource, _{s}).destroy();
                 \\}}
             , .{ snake_case, title_case, snake_case });
 
             try writer.print(
-                \\pub fn fromLink(_link: *server.wl.list.Link) *{} {{
-                \\    return @ptrCast(*{}, server.wl.Resource.fromLink(_link));
+                \\pub fn fromLink(_link: *server.wl.list.Link) *{s} {{
+                \\    return @ptrCast(*{s}, server.wl.Resource.fromLink(_link));
                 \\}}
             , .{ title_case, title_case });
 
@@ -369,8 +369,8 @@ const Interface = struct {
                 .{ "postNoMemory", "void" },
             }) |func|
                 try writer.print(
-                    \\pub fn {}(_{}: *{}) {} {{
-                    \\    return @ptrCast(*server.wl.Resource, _{}).{}();
+                    \\pub fn {s}(_{s}: *{s}) {s} {{
+                    \\    return @ptrCast(*server.wl.Resource, _{s}).{s}();
                     \\}}
                 , .{ func[0], snake_case, title_case, func[1], snake_case, func[0] });
 
@@ -379,8 +379,8 @@ const Interface = struct {
             } else false;
             if (has_error) {
                 try writer.print(
-                    \\pub fn postError({}: *{}, _err: Error, _message: [*:0]const u8) void {{
-                    \\    return @ptrCast(*server.wl.Resource, {}).postError(@intCast(u32, @enumToInt(_err)), _message);
+                    \\pub fn postError({s}: *{s}, _err: Error, _message: [*:0]const u8) void {{
+                    \\    return @ptrCast(*server.wl.Resource, {s}).postError(@intCast(u32, @enumToInt(_err)), _message);
                     \\}}
                 , .{ snake_case, title_case, snake_case });
             }
@@ -391,22 +391,22 @@ const Interface = struct {
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2500);
                 try writer.print(
-                    \\pub inline fn setHandler(
-                    \\    _{}: *{},
+                    \\pub fn setHandler(
+                    \\    _{s}: *{s},
                     \\    comptime T: type,
-                    \\    handle_request: fn ({}: *{}, request: Request, data: T) void,
-                    \\    comptime handle_destroy: ?fn ({}: *{}, data: T) void,
+                    \\    handle_request: fn ({s}: *{s}, request: Request, data: T) void,
+                    \\    comptime handle_destroy: ?fn ({s}: *{s}, data: T) void,
                     \\    _data: T,
-                    \\) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, _{});
+                    \\) callconv(.Inline) void {{
+                    \\    const _resource = @ptrCast(*server.wl.Resource, _{s});
                     \\    _resource.setDispatcher(
-                    \\        common.Dispatcher({}, T).dispatcher,
+                    \\        common.Dispatcher({s}, T).dispatcher,
                     \\        handle_request,
                     \\        @intToPtr(?*c_void, @ptrToInt(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, _handler, .{{
-                    \\                    @ptrCast(*{}, __resource),
+                    \\                    @ptrCast(*{s}, __resource),
                     \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
                     \\                }});
                     \\            }}
@@ -416,13 +416,13 @@ const Interface = struct {
                 , .{ snake_case, title_case, snake_case, title_case, snake_case, title_case, snake_case, title_case, title_case });
             } else {
                 try writer.print(
-                    \\pub inline fn setHandler(
-                    \\    _{}: *{},
+                    \\pub fn setHandler(
+                    \\    _{s}: *{s},
                     \\    comptime T: type,
-                    \\    comptime handle_destroy: ?fn ({}: *{}, data: T) void,
+                    \\    comptime handle_destroy: ?fn ({s}: *{s}, data: T) void,
                     \\    _data: T,
-                    \\) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, {});
+                    \\) callconv(.Inline) void {{
+                    \\    const _resource = @ptrCast(*server.wl.Resource, {s});
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
@@ -430,7 +430,7 @@ const Interface = struct {
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, _handler, .{{
-                    \\                    @ptrCast(*{}, __resource),
+                    \\                    @ptrCast(*{s}, __resource),
                     \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
                     \\                }});
                     \\            }}
@@ -484,9 +484,9 @@ const Interface = struct {
 
         try writer.print(
             \\ = struct {{
-            \\ extern const {}_interface: common.Interface;
-            \\ pub inline fn getInterface() *const common.Interface {{
-            \\  return &{}_interface;
+            \\ extern const {s}_interface: common.Interface;
+            \\ pub fn getInterface() callconv(.Inline) *const common.Interface {{
+            \\  return &{s}_interface;
             \\ }}
         , .{ interface.name, interface.name });
 
@@ -667,8 +667,8 @@ const Message = struct {
                             const c_type = if (arg.kind == .uint) "u32" else "i32";
                             try writer.print(
                                 \\ )) {{
-                                \\    .Enum => @intCast({}, @enumToInt(_{})),
-                                \\    .Struct => @bitCast(u32, _{}),
+                                \\    .Enum => @intCast({s}, @enumToInt(_{s})),
+                                \\    .Struct => @bitCast(u32, _{s}),
                                 \\    else => unreachable,
                                 \\ }}
                             , .{ c_type, arg.name, arg.name });
@@ -703,10 +703,10 @@ const Message = struct {
         }
         const args = if (message.args.items.len > 0) "&_args" else "null";
         if (side == .server) {
-            try writer.print("_resource.postEvent({}, {});", .{ opcode, args });
+            try writer.print("_resource.postEvent({}, {s});", .{ opcode, args });
         } else switch (message.kind) {
             .normal, .destructor => {
-                try writer.print("_proxy.marshal({}, {});", .{ opcode, args });
+                try writer.print("_proxy.marshal({}, {s});", .{ opcode, args });
                 if (message.kind == .destructor) try writer.writeAll("_proxy.destroy();");
             },
             .constructor => |new_iface| {
@@ -743,7 +743,7 @@ const Arg = struct {
 
     fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Arg {
         var name: ?[]const u8 = null;
-        var kind: ?@TagType(Type) = null;
+        var kind: ?std.meta.Tag(Type) = null;
         var interface: ?[]const u8 = null;
         var allow_null: ?bool = null;
         var enum_name: ?[]const u8 = null;
@@ -755,7 +755,7 @@ const Arg = struct {
                     name = try attr.dupeValue(allocator);
                 } else if (mem.eql(u8, attr.name, "type")) {
                     if (kind != null) return error.DuplicateType;
-                    kind = std.meta.stringToEnum(@TagType(Type), try attr.dupeValue(allocator)) orelse
+                    kind = std.meta.stringToEnum(std.meta.Tag(Type), try attr.dupeValue(allocator)) orelse
                         return error.InvalidType;
                 } else if (mem.eql(u8, attr.name, "interface")) {
                     if (interface != null) return error.DuplicateInterface;
@@ -931,7 +931,7 @@ const Enum = struct {
         try writer.writeAll(" = extern enum(c_int) {");
         for (e.entries.items) |entry| {
             try printIdentifier(writer, entry.name);
-            try writer.print("= {},", .{entry.value});
+            try writer.print("= {s},", .{entry.value});
         }
         // Always generate non-exhaustive enums to ensure forward compatability.
         // Entries have been added to wl_shm.format without bumping the version.
@@ -1021,7 +1021,7 @@ fn printIdentifier(writer: anytype, identifier: []const u8) !void {
     if (isValidIdentifier(identifier))
         try writer.writeAll(identifier)
     else
-        try writer.print("@\"{}\"", .{identifier});
+        try writer.print("@\"{s}\"", .{identifier});
 }
 
 fn isValidIdentifier(identifier: []const u8) bool {
