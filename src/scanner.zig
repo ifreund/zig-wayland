@@ -1042,118 +1042,118 @@ test "parsing" {
 
     const protocol = try Protocol.parseXML(&arena.allocator, @embedFile("../protocol/wayland.xml"));
 
-    testing.expectEqualSlices(u8, "wayland", protocol.name);
-    testing.expectEqual(@as(usize, 22), protocol.interfaces.items.len);
+    try testing.expectEqualSlices(u8, "wayland", protocol.name);
+    try testing.expectEqual(@as(usize, 22), protocol.interfaces.items.len);
 
     {
         const wl_display = protocol.interfaces.items[0];
-        testing.expectEqualSlices(u8, "wl_display", wl_display.name);
-        testing.expectEqual(@as(u32, 1), wl_display.version);
-        testing.expectEqual(@as(usize, 2), wl_display.requests.items.len);
-        testing.expectEqual(@as(usize, 2), wl_display.events.items.len);
-        testing.expectEqual(@as(usize, 1), wl_display.enums.items.len);
+        try testing.expectEqualSlices(u8, "wl_display", wl_display.name);
+        try testing.expectEqual(@as(u32, 1), wl_display.version);
+        try testing.expectEqual(@as(usize, 2), wl_display.requests.items.len);
+        try testing.expectEqual(@as(usize, 2), wl_display.events.items.len);
+        try testing.expectEqual(@as(usize, 1), wl_display.enums.items.len);
 
         {
             const sync = wl_display.requests.items[0];
-            testing.expectEqualSlices(u8, "sync", sync.name);
-            testing.expectEqual(@as(u32, 1), sync.since);
-            testing.expectEqual(@as(usize, 1), sync.args.items.len);
+            try testing.expectEqualSlices(u8, "sync", sync.name);
+            try testing.expectEqual(@as(u32, 1), sync.since);
+            try testing.expectEqual(@as(usize, 1), sync.args.items.len);
             {
                 const callback = sync.args.items[0];
-                testing.expectEqualSlices(u8, "callback", callback.name);
-                testing.expect(callback.kind == .new_id);
-                testing.expectEqualSlices(u8, "wl_callback", callback.kind.new_id.?);
-                testing.expectEqual(false, callback.allow_null);
-                testing.expectEqual(@as(?[]const u8, null), callback.enum_name);
+                try testing.expectEqualSlices(u8, "callback", callback.name);
+                try testing.expect(callback.kind == .new_id);
+                try testing.expectEqualSlices(u8, "wl_callback", callback.kind.new_id.?);
+                try testing.expectEqual(false, callback.allow_null);
+                try testing.expectEqual(@as(?[]const u8, null), callback.enum_name);
             }
-            testing.expect(sync.kind == .constructor);
+            try testing.expect(sync.kind == .constructor);
         }
 
         {
             const error_event = wl_display.events.items[0];
-            testing.expectEqualSlices(u8, "error", error_event.name);
-            testing.expectEqual(@as(u32, 1), error_event.since);
-            testing.expectEqual(@as(usize, 3), error_event.args.items.len);
+            try testing.expectEqualSlices(u8, "error", error_event.name);
+            try testing.expectEqual(@as(u32, 1), error_event.since);
+            try testing.expectEqual(@as(usize, 3), error_event.args.items.len);
             {
                 const object_id = error_event.args.items[0];
-                testing.expectEqualSlices(u8, "object_id", object_id.name);
-                testing.expectEqual(Arg.Type{ .object = null }, object_id.kind);
-                testing.expectEqual(false, object_id.allow_null);
-                testing.expectEqual(@as(?[]const u8, null), object_id.enum_name);
+                try testing.expectEqualSlices(u8, "object_id", object_id.name);
+                try testing.expectEqual(Arg.Type{ .object = null }, object_id.kind);
+                try testing.expectEqual(false, object_id.allow_null);
+                try testing.expectEqual(@as(?[]const u8, null), object_id.enum_name);
             }
             {
                 const code = error_event.args.items[1];
-                testing.expectEqualSlices(u8, "code", code.name);
-                testing.expectEqual(Arg.Type.uint, code.kind);
-                testing.expectEqual(false, code.allow_null);
-                testing.expectEqual(@as(?[]const u8, null), code.enum_name);
+                try testing.expectEqualSlices(u8, "code", code.name);
+                try testing.expectEqual(Arg.Type.uint, code.kind);
+                try testing.expectEqual(false, code.allow_null);
+                try testing.expectEqual(@as(?[]const u8, null), code.enum_name);
             }
             {
                 const message = error_event.args.items[2];
-                testing.expectEqualSlices(u8, "message", message.name);
-                testing.expectEqual(Arg.Type.string, message.kind);
-                testing.expectEqual(false, message.allow_null);
-                testing.expectEqual(@as(?[]const u8, null), message.enum_name);
+                try testing.expectEqualSlices(u8, "message", message.name);
+                try testing.expectEqual(Arg.Type.string, message.kind);
+                try testing.expectEqual(false, message.allow_null);
+                try testing.expectEqual(@as(?[]const u8, null), message.enum_name);
             }
         }
 
         {
             const error_enum = wl_display.enums.items[0];
-            testing.expectEqualSlices(u8, "error", error_enum.name);
-            testing.expectEqual(@as(u32, 1), error_enum.since);
-            testing.expectEqual(@as(usize, 4), error_enum.entries.items.len);
+            try testing.expectEqualSlices(u8, "error", error_enum.name);
+            try testing.expectEqual(@as(u32, 1), error_enum.since);
+            try testing.expectEqual(@as(usize, 4), error_enum.entries.items.len);
             {
                 const invalid_object = error_enum.entries.items[0];
-                testing.expectEqualSlices(u8, "invalid_object", invalid_object.name);
-                testing.expectEqual(@as(u32, 1), invalid_object.since);
-                testing.expectEqualSlices(u8, "0", invalid_object.value);
+                try testing.expectEqualSlices(u8, "invalid_object", invalid_object.name);
+                try testing.expectEqual(@as(u32, 1), invalid_object.since);
+                try testing.expectEqualSlices(u8, "0", invalid_object.value);
             }
             {
                 const invalid_method = error_enum.entries.items[1];
-                testing.expectEqualSlices(u8, "invalid_method", invalid_method.name);
-                testing.expectEqual(@as(u32, 1), invalid_method.since);
-                testing.expectEqualSlices(u8, "1", invalid_method.value);
+                try testing.expectEqualSlices(u8, "invalid_method", invalid_method.name);
+                try testing.expectEqual(@as(u32, 1), invalid_method.since);
+                try testing.expectEqualSlices(u8, "1", invalid_method.value);
             }
             {
                 const no_memory = error_enum.entries.items[2];
-                testing.expectEqualSlices(u8, "no_memory", no_memory.name);
-                testing.expectEqual(@as(u32, 1), no_memory.since);
-                testing.expectEqualSlices(u8, "2", no_memory.value);
+                try testing.expectEqualSlices(u8, "no_memory", no_memory.name);
+                try testing.expectEqual(@as(u32, 1), no_memory.since);
+                try testing.expectEqualSlices(u8, "2", no_memory.value);
             }
             {
                 const implementation = error_enum.entries.items[3];
-                testing.expectEqualSlices(u8, "implementation", implementation.name);
-                testing.expectEqual(@as(u32, 1), implementation.since);
-                testing.expectEqualSlices(u8, "3", implementation.value);
+                try testing.expectEqualSlices(u8, "implementation", implementation.name);
+                try testing.expectEqual(@as(u32, 1), implementation.since);
+                try testing.expectEqualSlices(u8, "3", implementation.value);
             }
-            testing.expectEqual(false, error_enum.bitfield);
+            try testing.expectEqual(false, error_enum.bitfield);
         }
     }
 
     {
         const wl_data_offer = protocol.interfaces.items[7];
-        testing.expectEqualSlices(u8, "wl_data_offer", wl_data_offer.name);
-        testing.expectEqual(@as(u32, 3), wl_data_offer.version);
-        testing.expectEqual(@as(usize, 5), wl_data_offer.requests.items.len);
-        testing.expectEqual(@as(usize, 3), wl_data_offer.events.items.len);
-        testing.expectEqual(@as(usize, 1), wl_data_offer.enums.items.len);
+        try testing.expectEqualSlices(u8, "wl_data_offer", wl_data_offer.name);
+        try testing.expectEqual(@as(u32, 3), wl_data_offer.version);
+        try testing.expectEqual(@as(usize, 5), wl_data_offer.requests.items.len);
+        try testing.expectEqual(@as(usize, 3), wl_data_offer.events.items.len);
+        try testing.expectEqual(@as(usize, 1), wl_data_offer.enums.items.len);
 
         {
             const accept = wl_data_offer.requests.items[0];
-            testing.expectEqualSlices(u8, "accept", accept.name);
-            testing.expectEqual(@as(u32, 1), accept.since);
-            testing.expectEqual(@as(usize, 2), accept.args.items.len);
+            try testing.expectEqualSlices(u8, "accept", accept.name);
+            try testing.expectEqual(@as(u32, 1), accept.since);
+            try testing.expectEqual(@as(usize, 2), accept.args.items.len);
             {
                 const serial = accept.args.items[0];
-                testing.expectEqualSlices(u8, "serial", serial.name);
-                testing.expectEqual(Arg.Type.uint, serial.kind);
-                testing.expectEqual(false, serial.allow_null);
+                try testing.expectEqualSlices(u8, "serial", serial.name);
+                try testing.expectEqual(Arg.Type.uint, serial.kind);
+                try testing.expectEqual(false, serial.allow_null);
             }
             {
                 const mime_type = accept.args.items[1];
-                testing.expectEqualSlices(u8, "mime_type", mime_type.name);
-                testing.expectEqual(Arg.Type.string, mime_type.kind);
-                testing.expectEqual(true, mime_type.allow_null);
+                try testing.expectEqualSlices(u8, "mime_type", mime_type.name);
+                try testing.expectEqual(Arg.Type.string, mime_type.kind);
+                try testing.expectEqual(true, mime_type.allow_null);
             }
         }
     }
