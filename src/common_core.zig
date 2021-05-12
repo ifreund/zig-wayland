@@ -118,13 +118,13 @@ test "Fixed" {
     {
         const initial: f64 = 10.5301837;
         const val = Fixed.fromDouble(initial);
-        testing.expectApproxEqAbs(initial, val.toDouble(), 1 / 256.);
-        testing.expectEqual(@as(i24, 10), val.toInt());
+        try testing.expectApproxEqAbs(initial, val.toDouble(), 1 / 256.);
+        try testing.expectEqual(@as(i24, 10), val.toInt());
     }
 
     {
         const val = Fixed.fromInt(10);
-        testing.expectEqual(@as(f64, 10.0), val.toDouble());
-        testing.expectEqual(@as(i24, 10), val.toInt());
+        try testing.expectEqual(@as(f64, 10.0), val.toDouble());
+        try testing.expectEqual(@as(i24, 10), val.toInt());
     }
 }
