@@ -493,11 +493,11 @@ const Interface = struct {
 
         try writer.print(
             \\ = struct {{
-            \\ extern const {[in]}_interface: common.Interface;
+            \\ extern const {[in]s}_interface: common.Interface;
             \\ pub fn getInterface() callconv(.Inline) *const common.Interface {{
-            \\  return &{[in]}_interface;
+            \\  return &{[in]s}_interface;
             \\ }}
-        , .{ .in = fmtId(interface.name) });
+        , .{ .in = interface.name });
 
         for (interface.enums.items) |e| try e.emit(writer);
         try writer.writeAll("};");
@@ -664,11 +664,11 @@ const Message = struct {
                             const c_type = if (arg.kind == .uint) "u32" else "i32";
                             try writer.print(
                                 \\ )) {{
-                                \\    .Enum => @intCast({[ct]}, @enumToInt(_{[an]})),
+                                \\    .Enum => @intCast({[ct]s}, @enumToInt(_{[an]})),
                                 \\    .Struct => @bitCast(u32, _{[an]}),
                                 \\    else => unreachable,
                                 \\ }}
-                            , .{ .ct = fmtId(c_type), .an = fmtId(arg.name) });
+                            , .{ .ct = c_type, .an = fmtId(arg.name) });
                         } else {
                             try writer.print("_{s}", .{arg.name});
                         }
