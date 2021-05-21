@@ -365,14 +365,14 @@ const Interface = struct {
                 .{ "postNoMemory", "void" },
             }) |func|
                 try writer.print(
-                    \\pub fn {[function0]}(_{[interface]}: *{[type]}) {[function1]} {{
-                    \\    return @ptrCast(*server.wl.Resource, _{[interface]}).{[function0]}();
+                    \\pub fn {[function]}(_{[interface]}: *{[type]}) {[return_type]} {{
+                    \\    return @ptrCast(*server.wl.Resource, _{[interface]}).{[function]}();
                     \\}}
                 , .{
-                    .function0 = camelCase(func[0]),
+                    .function = camelCase(func[0]),
                     .interface = fmtId(trimPrefix(interface.name)),
                     .@"type" = titleCaseTrim(interface.name),
-                    .function1 = camelCase(func[1]),
+                    .return_type = camelCase(func[1]),
                 });
 
             const has_error = for (interface.enums.items) |e| {
