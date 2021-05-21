@@ -300,19 +300,19 @@ const Interface = struct {
 
     fn emit(interface: Interface, side: Side, namespace: []const u8, writer: anytype) !void {
         try writer.print(
-            \\pub const {[tc]} = opaque {{
-            \\ pub const getInterface = common.{[ns]}.{[in]}.getInterface;
+            \\pub const {[type]} = opaque {{
+            \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
         , .{
-            .tc = titleCaseTrim(interface.name),
-            .ns = fmtId(namespace),
-            .in = fmtId(trimPrefix(interface.name)),
+            .@"type" = titleCaseTrim(interface.name),
+            .namespace = fmtId(namespace),
+            .interface = fmtId(trimPrefix(interface.name)),
         });
 
         for (interface.enums.items) |e| {
-            try writer.print("pub const {[tc]} = common.{[ns]}.{[in]}.{[tc]};\n", .{
-                .tc = titleCase(e.name),
-                .ns = fmtId(namespace),
-                .in = fmtId(trimPrefix(interface.name)),
+            try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
+                .@"type" = titleCase(e.name),
+                .namespace = fmtId(namespace),
+                .interface = fmtId(trimPrefix(interface.name)),
             });
         }
 
@@ -323,18 +323,18 @@ const Interface = struct {
                 try writer.writeAll("};\n");
                 try writer.print(
                     \\pub fn setListener(
-                    \\    _{[in]}: *{[tc]},
+                    \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
-                    \\    _listener: fn ({[in]}: *{[tc]}, event: Event, data: T) void,
+                    \\    _listener: fn ({[interface]}: *{[type]}, event: Event, data: T) void,
                     \\    _data: T,
                     \\) callconv(.Inline) void {{
-                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[in]});
+                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
                     \\    const _mut_data = @intToPtr(?*c_void, @ptrToInt(_data));
-                    \\    _proxy.addDispatcher(common.Dispatcher({[tc]}, T).dispatcher, _listener, _mut_data);
+                    \\    _proxy.addDispatcher(common.Dispatcher({[type]}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{
-                    .in = fmtId(trimPrefix(interface.name)),
-                    .tc = titleCaseTrim(interface.name),
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .@"type" = titleCaseTrim(interface.name),
                 });
             }
 
@@ -346,15 +346,15 @@ const Interface = struct {
         } else {
             try writer.print(
                 \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{(tc)} {{
-                \\    return @ptrCast(*{[tc]}, try server.wl.Resource.create(_client, {[tc]}, _version, _id));
-                \\}}pub fn destroy(_{[in]}: *{[tc]}) void {{
-                \\    return @ptrCast(*server.wl.Resource, _{[in]}).destroy();
-                \\}}pub fn fromLink(_link: *server.wl.list.Link) *{[tc]} {{
-                \\    return @ptrCast(*{[tc]}, server.wl.Resource.fromLink(_link));
+                \\    return @ptrCast(*{[type]}, try server.wl.Resource.create(_client, {[type]}, _version, _id));
+                \\}}pub fn destroy(_{[interface]}: *{[type]}) void {{
+                \\    return @ptrCast(*server.wl.Resource, _{[interface]}).destroy();
+                \\}}pub fn fromLink(_link: *server.wl.list.Link) *{[type]} {{
+                \\    return @ptrCast(*{[type]}, server.wl.Resource.fromLink(_link));
                 \\}}
             , .{
-                .tc = titleCaseTrim(interface.name),
-                .in = fmtId(trimPrefix(interface.name)),
+                .@"type" = titleCaseTrim(interface.name),
+                .interface = fmtId(trimPrefix(interface.name)),
             });
 
             for ([_][2][]const u8{
@@ -365,14 +365,14 @@ const Interface = struct {
                 .{ "postNoMemory", "void" },
             }) |func|
                 try writer.print(
-                    \\pub fn {[fn0]}(_{[in]}: *{[tc]}) {[fn1]} {{
-                    \\    return @ptrCast(*server.wl.Resource, _{[in]}).{[fn0]}();
+                    \\pub fn {[function0]}(_{[interface]}: *{[type]}) {[function1]} {{
+                    \\    return @ptrCast(*server.wl.Resource, _{[interface]}).{[function0]}();
                     \\}}
                 , .{
-                    .fn0 = camelCase(func[0]),
-                    .in = fmtId(trimPrefix(interface.name)),
-                    .tc = titleCaseTrim(interface.name),
-                    .fn1 = camelCase(func[1]),
+                    .function0 = camelCase(func[0]),
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .@"type" = titleCaseTrim(interface.name),
+                    .function1 = camelCase(func[1]),
                 });
 
             const has_error = for (interface.enums.items) |e| {
@@ -380,12 +380,12 @@ const Interface = struct {
             } else false;
             if (has_error) {
                 try writer.print(
-                    \\pub fn postError({[in]}: *{[tc]}, _err: Error, _message: [*:0]const u8) void {{
-                    \\    return @ptrCast(*server.wl.Resource, {[in]}).postError(@intCast(u32, @enumToInt(_err)), _message);
+                    \\pub fn postError({[interface]}: *{[type]}, _err: Error, _message: [*:0]const u8) void {{
+                    \\    return @ptrCast(*server.wl.Resource, {[interface]}).postError(@intCast(u32, @enumToInt(_err)), _message);
                     \\}}
                 , .{
-                    .in = fmtId(trimPrefix(interface.name)),
-                    .tc = titleCaseTrim(interface.name),
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .@"type" = titleCaseTrim(interface.name),
                 });
             }
 
@@ -396,21 +396,21 @@ const Interface = struct {
                 @setEvalBranchQuota(2500);
                 try writer.print(
                     \\pub fn setHandler(
-                    \\    _{[in]}: *{[tc]},
+                    \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
-                    \\    handle_request: fn ({[in]}: *{[tc]}, request: Request, data: T) void,
-                    \\    comptime handle_destroy: ?fn ({[in]}: *{[tc]}, data: T) void,
+                    \\    handle_request: fn ({[interface]}: *{[type]}, request: Request, data: T) void,
+                    \\    comptime handle_destroy: ?fn ({[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) callconv(.Inline) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, _{[in]});
+                    \\    const _resource = @ptrCast(*server.wl.Resource, _{[interface]});
                     \\    _resource.setDispatcher(
-                    \\        common.Dispatcher({[tc]}, T).dispatcher,
+                    \\        common.Dispatcher({[type]}, T).dispatcher,
                     \\        handle_request,
                     \\        @intToPtr(?*c_void, @ptrToInt(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, _handler, .{{
-                    \\                    @ptrCast(*{[tc]}, __resource),
+                    \\                    @ptrCast(*{[type]}, __resource),
                     \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
                     \\                }});
                     \\            }}
@@ -418,18 +418,18 @@ const Interface = struct {
                     \\    );
                     \\}}
                 , .{
-                    .in = fmtId(trimPrefix(interface.name)),
-                    .tc = titleCaseTrim(interface.name),
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .@"type" = titleCaseTrim(interface.name),
                 });
             } else {
                 try writer.print(
                     \\pub fn setHandler(
-                    \\    _{[in]}: *{[tc]},
+                    \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
-                    \\    comptime handle_destroy: ?fn ({[in]}: *{[tc]}, data: T) void,
+                    \\    comptime handle_destroy: ?fn ({[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) callconv(.Inline) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, {[in]});
+                    \\    const _resource = @ptrCast(*server.wl.Resource, {[interface]});
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
@@ -437,7 +437,7 @@ const Interface = struct {
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, _handler, .{{
-                    \\                    @ptrCast(*{[tc]}, __resource),
+                    \\                    @ptrCast(*{[type]}, __resource),
                     \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
                     \\                }});
                     \\            }}
@@ -445,8 +445,8 @@ const Interface = struct {
                     \\    );
                     \\}}
                 , .{
-                    .in = fmtId(trimPrefix(interface.name)),
-                    .tc = titleCaseTrim(interface.name),
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .@"type" = titleCaseTrim(interface.name),
                 });
             }
 
@@ -493,11 +493,11 @@ const Interface = struct {
 
         try writer.print(
             \\ = struct {{
-            \\ extern const {[in]s}_interface: common.Interface;
+            \\ extern const {[interface]s}_interface: common.Interface;
             \\ pub fn getInterface() callconv(.Inline) *const common.Interface {{
-            \\  return &{[in]s}_interface;
+            \\  return &{[interface]s}_interface;
             \\ }}
-        , .{ .in = interface.name });
+        , .{ .interface = interface.name });
 
         for (interface.enums.items) |e| try e.emit(writer);
         try writer.writeAll("};");
@@ -706,9 +706,9 @@ const Message = struct {
             },
             .constructor => |new_iface| {
                 if (new_iface) |i| {
-                    try writer.print("return @ptrCast(*{[tc]}, try _proxy.marshalConstructor({[op]}, &_args, {[tc]}.getInterface()));", .{
-                        .tc = titleCaseTrim(i),
-                        .op = opcode,
+                    try writer.print("return @ptrCast(*{[type]}, try _proxy.marshalConstructor({[opcode]}, &_args, {[type]}.getInterface()));", .{
+                        .@"type" = titleCaseTrim(i),
+                        .opcode = opcode,
                     });
                 } else {
                     try writer.print("return @ptrCast(*T, try _proxy.marshalConstructorVersioned({}, &_args, T.getInterface(), _version));", .{opcode});
