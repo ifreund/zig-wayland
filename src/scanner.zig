@@ -322,12 +322,12 @@ const Interface = struct {
                 for (interface.events.items) |event| try event.emitField(.client, writer);
                 try writer.writeAll("};\n");
                 try writer.print(
-                    \\pub fn setListener(
+                    \\pub inline fn setListener(
                     \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
                     \\    _listener: fn ({[interface]}: *{[type]}, event: Event, data: T) void,
                     \\    _data: T,
-                    \\) callconv(.Inline) void {{
+                    \\) void {{
                     \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
                     \\    const _mut_data = @intToPtr(?*c_void, @ptrToInt(_data));
                     \\    _proxy.addDispatcher(common.Dispatcher({[type]}, T).dispatcher, _listener, _mut_data);
@@ -395,13 +395,13 @@ const Interface = struct {
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2500);
                 try writer.print(
-                    \\pub fn setHandler(
+                    \\pub inline fn setHandler(
                     \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
                     \\    handle_request: fn ({[interface]}: *{[type]}, request: Request, data: T) void,
                     \\    comptime handle_destroy: ?fn ({[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
-                    \\) callconv(.Inline) void {{
+                    \\) void {{
                     \\    const _resource = @ptrCast(*server.wl.Resource, _{[interface]});
                     \\    _resource.setDispatcher(
                     \\        common.Dispatcher({[type]}, T).dispatcher,
@@ -423,12 +423,12 @@ const Interface = struct {
                 });
             } else {
                 try writer.print(
-                    \\pub fn setHandler(
+                    \\pub inline fn setHandler(
                     \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
                     \\    comptime handle_destroy: ?fn ({[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
-                    \\) callconv(.Inline) void {{
+                    \\) void {{
                     \\    const _resource = @ptrCast(*server.wl.Resource, {[interface]});
                     \\    _resource.setDispatcher(
                     \\        null,
@@ -494,7 +494,7 @@ const Interface = struct {
         try writer.print(
             \\ = struct {{
             \\ extern const {[interface]s}_interface: common.Interface;
-            \\ pub fn getInterface() callconv(.Inline) *const common.Interface {{
+            \\ pub inline fn getInterface() *const common.Interface {{
             \\  return &{[interface]s}_interface;
             \\ }}
         , .{ .interface = interface.name });
