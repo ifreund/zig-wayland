@@ -33,10 +33,10 @@ pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, pro
 
         var iter = scanner.client.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {s} = struct {{", .{entry.key});
-            if (mem.eql(u8, entry.key, "wl"))
+            try writer.print("pub const {s} = struct {{", .{entry.key_ptr.*});
+            if (mem.eql(u8, entry.key_ptr.*, "wl"))
                 try writer.writeAll("pub usingnamespace @import(\"wayland_client_core.zig\");\n");
-            for (entry.value.items) |generated_file|
+            for (entry.value_ptr.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{s}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
@@ -53,10 +53,10 @@ pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, pro
 
         var iter = scanner.server.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {s} = struct {{", .{entry.key});
-            if (mem.eql(u8, entry.key, "wl"))
+            try writer.print("pub const {s} = struct {{", .{entry.key_ptr.*});
+            if (mem.eql(u8, entry.key_ptr.*, "wl"))
                 try writer.writeAll("pub usingnamespace @import(\"wayland_server_core.zig\");\n");
-            for (entry.value.items) |generated_file|
+            for (entry.value_ptr.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{s}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
@@ -70,8 +70,8 @@ pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, pro
 
         var iter = scanner.common.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {s} = struct {{", .{entry.key});
-            for (entry.value.items) |generated_file|
+            try writer.print("pub const {s} = struct {{", .{entry.key_ptr.*});
+            for (entry.value_ptr.items) |generated_file|
                 try writer.print("pub usingnamespace @import(\"{s}\");", .{generated_file});
             try writer.writeAll("};\n");
         }
@@ -108,7 +108,7 @@ const Scanner = struct {
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
             try protocol.emitClient(client_file.writer());
-            try (try scanner.client.getOrPutValue(protocol_namespace, .{})).value.append(gpa, client_filename);
+            try (try scanner.client.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, client_filename);
         }
 
         {
@@ -116,7 +116,7 @@ const Scanner = struct {
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
             try protocol.emitServer(server_file.writer());
-            try (try scanner.server.getOrPutValue(protocol_namespace, .{})).value.append(gpa, server_filename);
+            try (try scanner.server.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, server_filename);
         }
 
         {
@@ -124,7 +124,7 @@ const Scanner = struct {
             const common_file = try out_dir.createFile(common_filename, .{});
             defer common_file.close();
             try protocol.emitCommon(common_file.writer());
-            try (try scanner.common.getOrPutValue(protocol_namespace, .{})).value.append(gpa, common_filename);
+            try (try scanner.common.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, common_filename);
         }
     }
 };
