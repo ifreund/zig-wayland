@@ -921,7 +921,7 @@ const Enum = struct {
             try writer.writeAll("pub const Enum ");
         }
 
-        try writer.writeAll(" = extern enum(c_int) {");
+        try writer.writeAll(" = enum(c_int) {");
         for (e.entries.items) |entry| {
             try writer.print("{s}= {s},", .{ fmtId(entry.name), entry.value });
         }

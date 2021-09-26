@@ -39,7 +39,7 @@ pub const Array = extern struct {
 };
 
 /// A 24.8 signed fixed-point number.
-pub const Fixed = extern enum(i32) {
+pub const Fixed = enum(i32) {
     _,
 
     pub fn toInt(f: Fixed) i24 {
