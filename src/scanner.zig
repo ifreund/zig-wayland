@@ -995,6 +995,8 @@ fn formatCaseImpl(case: Case, comptime trim: bool) type {
             options: std.fmt.FormatOptions,
             writer: anytype,
         ) !void {
+            _ = fmt;
+            _ = options;
             var upper = case == .title;
             var str = if (trim) trimPrefix(bytes) else bytes;
             for (str) |c| {
