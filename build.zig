@@ -65,7 +65,7 @@ pub const ScanProtocolsStep = struct {
         const self = ally.create(ScanProtocolsStep) catch unreachable;
         self.* = .{
             .builder = builder,
-            .step = zbs.Step.init(.Custom, "Scan Protocols", ally, make),
+            .step = zbs.Step.init(.custom, "Scan Protocols", ally, make),
             .out_path = fs.path.resolve(ally, &[_][]const u8{
                 builder.build_root,
                 builder.cache_root,
@@ -125,7 +125,7 @@ pub const ScanProtocolsStep = struct {
         const ally = self.builder.allocator;
         return .{
             .name = "wayland",
-            .path = fs.path.join(ally, &[_][]const u8{ self.out_path, "wayland.zig" }) catch unreachable,
+            .path = .{ .path = fs.path.join(ally, &[_][]const u8{ self.out_path, "wayland.zig" }) catch unreachable },
         };
     }
 
