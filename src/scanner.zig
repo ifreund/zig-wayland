@@ -429,7 +429,7 @@ const Interface = struct {
                     \\    comptime handle_destroy: ?fn ({[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, {[interface]});
+                    \\    const _resource = @ptrCast(*server.wl.Resource, _{[interface]});
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
