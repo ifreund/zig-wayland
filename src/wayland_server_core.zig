@@ -650,7 +650,7 @@ pub const EventLoop = opaque {
     pub fn dispatch(loop: *EventLoop, timeout: c_int) !void {
         const rc = wl_event_loop_dispatch(loop, timeout);
         switch (os.errno(rc)) {
-            0 => return,
+            .SUCCESS => return,
             // TODO
             else => |err| return os.unexpectedErrno(err),
         }
@@ -682,7 +682,7 @@ pub const EventSource = opaque {
     pub fn fdUpdate(source: *EventSource, mask: u32) !void {
         const rc = wl_event_source_fd_update(source, mask);
         switch (os.errno(rc)) {
-            0 => return,
+            .SUCCESS => return,
             // TODO
             else => |err| return os.unexpectedErrno(err),
         }
@@ -692,7 +692,7 @@ pub const EventSource = opaque {
     pub fn timerUpdate(source: *EventSource, ms_delay: c_int) !void {
         const rc = wl_event_source_timer_update(source, ms_delay);
         switch (os.errno(rc)) {
-            0 => return,
+            .SUCCESS => return,
             // TODO
             else => |err| return os.unexpectedErrno(err),
         }

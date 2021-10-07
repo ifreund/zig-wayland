@@ -23,14 +23,16 @@ pub fn build(b: *zbs.Builder) void {
     }
 
     const test_step = b.step("test", "Run the tests");
-    for ([_][]const u8{ "src/scanner.zig", "src/common_core.zig" }) |file| {
-        const t = b.addTest(file);
-        t.setTarget(target);
-        t.setBuildMode(mode);
+    {
+        const scanner_tests = b.addTest("src/scanner.zig");
+        scanner_tests.setTarget(target);
+        scanner_tests.setBuildMode(mode);
 
-        test_step.dependOn(&t.step);
+        scanner_tests.step.dependOn(&scanner.step);
+        scanner_tests.addPackage(scanner.getPkg());
+
+        test_step.dependOn(&scanner_tests.step);
     }
-
     {
         const ref_all = b.addTest("src/ref_all.zig");
         ref_all.setTarget(target);
@@ -53,9 +55,7 @@ pub const ScanProtocolsStep = struct {
 
     builder: *zbs.Builder,
     step: zbs.Step,
-
-    /// zig-cache/zig-wayland of the importing project
-    out_path: []const u8,
+    result: zbs.GeneratedFile,
 
     /// Slice of absolute paths of protocol xml files to be scanned
     protocol_paths: std.ArrayList([]const u8),
@@ -66,11 +66,7 @@ pub const ScanProtocolsStep = struct {
         self.* = .{
             .builder = builder,
             .step = zbs.Step.init(.custom, "Scan Protocols", ally, make),
-            .out_path = fs.path.resolve(ally, &[_][]const u8{
-                builder.build_root,
-                builder.cache_root,
-                "zig-wayland",
-            }) catch unreachable,
+            .result = .{ .step = &self.step, .path = null },
             .protocol_paths = std.ArrayList([]const u8).init(ally),
         };
         return self;
@@ -102,9 +98,13 @@ pub const ScanProtocolsStep = struct {
         ), &std.ascii.spaces);
         const wayland_xml = try fs.path.join(ally, &[_][]const u8{ wayland_dir, "wayland.xml" });
 
-        var root = try fs.cwd().openDir(self.builder.build_root, .{});
-        defer root.close();
-        try scanner.scan(root, self.out_path, wayland_xml, self.protocol_paths.items);
+        const out_path = try fs.path.join(ally, &[_][]const u8{ self.builder.cache_root, "zig-wayland" });
+
+        var root_dir = try fs.cwd().openDir(self.builder.build_root, .{});
+        defer root_dir.close();
+        var out_dir = try root_dir.makeOpenPath(out_path, .{});
+        defer out_dir.close();
+        try scanner.scan(root_dir, out_dir, wayland_xml, self.protocol_paths.items);
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.
@@ -113,19 +113,21 @@ pub const ScanProtocolsStep = struct {
                 &[_][]const u8{ "wayland-scanner", "private-code", path, self.getCodePath(path) },
             );
         }
+
+        self.result.path = try fs.path.join(ally, &[_][]const u8{ out_path, "wayland.zig" });
     }
     /// Add the necessary C source to the compilation unit.
     /// Once https://github.com/ziglang/zig/issues/131 we can remove this.
     pub fn addCSource(self: *ScanProtocolsStep, obj: *zbs.LibExeObjStep) void {
-        for (self.protocol_paths.items) |path|
+        for (self.protocol_paths.items) |path| {
             obj.addCSourceFile(self.getCodePath(path), &[_][]const u8{"-std=c99"});
+        }
     }
 
     pub fn getPkg(self: *ScanProtocolsStep) zbs.Pkg {
-        const ally = self.builder.allocator;
         return .{
             .name = "wayland",
-            .path = .{ .path = fs.path.join(ally, &[_][]const u8{ self.out_path, "wayland.zig" }) catch unreachable },
+            .path = .{ .generated = &self.result },
         };
     }
 
@@ -135,6 +137,11 @@ pub const ScanProtocolsStep = struct {
         const basename = fs.path.basename(xml_in_path);
         const basename_no_ext = basename[0..(basename.len - 4)];
         const code_filename = std.fmt.allocPrint(ally, "{s}-protocol.c", .{basename_no_ext}) catch unreachable;
-        return fs.path.join(ally, &[_][]const u8{ self.out_path, code_filename }) catch unreachable;
+        return fs.path.join(ally, &[_][]const u8{
+            self.builder.build_root,
+            self.builder.cache_root,
+            "zig-wayland",
+            code_filename,
+        }) catch unreachable;
     }
 };

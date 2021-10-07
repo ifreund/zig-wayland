@@ -112,20 +112,3 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
         }
     };
 }
-
-test "Fixed" {
-    const testing = @import("std").testing;
-
-    {
-        const initial: f64 = 10.5301837;
-        const val = Fixed.fromDouble(initial);
-        try testing.expectApproxEqAbs(initial, val.toDouble(), 1.0 / 256.0);
-        try testing.expectEqual(@as(i24, 10), val.toInt());
-    }
-
-    {
-        const val = Fixed.fromInt(10);
-        try testing.expectEqual(@as(f64, 10.0), val.toDouble());
-        try testing.expectEqual(@as(i24, 10), val.toInt());
-    }
-}

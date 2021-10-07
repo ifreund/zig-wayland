@@ -8,12 +8,12 @@ const xml = @import("xml.zig");
 const gpa = &allocator_instance.allocator;
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn scan(root_dir: fs.Dir, out_path: []const u8, wayland_xml: []const u8, protocols: []const []const u8) !void {
-    var out_dir = try root_dir.makeOpenPath(out_path, .{});
-    defer out_dir.close();
-
+pub fn scan(root_dir: fs.Dir, out_dir: fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
-    try wayland_file.writeAll(@embedFile("wayland.zig"));
+    try wayland_file.writeAll(
+        \\pub const client = @import("client.zig");
+        \\pub const server = @import("server.zig");
+    );
     defer wayland_file.close();
 
     var scanner = Scanner{};
