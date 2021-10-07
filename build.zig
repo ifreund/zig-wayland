@@ -8,13 +8,18 @@ pub fn build(b: *zbs.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const scanner = ScanProtocolsStep.create(b);
+    const wayland = zbs.Pkg{
+        .name = "wayland",
+        .path = .{ .generated = &scanner.result },
+    };
+
     inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(example, "example/" ++ example ++ ".zig");
         exe.setTarget(target);
         exe.setBuildMode(mode);
 
         exe.step.dependOn(&scanner.step);
-        exe.addPackage(scanner.getPkg());
+        exe.addPackage(wayland);
         scanner.addCSource(exe);
         exe.linkLibC();
         exe.linkSystemLibrary("wayland-client");
@@ -29,7 +34,7 @@ pub fn build(b: *zbs.Builder) void {
         scanner_tests.setBuildMode(mode);
 
         scanner_tests.step.dependOn(&scanner.step);
-        scanner_tests.addPackage(scanner.getPkg());
+        scanner_tests.addPackage(wayland);
 
         test_step.dependOn(&scanner_tests.step);
     }
@@ -39,7 +44,7 @@ pub fn build(b: *zbs.Builder) void {
         ref_all.setBuildMode(mode);
 
         ref_all.step.dependOn(&scanner.step);
-        ref_all.addPackage(scanner.getPkg());
+        ref_all.addPackage(wayland);
         scanner.addCSource(ref_all);
         ref_all.linkLibC();
         ref_all.linkSystemLibrary("wayland-client");
@@ -122,13 +127,6 @@ pub const ScanProtocolsStep = struct {
         for (self.protocol_paths.items) |path| {
             obj.addCSourceFile(self.getCodePath(path), &[_][]const u8{"-std=c99"});
         }
-    }
-
-    pub fn getPkg(self: *ScanProtocolsStep) zbs.Pkg {
-        return .{
-            .name = "wayland",
-            .path = .{ .generated = &self.result },
-        };
     }
 
     fn getCodePath(self: *ScanProtocolsStep, xml_in_path: []const u8) []const u8 {
