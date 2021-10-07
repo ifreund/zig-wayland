@@ -25,8 +25,11 @@ pub fn build(b: *Builder) void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
 
+    exe.addPackage(.{
+        .name = "wayland",
+        .path = .{ .generated = &scanner.result },
+    });
     exe.step.dependOn(&scanner.step);
-    exe.addPackage(scanner.getPkg());
     exe.linkLibC();
     exe.linkSystemLibrary("wayland-client");
 
