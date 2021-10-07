@@ -19,27 +19,27 @@ pub fn dispatch(display: *Display) !u32 {
     const rc = wl_display_dispatch(display);
     // poll(2), sendmsg(2), recvmsg(2), EOVERFLOW, E2BIG
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
-        os.EFAULT => unreachable,
-        os.EINTR => unreachable,
-        os.EINVAL => unreachable,
-        os.ENOMEM => error.SystemResources,
-        os.EACCES => error.AccessDenied,
-        os.EAGAIN => unreachable,
-        os.EALREADY => error.FastOpenAlreadyInProgress,
-        os.EBADF => unreachable,
-        os.ECONNRESET => error.ConnectionResetByPeer,
-        os.EDESTADDRREQ => unreachable,
-        os.EISCONN => unreachable,
-        os.EMSGSIZE => error.MessageTooBig,
-        os.ENOBUFS => error.SystemResources,
-        os.ENOTCONN => unreachable,
-        os.ENOTSOCK => unreachable,
-        os.EOPNOTSUPP => unreachable,
-        os.EPIPE => error.BrokenPipe,
-        os.ECONNREFUSED => error.ConnectionRefused,
-        os.EOVERFLOW => error.BufferOverflow,
-        os.E2BIG => error.BufferOverflow,
+        os.linux.E.SUCCESS => @intCast(u32, rc),
+        os.linux.E.FAULT => unreachable,
+        os.linux.E.INTR => unreachable,
+        os.linux.E.INVAL => unreachable,
+        os.linux.E.NOMEM => error.SystemResources,
+        os.linux.E.ACCES => error.AccessDenied,
+        os.linux.E.AGAIN => unreachable,
+        os.linux.E.ALREADY => error.FastOpenAlreadyInProgress,
+        os.linux.E.BADF => unreachable,
+        os.linux.E.CONNRESET => error.ConnectionResetByPeer,
+        os.linux.E.DESTADDRREQ => unreachable,
+        os.linux.E.ISCONN => unreachable,
+        os.linux.E.MSGSIZE => error.MessageTooBig,
+        os.linux.E.NOBUFS => error.SystemResources,
+        os.linux.E.NOTCONN => unreachable,
+        os.linux.E.NOTSOCK => unreachable,
+        os.linux.E.OPNOTSUPP => unreachable,
+        os.linux.E.PIPE => error.BrokenPipe,
+        os.linux.E.CONNREFUSED => error.ConnectionRefused,
+        os.linux.E.OVERFLOW => error.BufferOverflow,
+        os.linux.E.@"2BIG" => error.BufferOverflow,
         else => |err| os.unexpectedErrno(err),
     };
 }
@@ -48,27 +48,27 @@ extern fn wl_display_dispatch_queue(display: *Display, queue: *client.wl.EventQu
 pub fn dispatchQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_dispatch_queue(display, queue);
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
-        os.EFAULT => unreachable,
-        os.EINTR => unreachable,
-        os.EINVAL => unreachable,
-        os.ENOMEM => error.SystemResources,
-        os.EACCES => error.AccessDenied,
-        os.EAGAIN => unreachable,
-        os.EALREADY => error.FastOpenAlreadyInProgress,
-        os.EBADF => unreachable,
-        os.ECONNRESET => error.ConnectionResetByPeer,
-        os.EDESTADDRREQ => unreachable,
-        os.EISCONN => unreachable,
-        os.EMSGSIZE => error.MessageTooBig,
-        os.ENOBUFS => error.SystemResources,
-        os.ENOTCONN => unreachable,
-        os.ENOTSOCK => unreachable,
-        os.EOPNOTSUPP => unreachable,
-        os.EPIPE => error.BrokenPipe,
-        os.ECONNREFUSED => error.ConnectionRefused,
-        os.EOVERFLOW => error.BufferOverflow,
-        os.E2BIG => error.BufferOverflow,
+        os.linux.E.SUCCESS => @intCast(u32, rc),
+        os.linux.E.FAULT => unreachable,
+        os.linux.E.INTR => unreachable,
+        os.linux.E.INVAL => unreachable,
+        os.linux.E.NOMEM => error.SystemResources,
+        os.linux.E.ACCES => error.AccessDenied,
+        os.linux.E.AGAIN => unreachable,
+        os.linux.E.ALREADY => error.FastOpenAlreadyInProgress,
+        os.linux.E.BADF => unreachable,
+        os.linux.E.CONNRESET => error.ConnectionResetByPeer,
+        os.linux.E.DESTADDRREQ => unreachable,
+        os.linux.E.ISCONN => unreachable,
+        os.linux.E.MSGSIZE => error.MessageTooBig,
+        os.linux.E.NOBUFS => error.SystemResources,
+        os.linux.E.NOTCONN => unreachable,
+        os.linux.E.NOTSOCK => unreachable,
+        os.linux.E.OPNOTSUPP => unreachable,
+        os.linux.E.PIPE => error.BrokenPipe,
+        os.linux.E.CONNREFUSED => error.ConnectionRefused,
+        os.linux.E.OVERFLOW => error.BufferOverflow,
+        os.linux.E.@"2BIG" => error.BufferOverflow,
         else => |err| os.unexpectedErrno(err),
     };
 }
@@ -77,7 +77,7 @@ extern fn wl_display_dispatch_pending(display: *Display) c_int;
 pub fn dispatchPending(display: *Display) !u32 {
     const rc = wl_display_dispatch_pending(display);
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
+        os.linux.E.SUCCESS => @intCast(u32, rc),
         // TODO
         else => |err| os.unexpectedErrno(err),
     };
@@ -87,7 +87,7 @@ extern fn wl_display_dispatch_queue_pending(display: *Display, queue: *client.wl
 pub fn dispatchQueuePending(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_dispatch_queue_pending(display, queue);
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
+        os.linux.E.SUCCESS => @intCast(u32, rc),
         // TODO
         else => |err| os.unexpectedErrno(err),
     };
@@ -97,7 +97,7 @@ extern fn wl_display_roundtrip(display: *Display) c_int;
 pub fn roundtrip(display: *Display) !u32 {
     const rc = wl_display_roundtrip(display);
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
+        os.linux.E.SUCCESS => @intCast(u32, rc),
         // TODO
         else => |err| os.unexpectedErrno(err),
     };
@@ -107,7 +107,7 @@ extern fn wl_display_roundtrip_queue(display: *Display, queue: *client.wl.EventQ
 pub fn roundtripQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_roundtrip_queue(display, queue);
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
+        os.linux.E.SUCCESS => @intCast(u32, rc),
         // TODO
         else => |err| os.unexpectedErrno(err),
     };
@@ -117,7 +117,7 @@ extern fn wl_display_flush(display: *Display) c_int;
 pub fn flush(display: *Display) error{WouldBlock}!u32 {
     const rc = wl_display_flush(display);
     return switch (os.errno(rc)) {
-        0 => @intCast(u32, rc),
+        os.linux.E.SUCCESS => @intCast(u32, rc),
         os.EAGAIN => error.WouldBlock,
         else => unreachable,
     };

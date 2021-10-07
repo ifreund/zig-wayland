@@ -39,7 +39,7 @@ pub const Array = extern struct {
 };
 
 /// A 24.8 signed fixed-point number.
-pub const Fixed = extern enum(i32) {
+pub const Fixed = enum(i32) {
     _,
 
     pub fn toInt(f: Fixed) i24 {
@@ -81,6 +81,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
             message: *const Message,
             args: [*]Argument,
         ) callconv(.C) c_int {
+            _ = message;
             inline for (@typeInfo(Payload).Union.fields) |payload_field, payload_num| {
                 if (payload_num == opcode) {
                     var payload_data: payload_field.field_type = undefined;

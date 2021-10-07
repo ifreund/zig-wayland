@@ -33,9 +33,11 @@ pub fn main() anyerror!void {
 }
 
 fn not(listen: *wl.Listener(void)) void {
+    _ = listen;
     std.debug.print("notified\n", .{});
 }
 
 fn not2(listen: *wl.Listener(*Foo), foo: *Foo) void {
+    _ = listen;
     std.debug.print("{s}\n", .{foo.bar});
 }

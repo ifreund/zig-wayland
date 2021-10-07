@@ -169,7 +169,7 @@ pub const Client = opaque {
     extern fn wl_client_add_resource_created_listener(client: *Client, listener: *Listener(*Resource)) void;
     pub const addResourceCreatedListener = wl_client_add_resource_created_listener;
 
-    const IteratorResult = extern enum { stop, cont };
+    const IteratorResult = enum(c_int) { stop, cont };
     extern fn wl_client_for_each_resource(
         client: *Client,
         iterator: fn (resource: *Resource, data: ?*c_void) callconv(.C) IteratorResult,
@@ -318,7 +318,7 @@ pub const Resource = opaque {
 };
 
 pub const ProtocolLogger = opaque {
-    pub const Type = extern enum {
+    pub const Type = enum(c_int) {
         request,
         event,
     };
