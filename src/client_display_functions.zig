@@ -9,14 +9,10 @@ pub fn connectToFd(fd: c_int) error{ConnectFailed}!*Display {
 }
 
 extern fn wl_display_disconnect(display: *Display) void;
-pub fn disconnect(display: *Display) void {
-    wl_display_disconnect(display);
-}
+pub const disconnect = wl_display_disconnect;
 
 extern fn wl_display_get_fd(display: *Display) c_int;
-pub fn getFd(display: *Display) c_int {
-    return wl_display_get_fd(display);
-}
+pub const getFd = wl_display_get_fd;
 
 extern fn wl_display_dispatch(display: *Display) c_int;
 pub fn dispatch(display: *Display) !u32 {
@@ -134,6 +130,4 @@ pub fn createQueue(display: *Display) error{OutOfMemory}!*client.wl.EventQueue {
 
 // TODO: should we interpret this return value?
 extern fn wl_display_get_error(display: *Display) c_int;
-pub fn getError(display: *Display) c_int {
-    return wl_display_get_error(display);
-}
+pub const getError = wl_display_get_error;
