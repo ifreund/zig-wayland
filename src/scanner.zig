@@ -317,6 +317,15 @@ const Interface = struct {
         }
 
         if (side == .client) {
+            try writer.print(
+                \\pub fn setQueue(_{[interface]}: *{[type]}, _queue: *client.wl.EventQueue) void {{
+                \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
+                \\    _proxy.setQueue(_queue);
+                \\}}
+            , .{
+                .interface = fmtId(trimPrefix(interface.name)),
+                .@"type" = titleCaseTrim(interface.name),
+            });
             if (interface.events.items.len > 0) {
                 try writer.writeAll("pub const Event = union(enum) {");
                 for (interface.events.items) |event| try event.emitField(.client, writer);
