@@ -96,6 +96,9 @@ pub const Proxy = opaque {
     pub fn getId(proxy: *Proxy) u32 {
         return wl_proxy_get_id(proxy);
     }
+
+    extern fn wl_proxy_set_queue(proxy: *Proxy, queue: *EventQueue) void;
+    pub const setQueue = wl_proxy_set_queue;
 };
 
 pub const EventQueue = opaque {
