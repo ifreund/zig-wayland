@@ -347,11 +347,25 @@ const Interface = struct {
                 });
             }
 
-            for (interface.requests.items) |request, opcode|
+            var has_destroy = false;
+            for (interface.requests.items) |request, opcode| {
+                if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
                 try request.emitFn(side, writer, interface, opcode);
+            }
 
-            if (mem.eql(u8, interface.name, "wl_display"))
+            if (mem.eql(u8, interface.name, "wl_display")) {
                 try writer.writeAll(@embedFile("client_display_functions.zig"));
+            } else if (!has_destroy) {
+                try writer.print(
+                    \\pub fn destroy(_{[interface]}: *{[type]}) void {{
+                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
+                    \\    _proxy.destroy();
+                    \\}}
+                , .{
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .@"type" = titleCaseTrim(interface.name),
+                });
+            }
         } else {
             try writer.print(
                 \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{(tc)} {{
