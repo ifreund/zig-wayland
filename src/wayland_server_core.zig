@@ -630,18 +630,18 @@ pub const EventLoop = opaque {
 
     extern fn wl_event_loop_add_idle(
         loop: *EventLoop,
-        func: fn (data: ?*c_void) callconv(.C) c_int,
+        func: fn (data: ?*c_void) callconv(.C) void,
         data: ?*c_void,
     ) ?*EventSource;
     pub inline fn addIdle(
         loop: *EventLoop,
         comptime T: type,
-        func: fn (data: T) callconv(.C) c_int,
+        func: fn (data: T) callconv(.C) void,
         data: T,
     ) error{OutOfMemory}!*EventSource {
         return wl_event_loop_add_idle(
             loop,
-            @ptrCast(fn (?*c_void) callconv(.C) c_int, func),
+            @ptrCast(fn (?*c_void) callconv(.C) void, func),
             data,
         ) orelse error.OutOfMemory;
     }
