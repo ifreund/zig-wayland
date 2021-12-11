@@ -5,7 +5,7 @@ const fmtId = std.zig.fmtId;
 
 const xml = @import("xml.zig");
 
-const gpa = &allocator_instance.allocator;
+const gpa = allocator_instance.allocator();
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn scan(root_dir: fs.Dir, out_dir: fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
@@ -97,8 +97,8 @@ const Scanner = struct {
         var arena = std.heap.ArenaAllocator.init(gpa);
         defer arena.deinit();
 
-        const xml_bytes = try xml_file.readToEndAlloc(&arena.allocator, 512 * 4096);
-        const protocol = try Protocol.parseXML(&arena.allocator, xml_bytes);
+        const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
+        const protocol = try Protocol.parseXML(arena.allocator(), xml_bytes);
 
         const protocol_name = try gpa.dupe(u8, protocol.name);
         const protocol_namespace = try gpa.dupe(u8, protocol.namespace);
@@ -136,20 +136,20 @@ const Protocol = struct {
     toplevel_description: ?[]const u8,
     interfaces: std.ArrayList(Interface),
 
-    fn parseXML(allocator: *mem.Allocator, xml_bytes: []const u8) !Protocol {
+    fn parseXML(arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
         var parser = xml.Parser.init(xml_bytes);
         while (parser.next()) |ev| switch (ev) {
-            .open_tag => |tag| if (mem.eql(u8, tag, "protocol")) return parse(allocator, &parser),
+            .open_tag => |tag| if (mem.eql(u8, tag, "protocol")) return parse(arena, &parser),
             else => {},
         };
         return error.UnexpectedEndOfFile;
     }
 
-    fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Protocol {
+    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Protocol {
         var name: ?[]const u8 = null;
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
-        var interfaces = std.ArrayList(Interface).init(allocator);
+        var interfaces = std.ArrayList(Interface).init(arena);
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 if (mem.eql(u8, tag, "copyright")) {
@@ -157,7 +157,7 @@ const Protocol = struct {
                         return error.DuplicateCopyright;
                     const e = parser.next() orelse return error.UnexpectedEndOfFile;
                     switch (e) {
-                        .character_data => |data| copyright = try allocator.dupe(u8, data),
+                        .character_data => |data| copyright = try arena.dupe(u8, data),
                         else => return error.BadCopyright,
                     }
                 } else if (mem.eql(u8, tag, "description")) {
@@ -166,7 +166,7 @@ const Protocol = struct {
                     while (parser.next()) |e| {
                         switch (e) {
                             .character_data => |data| {
-                                toplevel_description = try allocator.dupe(u8, data);
+                                toplevel_description = try arena.dupe(u8, data);
                                 break;
                             },
                             .attribute => continue,
@@ -176,12 +176,12 @@ const Protocol = struct {
                         return error.UnexpectedEndOfFile;
                     }
                 } else if (mem.eql(u8, tag, "interface")) {
-                    try interfaces.append(try Interface.parse(allocator, parser));
+                    try interfaces.append(try Interface.parse(arena, parser));
                 }
             },
             .attribute => |attr| if (mem.eql(u8, attr.name, "name")) {
                 if (name != null) return error.DuplicateName;
-                name = try attr.dupeValue(allocator);
+                name = try attr.dupeValue(arena);
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
                 if (interfaces.items.len == 0) return error.NoInterfaces;
@@ -258,30 +258,30 @@ const Interface = struct {
     events: std.ArrayList(Message),
     enums: std.ArrayList(Enum),
 
-    fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Interface {
+    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Interface {
         var name: ?[]const u8 = null;
         var version: ?u32 = null;
-        var requests = std.ArrayList(Message).init(allocator);
-        var events = std.ArrayList(Message).init(allocator);
-        var enums = std.ArrayList(Enum).init(allocator);
+        var requests = std.ArrayList(Message).init(arena);
+        var events = std.ArrayList(Message).init(arena);
+        var enums = std.ArrayList(Enum).init(arena);
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 // TODO: parse description
                 if (mem.eql(u8, tag, "request"))
-                    try requests.append(try Message.parse(allocator, parser))
+                    try requests.append(try Message.parse(arena, parser))
                 else if (mem.eql(u8, tag, "event"))
-                    try events.append(try Message.parse(allocator, parser))
+                    try events.append(try Message.parse(arena, parser))
                 else if (mem.eql(u8, tag, "enum"))
-                    try enums.append(try Enum.parse(allocator, parser));
+                    try enums.append(try Enum.parse(arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
                     if (name != null) return error.DuplicateName;
-                    name = try attr.dupeValue(allocator);
+                    name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "version")) {
                     if (version != null) return error.DuplicateVersion;
-                    version = try std.fmt.parseInt(u32, try attr.dupeValue(allocator), 10);
+                    version = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 }
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "interface")) {
@@ -537,25 +537,25 @@ const Message = struct {
         destructor: void,
     },
 
-    fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Message {
+    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Message {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
-        var args = std.ArrayList(Arg).init(allocator);
+        var args = std.ArrayList(Arg).init(arena);
         var destructor = false;
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 // TODO: parse description
                 if (mem.eql(u8, tag, "arg"))
-                    try args.append(try Arg.parse(allocator, parser));
+                    try args.append(try Arg.parse(arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
                     if (name != null) return error.DuplicateName;
-                    name = try attr.dupeValue(allocator);
+                    name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "since")) {
                     if (since != null) return error.DuplicateSince;
-                    since = try std.fmt.parseInt(u32, try attr.dupeValue(allocator), 10);
+                    since = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 } else if (mem.eql(u8, attr.name, "type")) {
                     if (attr.valueEql("destructor")) {
                         destructor = true;
@@ -758,7 +758,7 @@ const Arg = struct {
     allow_null: bool,
     enum_name: ?[]const u8,
 
-    fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Arg {
+    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Arg {
         var name: ?[]const u8 = null;
         var kind: ?std.meta.Tag(Type) = null;
         var interface: ?[]const u8 = null;
@@ -769,21 +769,21 @@ const Arg = struct {
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
                     if (name != null) return error.DuplicateName;
-                    name = try attr.dupeValue(allocator);
+                    name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "type")) {
                     if (kind != null) return error.DuplicateType;
-                    kind = std.meta.stringToEnum(std.meta.Tag(Type), try attr.dupeValue(allocator)) orelse
+                    kind = std.meta.stringToEnum(std.meta.Tag(Type), try attr.dupeValue(arena)) orelse
                         return error.InvalidType;
                 } else if (mem.eql(u8, attr.name, "interface")) {
                     if (interface != null) return error.DuplicateInterface;
-                    interface = try attr.dupeValue(allocator);
+                    interface = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "allow-null")) {
                     if (allow_null != null) return error.DuplicateAllowNull;
                     if (!attr.valueEql("true") and !attr.valueEql("false")) return error.InvalidBoolValue;
                     allow_null = attr.valueEql("true");
                 } else if (mem.eql(u8, attr.name, "enum")) {
                     if (enum_name != null) return error.DuplicateEnum;
-                    enum_name = try attr.dupeValue(allocator);
+                    enum_name = try attr.dupeValue(arena);
                 }
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "arg")) {
@@ -873,25 +873,25 @@ const Enum = struct {
     entries: std.ArrayList(Entry),
     bitfield: bool,
 
-    fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Enum {
+    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Enum {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
-        var entries = std.ArrayList(Entry).init(allocator);
+        var entries = std.ArrayList(Entry).init(arena);
         var bitfield: ?bool = null;
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 // TODO: parse description
                 if (mem.eql(u8, tag, "entry"))
-                    try entries.append(try Entry.parse(allocator, parser));
+                    try entries.append(try Entry.parse(arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
                     if (name != null) return error.DuplicateName;
-                    name = try attr.dupeValue(allocator);
+                    name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "since")) {
                     if (since != null) return error.DuplicateSince;
-                    since = try std.fmt.parseInt(u32, try attr.dupeValue(allocator), 10);
+                    since = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 } else if (mem.eql(u8, attr.name, "bitfield")) {
                     if (bitfield != null) return error.DuplicateBitfield;
                     if (!attr.valueEql("true") and !attr.valueEql("false")) return error.InvalidBoolValue;
@@ -961,7 +961,7 @@ const Entry = struct {
     since: u32,
     value: []const u8,
 
-    fn parse(allocator: *mem.Allocator, parser: *xml.Parser) !Entry {
+    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Entry {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
         var value: ?[]const u8 = null;
@@ -970,13 +970,13 @@ const Entry = struct {
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
                     if (name != null) return error.DuplicateName;
-                    name = try attr.dupeValue(allocator);
+                    name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "since")) {
                     if (since != null) return error.DuplicateSince;
-                    since = try std.fmt.parseInt(u32, try attr.dupeValue(allocator), 10);
+                    since = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 } else if (mem.eql(u8, attr.name, "value")) {
                     if (value != null) return error.DuplicateName;
-                    value = try attr.dupeValue(allocator);
+                    value = try attr.dupeValue(arena);
                 }
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "entry")) {
@@ -1063,7 +1063,7 @@ test "parsing" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    const protocol = try Protocol.parseXML(&arena.allocator, @embedFile("../protocol/wayland.xml"));
+    const protocol = try Protocol.parseXML(arena.allocator(), @embedFile("../protocol/wayland.xml"));
 
     try testing.expectEqualSlices(u8, "wayland", protocol.name);
     try testing.expectEqual(@as(usize, 22), protocol.interfaces.items.len);
