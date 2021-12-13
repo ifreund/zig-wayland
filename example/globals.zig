@@ -12,6 +12,6 @@ pub fn main() !void {
 
 fn listener(registry: *wl.Registry, event: wl.Registry.Event, data: *u32) void {
     _ = registry;
-    std.debug.warn("foo is {}\n", .{data.*});
-    std.debug.warn("event is {}\n", .{event});
+    std.debug.print("foo is {}\n", .{data.*});
+    std.debug.print("event is {}\n", .{event});
 }
