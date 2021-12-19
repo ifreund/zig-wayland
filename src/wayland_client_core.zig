@@ -55,7 +55,7 @@ pub const Proxy = opaque {
     }
 
     const DispatcherFn = fn (
-        implementation: ?*const c_void,
+        implementation: ?*const anyopaque,
         proxy: *Proxy,
         opcode: u32,
         message: *const Message,
@@ -64,14 +64,14 @@ pub const Proxy = opaque {
     extern fn wl_proxy_add_dispatcher(
         proxy: *Proxy,
         dispatcher: DispatcherFn,
-        implementation: ?*const c_void,
-        data: ?*c_void,
+        implementation: ?*const anyopaque,
+        data: ?*anyopaque,
     ) c_int;
     pub fn addDispatcher(
         proxy: *Proxy,
         dispatcher: DispatcherFn,
-        implementation: ?*const c_void,
-        data: ?*c_void,
+        implementation: ?*const anyopaque,
+        data: ?*anyopaque,
     ) void {
         const ret = wl_proxy_add_dispatcher(proxy, dispatcher, implementation, data);
         // Since there is no way to remove listeners, adding a listener to
@@ -80,7 +80,7 @@ pub const Proxy = opaque {
         assert(ret != -1); // If this fails, a listener was already added
     }
 
-    extern fn wl_proxy_get_user_data(proxy: *Proxy) ?*c_void;
+    extern fn wl_proxy_get_user_data(proxy: *Proxy) ?*anyopaque;
     pub const getUserData = wl_proxy_get_user_data;
 
     extern fn wl_proxy_get_version(proxy: *Proxy) u32;

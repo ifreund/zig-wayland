@@ -21,7 +21,7 @@ pub const Interface = extern struct {
 pub const Array = extern struct {
     size: usize,
     alloc: usize,
-    data: ?*c_void,
+    data: ?*anyopaque,
 
     /// Does not clone memory
     pub fn fromArrayList(comptime T: type, list: std.ArrayList(T)) Array {
@@ -75,7 +75,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
     const Payload = if (client) Obj.Event else Obj.Request;
     return struct {
         pub fn dispatcher(
-            implementation: ?*const c_void,
+            implementation: ?*const anyopaque,
             object: if (client) *wayland.client.wl.Proxy else *wayland.server.wl.Resource,
             opcode: u32,
             message: *const Message,

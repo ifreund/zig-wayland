@@ -338,7 +338,7 @@ const Interface = struct {
                     \\    _data: T,
                     \\) void {{
                     \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
-                    \\    const _mut_data = @intToPtr(?*c_void, @ptrToInt(_data));
+                    \\    const _mut_data = @intToPtr(?*anyopaque, @ptrToInt(_data));
                     \\    _proxy.addDispatcher(common.Dispatcher({[type]}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{
@@ -429,7 +429,7 @@ const Interface = struct {
                     \\    _resource.setDispatcher(
                     \\        common.Dispatcher({[type]}, T).dispatcher,
                     \\        handle_request,
-                    \\        @intToPtr(?*c_void, @ptrToInt(_data)),
+                    \\        @intToPtr(?*anyopaque, @ptrToInt(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, _handler, .{{
@@ -456,7 +456,7 @@ const Interface = struct {
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
-                    \\        @intToPtr(?*c_void, @ptrToInt(_data)),
+                    \\        @intToPtr(?*anyopaque, @ptrToInt(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.{{ .modifier = .always_inline }}, _handler, .{{
