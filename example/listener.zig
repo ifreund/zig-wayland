@@ -32,10 +32,10 @@ pub fn main() anyerror!void {
     signal2.emit(&foo2);
 }
 
-fn not(listen: *wl.Listener(void)) void {
+fn not(_: *wl.Listener(void)) void {
     std.debug.print("notified\n", .{});
 }
 
-fn not2(listen: *wl.Listener(*Foo), foo: *Foo) void {
+fn not2(_: *wl.Listener(*Foo), foo: *Foo) void {
     std.debug.print("{s}\n", .{foo.bar});
 }

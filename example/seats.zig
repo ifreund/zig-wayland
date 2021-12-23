@@ -24,7 +24,7 @@ fn listener(registry: *wl.Registry, event: wl.Registry.Event, running: *bool) vo
     }
 }
 
-fn seatListener(seat: *wl.Seat, event: wl.Seat.Event, running: *bool) void {
+fn seatListener(_: *wl.Seat, event: wl.Seat.Event, running: *bool) void {
     switch (event) {
         .capabilities => |data| {
             std.debug.print("Seat capabilities\n  Pointer {}\n  Keyboard {}\n  Touch {}\n", .{

@@ -82,8 +82,8 @@ pub const Server = opaque {
 
     extern fn wl_display_set_global_filter(
         server: *Server,
-        filter: fn (client: *const Client, global: *const Global, data: ?*c_void) callconv(.C) bool,
-        data: ?*c_void,
+        filter: fn (client: *const Client, global: *const Global, data: ?*anyopaque) callconv(.C) bool,
+        data: ?*anyopaque,
     ) void;
     pub inline fn setGlobalFilter(
         server: *Server,
@@ -109,8 +109,8 @@ pub const Server = opaque {
 
     extern fn wl_display_add_protocol_logger(
         server: *Server,
-        func: fn (data: ?*c_void, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
-        data: ?*c_void,
+        func: fn (data: ?*anyopaque, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
+        data: ?*anyopaque,
     ) void;
     pub inline fn addProtocolLogger(
         server: *Server,
@@ -169,11 +169,11 @@ pub const Client = opaque {
     extern fn wl_client_add_resource_created_listener(client: *Client, listener: *Listener(*Resource)) void;
     pub const addResourceCreatedListener = wl_client_add_resource_created_listener;
 
-    const IteratorResult = extern enum { stop, cont };
+    const IteratorResult = enum(c_int) { stop, cont };
     extern fn wl_client_for_each_resource(
         client: *Client,
-        iterator: fn (resource: *Resource, data: ?*c_void) callconv(.C) IteratorResult,
-        data: ?*c_void,
+        iterator: fn (resource: *Resource, data: ?*anyopaque) callconv(.C) IteratorResult,
+        data: ?*anyopaque,
     ) void;
     pub inline fn forEachResource(
         client: *Client,
@@ -196,8 +196,8 @@ pub const Global = opaque {
         server: *Server,
         interface: *const Interface,
         version: c_int,
-        data: ?*c_void,
-        bind: fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void,
+        data: ?*anyopaque,
+        bind: fn (client: *Client, data: ?*anyopaque, version: u32, id: u32) callconv(.C) void,
     ) ?*Global;
     pub inline fn create(
         server: *Server,
@@ -212,7 +212,7 @@ pub const Global = opaque {
             T.getInterface(),
             @intCast(c_int, version),
             data,
-            @ptrCast(fn (client: *Client, data: ?*c_void, version: u32, id: u32) callconv(.C) void, bind),
+            @ptrCast(fn (client: *Client, data: ?*anyopaque, version: u32, id: u32) callconv(.C) void, bind),
         ) orelse error.GlobalCreateFailed;
     }
 
@@ -225,7 +225,7 @@ pub const Global = opaque {
     extern fn wl_global_get_interface(global: *const Global) *const Interface;
     pub const getInterface = wl_global_get_interface;
 
-    extern fn wl_global_get_user_data(global: *const Global) ?*c_void;
+    extern fn wl_global_get_user_data(global: *const Global) ?*anyopaque;
     pub const getUserData = wl_global_get_user_data;
 };
 
@@ -253,7 +253,7 @@ pub const Resource = opaque {
     pub const postNoMemory = wl_resource_post_no_memory;
 
     const DispatcherFn = fn (
-        implementation: ?*const c_void,
+        implementation: ?*const anyopaque,
         resource: *Resource,
         opcode: u32,
         message: *const Message,
@@ -263,21 +263,21 @@ pub const Resource = opaque {
     extern fn wl_resource_set_dispatcher(
         resource: *Resource,
         dispatcher: ?DispatcherFn,
-        implementation: ?*const c_void,
-        data: ?*c_void,
+        implementation: ?*const anyopaque,
+        data: ?*anyopaque,
         destroy_fn: ?DestroyFn,
     ) void;
     pub fn setDispatcher(
         resource: *Resource,
         dispatcher: ?DispatcherFn,
-        implementation: ?*const c_void,
-        data: ?*c_void,
+        implementation: ?*const anyopaque,
+        data: ?*anyopaque,
         destroy_fn: ?DestroyFn,
     ) void {
         wl_resource_set_dispatcher(resource, dispatcher, implementation, data, destroy_fn);
     }
 
-    extern fn wl_resource_get_user_data(resource: *Resource) ?*c_void;
+    extern fn wl_resource_get_user_data(resource: *Resource) ?*anyopaque;
     pub const getUserData = wl_resource_get_user_data;
 
     extern fn wl_resource_get_id(resource: *Resource) u32;
@@ -318,7 +318,7 @@ pub const Resource = opaque {
 };
 
 pub const ProtocolLogger = opaque {
-    pub const Type = extern enum {
+    pub const Type = enum(c_int) {
         request,
         event,
     };
@@ -471,7 +471,7 @@ pub fn Listener(comptime T: type) type {
             fn (listener: *Self, data: T) void;
 
         link: list.Link,
-        notify: fn (listener: *Self, data: ?*c_void) callconv(.C) void,
+        notify: fn (listener: *Self, data: ?*anyopaque) callconv(.C) void,
 
         pub fn init(comptime notify: NotifyFn) Self {
             var self: Self = undefined;
@@ -482,13 +482,13 @@ pub fn Listener(comptime T: type) type {
         pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
             self.notify = if (T == void)
                 struct {
-                    fn wrapper(listener: *Self, _: ?*c_void) callconv(.C) void {
+                    fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.C) void {
                         @call(.{ .modifier = .always_inline }, notify, .{listener});
                     }
                 }.wrapper
             else
                 struct {
-                    fn wrapper(listener: *Self, data: ?*c_void) callconv(.C) void {
+                    fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.C) void {
                         @call(.{ .modifier = .always_inline }, notify, .{ listener, @intToPtr(T, @ptrToInt(data)) });
                     }
                 }.wrapper;
@@ -533,7 +533,7 @@ pub fn Signal(comptime T: type) type {
         /// This is similar to wlroots' wlr_signal_emit_safe. It handles
         /// removal of any element in the list during iteration and stops at
         /// whatever the last element was when iteration started.
-        fn emitInner(signal: *Self, data: ?*c_void) void {
+        fn emitInner(signal: *Self, data: ?*anyopaque) void {
             var cursor: Listener(T) = undefined;
             signal.listener_list.prepend(&cursor);
 
@@ -569,8 +569,8 @@ pub const EventLoop = opaque {
         loop: *EventLoop,
         fd: c_int,
         mask: u32,
-        func: fn (fd: c_int, mask: u32, data: ?*c_void) callconv(.C) c_int,
-        data: ?*c_void,
+        func: fn (fd: c_int, mask: u32, data: ?*anyopaque) callconv(.C) c_int,
+        data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addFd(
         loop: *EventLoop,
@@ -584,15 +584,15 @@ pub const EventLoop = opaque {
             loop,
             fd,
             mask,
-            @ptrCast(fn (fd: c_int, mask: u32, data: ?*c_void) callconv(.C) c_int, func),
+            @ptrCast(fn (fd: c_int, mask: u32, data: ?*anyopaque) callconv(.C) c_int, func),
             data,
         ) orelse error.AddFdFailed;
     }
 
     extern fn wl_event_loop_add_timer(
         loop: *EventLoop,
-        func: fn (data: ?*c_void) callconv(.C) c_int,
-        data: ?*c_void,
+        func: fn (data: ?*anyopaque) callconv(.C) c_int,
+        data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addTimer(
         loop: *EventLoop,
@@ -602,7 +602,7 @@ pub const EventLoop = opaque {
     ) !*EventSource {
         return wl_event_loop_add_timer(
             loop,
-            @ptrCast(fn (?*c_void) callconv(.C) c_int, func),
+            @ptrCast(fn (?*anyopaque) callconv(.C) c_int, func),
             data,
         ) orelse error.AddTimerFailed;
     }
@@ -610,8 +610,8 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_add_signal(
         loop: *EventLoop,
         signal_number: c_int,
-        func: fn (c_int, ?*c_void) callconv(.C) c_int,
-        data: ?*c_void,
+        func: fn (c_int, ?*anyopaque) callconv(.C) c_int,
+        data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addSignal(
         loop: *EventLoop,
@@ -623,15 +623,15 @@ pub const EventLoop = opaque {
         return wl_event_loop_add_signal(
             loop,
             signal_number,
-            @ptrCast(fn (c_int, ?*c_void) callconv(.C) c_int, func),
+            @ptrCast(fn (c_int, ?*anyopaque) callconv(.C) c_int, func),
             data,
         ) orelse error.AddSignalFailed;
     }
 
     extern fn wl_event_loop_add_idle(
         loop: *EventLoop,
-        func: fn (data: ?*c_void) callconv(.C) void,
-        data: ?*c_void,
+        func: fn (data: ?*anyopaque) callconv(.C) void,
+        data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addIdle(
         loop: *EventLoop,
@@ -641,7 +641,7 @@ pub const EventLoop = opaque {
     ) error{OutOfMemory}!*EventSource {
         return wl_event_loop_add_idle(
             loop,
-            @ptrCast(fn (?*c_void) callconv(.C) void, func),
+            @ptrCast(fn (?*anyopaque) callconv(.C) void, func),
             data,
         ) orelse error.OutOfMemory;
     }
@@ -650,7 +650,7 @@ pub const EventLoop = opaque {
     pub fn dispatch(loop: *EventLoop, timeout: c_int) !void {
         const rc = wl_event_loop_dispatch(loop, timeout);
         switch (os.errno(rc)) {
-            0 => return,
+            .SUCCESS => return,
             // TODO
             else => |err| return os.unexpectedErrno(err),
         }
@@ -682,7 +682,7 @@ pub const EventSource = opaque {
     pub fn fdUpdate(source: *EventSource, mask: u32) !void {
         const rc = wl_event_source_fd_update(source, mask);
         switch (os.errno(rc)) {
-            0 => return,
+            .SUCCESS => return,
             // TODO
             else => |err| return os.unexpectedErrno(err),
         }
@@ -692,7 +692,7 @@ pub const EventSource = opaque {
     pub fn timerUpdate(source: *EventSource, ms_delay: c_int) !void {
         const rc = wl_event_source_timer_update(source, ms_delay);
         switch (os.errno(rc)) {
-            0 => return,
+            .SUCCESS => return,
             // TODO
             else => |err| return os.unexpectedErrno(err),
         }
@@ -710,7 +710,7 @@ pub const shm = struct {
         extern fn wl_shm_buffer_end_access(buffer: *Buffer) void;
         pub const endAccess = wl_shm_buffer_end_access;
 
-        extern fn wl_shm_buffer_get_data(buffer: *Buffer) ?*c_void;
+        extern fn wl_shm_buffer_get_data(buffer: *Buffer) ?*anyopaque;
         pub const getData = wl_shm_buffer_get_data;
 
         extern fn wl_shm_buffer_get_format(buffer: *Buffer) u32;
