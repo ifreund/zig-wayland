@@ -17,7 +17,7 @@ pub const getFd = wl_display_get_fd;
 extern fn wl_display_dispatch(display: *Display) c_int;
 pub fn dispatch(display: *Display) !u32 {
     const rc = wl_display_dispatch(display);
-    // poll(2), sendmsg(2), recvmsg(2), EOVERFLOW, E2BIG
+    // poll(2), sendmsg(2), recvmsg(2), EOVERFLOW, E2BIG, EPROTO
     return switch (os.errno(rc)) {
         .SUCCESS => @intCast(u32, rc),
         .FAULT => unreachable,
@@ -40,6 +40,7 @@ pub fn dispatch(display: *Display) !u32 {
         .CONNREFUSED => error.ConnectionRefused,
         .OVERFLOW => error.BufferOverflow,
         .@"2BIG" => error.BufferOverflow,
+        .PROTO => error.ProtocolError,
         else => |err| os.unexpectedErrno(err),
     };
 }
@@ -47,6 +48,7 @@ pub fn dispatch(display: *Display) !u32 {
 extern fn wl_display_dispatch_queue(display: *Display, queue: *client.wl.EventQueue) c_int;
 pub fn dispatchQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
     const rc = wl_display_dispatch_queue(display, queue);
+    // poll(2), sendmsg(2), recvmsg(2), EOVERFLOW, E2BIG, EPROTO
     return switch (os.errno(rc)) {
         .SUCCESS => @intCast(u32, rc),
         .FAULT => unreachable,
@@ -69,6 +71,7 @@ pub fn dispatchQueue(display: *Display, queue: *client.wl.EventQueue) !u32 {
         .CONNREFUSED => error.ConnectionRefused,
         .OVERFLOW => error.BufferOverflow,
         .@"2BIG" => error.BufferOverflow,
+        .PROTO => error.ProtocolError,
         else => |err| os.unexpectedErrno(err),
     };
 }
