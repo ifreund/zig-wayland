@@ -65,6 +65,8 @@ pub const ScanProtocolsStep = struct {
     /// Slice of absolute paths of protocol xml files to be scanned
     protocol_paths: std.ArrayList([]const u8),
 
+    requested_interfaces: std.ArrayList(scanner.RequestedInterface),
+
     pub fn create(builder: *zbs.Builder) *ScanProtocolsStep {
         const ally = builder.allocator;
         const self = ally.create(ScanProtocolsStep) catch unreachable;
@@ -73,6 +75,7 @@ pub const ScanProtocolsStep = struct {
             .step = zbs.Step.init(.custom, "Scan Protocols", ally, make),
             .result = .{ .step = &self.step, .path = null },
             .protocol_paths = std.ArrayList([]const u8).init(ally),
+            .requested_interfaces = std.ArrayList(scanner.RequestedInterface).init(ally),
         };
         return self;
     }
@@ -94,6 +97,11 @@ pub const ScanProtocolsStep = struct {
         ) catch unreachable);
     }
 
+    /// Generate a list of requested global interfaces versions to be used
+    pub fn interfaces(self: *ScanProtocolsStep, ifaces: []const scanner.RequestedInterface) void {
+        for (ifaces) |requested| self.requested_interfaces.append(requested) catch unreachable;
+    }
+
     fn make(step: *zbs.Step) !void {
         const self = @fieldParentPtr(ScanProtocolsStep, "step", step);
         const ally = self.builder.allocator;
@@ -109,7 +117,7 @@ pub const ScanProtocolsStep = struct {
         defer root_dir.close();
         var out_dir = try root_dir.makeOpenPath(out_path, .{});
         defer out_dir.close();
-        try scanner.scan(root_dir, out_dir, wayland_xml, self.protocol_paths.items);
+        try scanner.scan(root_dir, out_dir, wayland_xml, self.protocol_paths.items, self.requested_interfaces.items);
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.

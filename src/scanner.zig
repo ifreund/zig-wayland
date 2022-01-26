@@ -8,7 +8,29 @@ const xml = @import("xml.zig");
 const gpa = allocator_instance.allocator();
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn scan(root_dir: fs.Dir, out_dir: fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
+pub const RequestedInterface = struct {
+    /// Name of the global interface as written in the protocol xml
+    name: []const u8,
+    /// Version of the global interface to generate code for
+    version: u32,
+
+    // wl_display, wl_registry, and wl_callback are always generated
+    // as their version cannot change.
+    pub fn isValid(requested: RequestedInterface) !void {
+        if (mem.eql(u8, requested.name, "wl_display") or mem.eql(u8, requested.name, "wl_registry") or
+            mem.eql(u8, requested.name, "wl_callback")) return error.InvalidGlobal;
+    }
+};
+
+var requested_interfaces: std.ArrayList(RequestedInterface) = undefined;
+
+pub fn scan(
+    root_dir: fs.Dir,
+    out_dir: fs.Dir,
+    wayland_xml: []const u8,
+    protocols: []const []const u8,
+    requested_ifaces: []const RequestedInterface,
+) !void {
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
     try wayland_file.writeAll(
         \\pub const client = @import("client.zig");
@@ -18,9 +40,9 @@ pub fn scan(root_dir: fs.Dir, out_dir: fs.Dir, wayland_xml: []const u8, protocol
 
     var scanner = Scanner{};
 
-    try scanner.scanProtocol(root_dir, out_dir, wayland_xml);
+    try scanner.scanProtocol(root_dir, out_dir, wayland_xml, requested_ifaces);
     for (protocols) |xml_path|
-        try scanner.scanProtocol(root_dir, out_dir, xml_path);
+        try scanner.scanProtocol(root_dir, out_dir, xml_path, requested_ifaces);
 
     {
         const client_core_file = try out_dir.createFile("wayland_client_core.zig", .{});
@@ -90,12 +112,24 @@ const Scanner = struct {
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
-    fn scanProtocol(scanner: *Scanner, root_dir: fs.Dir, out_dir: fs.Dir, xml_path: []const u8) !void {
+    fn scanProtocol(
+        scanner: *Scanner,
+        root_dir: fs.Dir,
+        out_dir: fs.Dir,
+        xml_path: []const u8,
+        requested_ifaces: []const RequestedInterface,
+    ) !void {
         const xml_file = try root_dir.openFile(xml_path, .{});
         defer xml_file.close();
 
         var arena = std.heap.ArenaAllocator.init(gpa);
         defer arena.deinit();
+
+        requested_interfaces = std.ArrayList(RequestedInterface).init(arena.allocator());
+        for (requested_ifaces) |requested| {
+            requested.isValid() catch @panic("No need for wl_display, wl_registry, and wl_callback.");
+            try requested_interfaces.append(requested);
+        }
 
         const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
         const protocol = try Protocol.parseXML(arena.allocator(), xml_bytes);
@@ -135,6 +169,7 @@ const Protocol = struct {
     copyright: ?[]const u8,
     toplevel_description: ?[]const u8,
     interfaces: std.ArrayList(Interface),
+    required_interfaces: std.ArrayList(RequestedInterface),
 
     fn parseXML(arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
         var parser = xml.Parser.init(xml_bytes);
@@ -150,6 +185,8 @@ const Protocol = struct {
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
         var interfaces = std.ArrayList(Interface).init(arena);
+        var required_interfaces = std.ArrayList(RequestedInterface).init(arena);
+
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 if (mem.eql(u8, tag, "copyright")) {
@@ -185,11 +222,19 @@ const Protocol = struct {
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
                 if (interfaces.items.len == 0) return error.NoInterfaces;
+                for (interfaces.items) |interface| {
+                    for (requested_interfaces.items) |requested| {
+                        if (mem.eql(u8, interface.name, requested.name)) {
+                            try required_interfaces.append(requested);
+                        }
+                    }
+                }
                 return Protocol{
                     .name = name orelse return error.MissingName,
                     // TODO: support mixing namespaces in a protocol
                     .namespace = prefix(interfaces.items[0].name) orelse return error.NoNamespace,
                     .interfaces = interfaces,
+                    .required_interfaces = required_interfaces,
 
                     // Missing copyright or toplevel description is bad style, but not illegal.
                     .copyright = copyright,
@@ -257,6 +302,7 @@ const Interface = struct {
     requests: std.ArrayList(Message),
     events: std.ArrayList(Message),
     enums: std.ArrayList(Enum),
+    required: bool,
 
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Interface {
         var name: ?[]const u8 = null;
@@ -264,6 +310,7 @@ const Interface = struct {
         var requests = std.ArrayList(Message).init(arena);
         var events = std.ArrayList(Message).init(arena);
         var enums = std.ArrayList(Enum).init(arena);
+        var required: bool = false;
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
@@ -285,12 +332,18 @@ const Interface = struct {
                 }
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "interface")) {
+                for (requested_interfaces.items) |requested| {
+                    if (mem.eql(u8, name orelse return error.MissingName, requested.name)) {
+                        required = true;
+                    }
+                }
                 return Interface{
                     .name = name orelse return error.MissingName,
                     .version = version orelse return error.MissingVersion,
                     .requests = requests,
                     .events = events,
                     .enums = enums,
+                    .required = required,
                 };
             },
             else => {},
@@ -328,7 +381,17 @@ const Interface = struct {
             });
             if (interface.events.items.len > 0) {
                 try writer.writeAll("pub const Event = union(enum) {");
-                for (interface.events.items) |event| try event.emitField(.client, writer);
+                for (interface.events.items) |event| {
+                    if (interface.required) {
+                        for (requested_interfaces.items) |requested| {
+                            if (mem.eql(u8, interface.name, requested.name)) {
+                                if (event.since <= requested.version) {
+                                    try event.emitField(.client, writer);
+                                } else continue;
+                            }
+                        }
+                    } else try event.emitField(.client, writer);
+                }
                 try writer.writeAll("};\n");
                 try writer.print(
                     \\pub inline fn setListener(
@@ -350,7 +413,15 @@ const Interface = struct {
             var has_destroy = false;
             for (interface.requests.items) |request, opcode| {
                 if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
-                try request.emitFn(side, writer, interface, opcode);
+                if (interface.required) {
+                    for (requested_interfaces.items) |requested| {
+                        if (mem.eql(u8, interface.name, requested.name)) {
+                            if (request.since <= requested.version) {
+                                try request.emitFn(side, writer, interface, opcode);
+                            } else continue;
+                        }
+                    }
+                } else try request.emitFn(side, writer, interface, opcode);
             }
 
             if (mem.eql(u8, interface.name, "wl_display")) {
@@ -414,7 +485,17 @@ const Interface = struct {
 
             if (interface.requests.items.len > 0) {
                 try writer.writeAll("pub const Request = union(enum) {");
-                for (interface.requests.items) |request| try request.emitField(.server, writer);
+                for (interface.requests.items) |request| {
+                    if (interface.required) {
+                        for (requested_interfaces.items) |requested| {
+                            if (mem.eql(u8, interface.name, requested.name)) {
+                                if (request.since <= requested.version) {
+                                    try request.emitField(.server, writer);
+                                } else continue;
+                            }
+                        }
+                    } else try request.emitField(.server, writer);
+                }
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2500);
                 try writer.print(
@@ -473,8 +554,17 @@ const Interface = struct {
                 });
             }
 
-            for (interface.events.items) |event, opcode|
-                try event.emitFn(side, writer, interface, opcode);
+            for (interface.events.items) |event, opcode| {
+                if (interface.required) {
+                    for (requested_interfaces.items) |requested| {
+                        if (mem.eql(u8, interface.name, requested.name)) {
+                            if (event.since <= requested.version) {
+                                try event.emitFn(side, writer, interface, opcode);
+                            } else continue;
+                        }
+                    }
+                } else try event.emitFn(side, writer, interface, opcode);
+            }
         }
 
         try writer.writeAll("};\n");
@@ -522,7 +612,15 @@ const Interface = struct {
             \\ }}
         , .{ .interface = interface.name });
 
-        for (interface.enums.items) |e| try e.emit(writer);
+        for (interface.enums.items) |e| {
+            if (interface.required) {
+                for (requested_interfaces.items) |requested| {
+                    if (mem.eql(u8, interface.name, requested.name)) {
+                        if (e.since <= requested.version) try e.emit(writer) else continue;
+                    }
+                }
+            } else try e.emit(writer);
+        }
         try writer.writeAll("};");
     }
 };
