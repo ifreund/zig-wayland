@@ -134,3 +134,31 @@ pub fn createQueue(display: *Display) error{OutOfMemory}!*client.wl.EventQueue {
 // TODO: should we interpret this return value?
 extern fn wl_display_get_error(display: *Display) c_int;
 pub const getError = wl_display_get_error;
+
+extern fn wl_display_prepare_read_queue(display: *Display, queue: *client.wl.EventQueue) c_int;
+/// Succeeds if the queue is empty and returns true.
+/// Fails and returns false if the queue was not empty.
+pub fn prepareReadQueue(display: *Display, queue: *client.wl.EventQueue) bool {
+    switch (wl_display_prepare_read_queue(display, queue)) {
+        0 => return true,
+        -1 => return false,
+        else => unreachable,
+    }
+}
+
+extern fn wl_display_prepare_read(display: *Display) c_int;
+/// Succeeds if the queue is empty and returns true.
+/// Fails and returns false if the queue was not empty.
+pub fn prepareRead(display: *Display) bool {
+    switch (wl_display_prepare_read(display)) {
+        0 => return true,
+        -1 => return false,
+        else => unreachable,
+    }
+}
+
+extern fn wl_display_cancel_read(display: *Display) void;
+pub const cancelRead = wl_display_cancel_read;
+
+extern fn wl_display_read_events(display: *Display) c_int;
+pub const readEvents = wl_display_read_events;
