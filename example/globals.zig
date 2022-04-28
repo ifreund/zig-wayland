@@ -7,7 +7,7 @@ pub fn main() !void {
     const registry = try display.getRegistry();
     var foo: u32 = 42;
     registry.setListener(*u32, listener, &foo);
-    _ = try display.roundtrip();
+    if (display.roundtrip() != .SUCCESS) return error.RoundtripFailed;
 }
 
 fn listener(_: *wl.Registry, event: wl.Registry.Event, data: *u32) void {

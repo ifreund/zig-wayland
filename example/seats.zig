@@ -8,7 +8,7 @@ pub fn main() !void {
     var running: bool = true;
     registry.setListener(*bool, listener, &running);
     while (running) {
-        _ = try display.dispatch();
+        if (display.roundtrip() != .SUCCESS) return error.RoundtripFailed;
     }
 }
 
