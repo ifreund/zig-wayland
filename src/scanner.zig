@@ -129,12 +129,13 @@ const Scanner = struct {
     }
 };
 
+/// All data in this struct is immutable after creation in parse().
 const Protocol = struct {
     name: []const u8,
     namespace: []const u8,
     copyright: ?[]const u8,
     toplevel_description: ?[]const u8,
-    interfaces: std.ArrayList(Interface),
+    interfaces: []const Interface,
 
     fn parseXML(arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
         var parser = xml.Parser.init(xml_bytes);
@@ -149,7 +150,9 @@ const Protocol = struct {
         var name: ?[]const u8 = null;
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
-        var interfaces = std.ArrayList(Interface).init(arena);
+        var interfaces = std.ArrayList(Interface).init(gpa);
+        defer interfaces.deinit();
+
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 if (mem.eql(u8, tag, "copyright")) {
@@ -185,11 +188,12 @@ const Protocol = struct {
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
                 if (interfaces.items.len == 0) return error.NoInterfaces;
+
                 return Protocol{
                     .name = name orelse return error.MissingName,
                     // TODO: support mixing namespaces in a protocol
                     .namespace = prefix(interfaces.items[0].name) orelse return error.NoNamespace,
-                    .interfaces = interfaces,
+                    .interfaces = try arena.dupe(Interface, interfaces.items),
 
                     // Missing copyright or toplevel description is bad style, but not illegal.
                     .copyright = copyright,
@@ -226,7 +230,7 @@ const Protocol = struct {
             \\const client = @import("wayland.zig").client;
             \\const common = @import("common.zig");
         );
-        for (protocol.interfaces.items) |interface|
+        for (protocol.interfaces) |interface|
             try interface.emit(.client, protocol.namespace, writer);
     }
 
@@ -237,7 +241,7 @@ const Protocol = struct {
             \\const server = @import("wayland.zig").server;
             \\const common = @import("common.zig");
         );
-        for (protocol.interfaces.items) |interface|
+        for (protocol.interfaces) |interface|
             try interface.emit(.server, protocol.namespace, writer);
     }
 
@@ -246,24 +250,28 @@ const Protocol = struct {
         try writer.writeAll(
             \\const common = @import("common.zig");
         );
-        for (protocol.interfaces.items) |interface|
+        for (protocol.interfaces) |interface|
             try interface.emitCommon(writer);
     }
 };
 
+/// All data in this struct is immutable after creation in parse().
 const Interface = struct {
     name: []const u8,
     version: u32,
-    requests: std.ArrayList(Message),
-    events: std.ArrayList(Message),
-    enums: std.ArrayList(Enum),
+    requests: []const Message,
+    events: []const Message,
+    enums: []const Enum,
 
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Interface {
         var name: ?[]const u8 = null;
         var version: ?u32 = null;
-        var requests = std.ArrayList(Message).init(arena);
-        var events = std.ArrayList(Message).init(arena);
-        var enums = std.ArrayList(Enum).init(arena);
+        var requests = std.ArrayList(Message).init(gpa);
+        defer requests.deinit();
+        var events = std.ArrayList(Message).init(gpa);
+        defer events.deinit();
+        var enums = std.ArrayList(Enum).init(gpa);
+        defer enums.deinit();
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
@@ -288,9 +296,9 @@ const Interface = struct {
                 return Interface{
                     .name = name orelse return error.MissingName,
                     .version = version orelse return error.MissingVersion,
-                    .requests = requests,
-                    .events = events,
-                    .enums = enums,
+                    .requests = try arena.dupe(Message, requests.items),
+                    .events = try arena.dupe(Message, events.items),
+                    .enums = try arena.dupe(Enum, enums.items),
                 };
             },
             else => {},
@@ -308,7 +316,7 @@ const Interface = struct {
             .interface = fmtId(trimPrefix(interface.name)),
         });
 
-        for (interface.enums.items) |e| {
+        for (interface.enums) |e| {
             try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
                 .@"type" = titleCase(e.name),
                 .namespace = fmtId(namespace),
@@ -326,9 +334,9 @@ const Interface = struct {
                 .interface = fmtId(trimPrefix(interface.name)),
                 .@"type" = titleCaseTrim(interface.name),
             });
-            if (interface.events.items.len > 0) {
+            if (interface.events.len > 0) {
                 try writer.writeAll("pub const Event = union(enum) {");
-                for (interface.events.items) |event| try event.emitField(.client, writer);
+                for (interface.events) |event| try event.emitField(.client, writer);
                 try writer.writeAll("};\n");
                 try writer.print(
                     \\pub inline fn setListener(
@@ -348,7 +356,7 @@ const Interface = struct {
             }
 
             var has_destroy = false;
-            for (interface.requests.items) |request, opcode| {
+            for (interface.requests) |request, opcode| {
                 if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
                 try request.emitFn(side, writer, interface, opcode);
             }
@@ -398,7 +406,7 @@ const Interface = struct {
                     .return_type = camelCase(func[1]),
                 });
 
-            const has_error = for (interface.enums.items) |e| {
+            const has_error = for (interface.enums) |e| {
                 if (mem.eql(u8, e.name, "error")) break true;
             } else false;
             if (has_error) {
@@ -412,9 +420,9 @@ const Interface = struct {
                 });
             }
 
-            if (interface.requests.items.len > 0) {
+            if (interface.requests.len > 0) {
                 try writer.writeAll("pub const Request = union(enum) {");
-                for (interface.requests.items) |request| try request.emitField(.server, writer);
+                for (interface.requests) |request| try request.emitField(.server, writer);
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2500);
                 try writer.print(
@@ -473,7 +481,7 @@ const Interface = struct {
                 });
             }
 
-            for (interface.events.items) |event, opcode|
+            for (interface.events) |event, opcode|
                 try event.emitFn(side, writer, interface, opcode);
         }
 
@@ -522,15 +530,16 @@ const Interface = struct {
             \\ }}
         , .{ .interface = interface.name });
 
-        for (interface.enums.items) |e| try e.emit(writer);
+        for (interface.enums) |e| try e.emit(writer);
         try writer.writeAll("};");
     }
 };
 
+/// All data in this struct is immutable after creation in parse().
 const Message = struct {
     name: []const u8,
     since: u32,
-    args: std.ArrayList(Arg) = std.ArrayList(Arg),
+    args: []const Arg,
     kind: union(enum) {
         normal: void,
         constructor: ?[]const u8,
@@ -540,7 +549,8 @@ const Message = struct {
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Message {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
-        var args = std.ArrayList(Arg).init(arena);
+        var args = std.ArrayList(Arg).init(gpa);
+        defer args.deinit();
         var destructor = false;
 
         while (parser.next()) |ev| switch (ev) {
@@ -568,7 +578,7 @@ const Message = struct {
                 return Message{
                     .name = name orelse return error.MissingName,
                     .since = since orelse 1,
-                    .args = args,
+                    .args = try arena.dupe(Arg, args.items),
                     .kind = blk: {
                         if (destructor) break :blk .destructor;
                         for (args.items) |arg|
@@ -607,12 +617,12 @@ const Message = struct {
 
     fn emitField(message: Message, side: Side, writer: anytype) !void {
         try writer.print("{s}", .{fmtId(message.name)});
-        if (message.args.items.len == 0) {
+        if (message.args.len == 0) {
             try writer.writeAll(": void,");
             return;
         }
         try writer.writeAll(": struct {");
-        for (message.args.items) |arg| {
+        for (message.args) |arg| {
             if (side == .server and arg.kind == .new_id and arg.kind.new_id == null) {
                 try writer.print("interface_name: [*:0]const u8, version: u32,{}: u32", .{fmtId(arg.name)});
             } else if (side == .client and arg.kind == .new_id) {
@@ -642,7 +652,7 @@ const Message = struct {
             fmtId(trimPrefix(interface.name)),
             titleCaseTrim(interface.name),
         });
-        for (message.args.items) |arg| {
+        for (message.args) |arg| {
             if (side == .server and arg.kind == .new_id) {
                 try writer.print(", _{s}:", .{arg.name});
                 if (arg.allow_null) try writer.writeByte('?');
@@ -670,9 +680,9 @@ const Message = struct {
         else
             try writer.writeAll("const _proxy = @ptrCast(*client.wl.Proxy,_");
         try writer.print("{});", .{fmtId(trimPrefix(interface.name))});
-        if (message.args.items.len > 0) {
+        if (message.args.len > 0) {
             try writer.writeAll("var _args = [_]common.Argument{");
-            for (message.args.items) |arg| {
+            for (message.args) |arg| {
                 switch (arg.kind) {
                     .int, .uint, .fixed, .string, .array, .fd => {
                         try writer.writeAll(".{ .");
@@ -719,7 +729,7 @@ const Message = struct {
             }
             try writer.writeAll("};\n");
         }
-        const args = if (message.args.items.len > 0) "&_args" else "null";
+        const args = if (message.args.len > 0) "&_args" else "null";
         if (side == .server) {
             try writer.print("_resource.postEvent({}, {s});", .{ opcode, args });
         } else switch (message.kind) {
@@ -742,6 +752,7 @@ const Message = struct {
     }
 };
 
+/// All data in this struct is immutable after creation in parse().
 const Arg = struct {
     const Type = union(enum) {
         int,
@@ -867,16 +878,18 @@ const Arg = struct {
     }
 };
 
+/// All data in this struct is immutable after creation in parse().
 const Enum = struct {
     name: []const u8,
     since: u32,
-    entries: std.ArrayList(Entry),
+    entries: []const Entry,
     bitfield: bool,
 
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Enum {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
-        var entries = std.ArrayList(Entry).init(arena);
+        var entries = std.ArrayList(Entry).init(gpa);
+        defer entries.deinit();
         var bitfield: ?bool = null;
 
         while (parser.next()) |ev| switch (ev) {
@@ -902,7 +915,7 @@ const Enum = struct {
                 return Enum{
                     .name = name orelse return error.MissingName,
                     .since = since orelse 1,
-                    .entries = entries,
+                    .entries = try arena.dupe(Entry, entries.items),
                     .bitfield = bitfield orelse false,
                 };
             },
@@ -917,7 +930,7 @@ const Enum = struct {
         if (e.bitfield) {
             var entries_emitted: u8 = 0;
             try writer.writeAll(" = packed struct {");
-            for (e.entries.items) |entry| {
+            for (e.entries) |entry| {
                 const value = entry.intValue();
                 if (value != 0 and std.math.isPowerOfTwo(value)) {
                     try writer.print("{s}", .{entry.name});
@@ -945,7 +958,7 @@ const Enum = struct {
         }
 
         try writer.writeAll(" = enum(c_int) {");
-        for (e.entries.items) |entry| {
+        for (e.entries) |entry| {
             try writer.print("{s}= {s},", .{ fmtId(entry.name), entry.value });
         }
         // Always generate non-exhaustive enums to ensure forward compatability.
@@ -956,6 +969,7 @@ const Enum = struct {
     }
 };
 
+/// All data in this struct is immutable after creation in parse().
 const Entry = struct {
     name: []const u8,
     since: u32,
@@ -1064,23 +1078,23 @@ test "parsing" {
     const protocol = try Protocol.parseXML(arena.allocator(), @embedFile("../protocol/wayland.xml"));
 
     try testing.expectEqualSlices(u8, "wayland", protocol.name);
-    try testing.expectEqual(@as(usize, 22), protocol.interfaces.items.len);
+    try testing.expectEqual(@as(usize, 22), protocol.interfaces.len);
 
     {
-        const wl_display = protocol.interfaces.items[0];
+        const wl_display = protocol.interfaces[0];
         try testing.expectEqualSlices(u8, "wl_display", wl_display.name);
         try testing.expectEqual(@as(u32, 1), wl_display.version);
-        try testing.expectEqual(@as(usize, 2), wl_display.requests.items.len);
-        try testing.expectEqual(@as(usize, 2), wl_display.events.items.len);
-        try testing.expectEqual(@as(usize, 1), wl_display.enums.items.len);
+        try testing.expectEqual(@as(usize, 2), wl_display.requests.len);
+        try testing.expectEqual(@as(usize, 2), wl_display.events.len);
+        try testing.expectEqual(@as(usize, 1), wl_display.enums.len);
 
         {
-            const sync = wl_display.requests.items[0];
+            const sync = wl_display.requests[0];
             try testing.expectEqualSlices(u8, "sync", sync.name);
             try testing.expectEqual(@as(u32, 1), sync.since);
-            try testing.expectEqual(@as(usize, 1), sync.args.items.len);
+            try testing.expectEqual(@as(usize, 1), sync.args.len);
             {
-                const callback = sync.args.items[0];
+                const callback = sync.args[0];
                 try testing.expectEqualSlices(u8, "callback", callback.name);
                 try testing.expect(callback.kind == .new_id);
                 try testing.expectEqualSlices(u8, "wl_callback", callback.kind.new_id.?);
@@ -1091,26 +1105,26 @@ test "parsing" {
         }
 
         {
-            const error_event = wl_display.events.items[0];
+            const error_event = wl_display.events[0];
             try testing.expectEqualSlices(u8, "error", error_event.name);
             try testing.expectEqual(@as(u32, 1), error_event.since);
-            try testing.expectEqual(@as(usize, 3), error_event.args.items.len);
+            try testing.expectEqual(@as(usize, 3), error_event.args.len);
             {
-                const object_id = error_event.args.items[0];
+                const object_id = error_event.args[0];
                 try testing.expectEqualSlices(u8, "object_id", object_id.name);
                 try testing.expectEqual(Arg.Type{ .object = null }, object_id.kind);
                 try testing.expectEqual(false, object_id.allow_null);
                 try testing.expectEqual(@as(?[]const u8, null), object_id.enum_name);
             }
             {
-                const code = error_event.args.items[1];
+                const code = error_event.args[1];
                 try testing.expectEqualSlices(u8, "code", code.name);
                 try testing.expectEqual(Arg.Type.uint, code.kind);
                 try testing.expectEqual(false, code.allow_null);
                 try testing.expectEqual(@as(?[]const u8, null), code.enum_name);
             }
             {
-                const message = error_event.args.items[2];
+                const message = error_event.args[2];
                 try testing.expectEqualSlices(u8, "message", message.name);
                 try testing.expectEqual(Arg.Type.string, message.kind);
                 try testing.expectEqual(false, message.allow_null);
@@ -1119,30 +1133,30 @@ test "parsing" {
         }
 
         {
-            const error_enum = wl_display.enums.items[0];
+            const error_enum = wl_display.enums[0];
             try testing.expectEqualSlices(u8, "error", error_enum.name);
             try testing.expectEqual(@as(u32, 1), error_enum.since);
-            try testing.expectEqual(@as(usize, 4), error_enum.entries.items.len);
+            try testing.expectEqual(@as(usize, 4), error_enum.entries.len);
             {
-                const invalid_object = error_enum.entries.items[0];
+                const invalid_object = error_enum.entries[0];
                 try testing.expectEqualSlices(u8, "invalid_object", invalid_object.name);
                 try testing.expectEqual(@as(u32, 1), invalid_object.since);
                 try testing.expectEqualSlices(u8, "0", invalid_object.value);
             }
             {
-                const invalid_method = error_enum.entries.items[1];
+                const invalid_method = error_enum.entries[1];
                 try testing.expectEqualSlices(u8, "invalid_method", invalid_method.name);
                 try testing.expectEqual(@as(u32, 1), invalid_method.since);
                 try testing.expectEqualSlices(u8, "1", invalid_method.value);
             }
             {
-                const no_memory = error_enum.entries.items[2];
+                const no_memory = error_enum.entries[2];
                 try testing.expectEqualSlices(u8, "no_memory", no_memory.name);
                 try testing.expectEqual(@as(u32, 1), no_memory.since);
                 try testing.expectEqualSlices(u8, "2", no_memory.value);
             }
             {
-                const implementation = error_enum.entries.items[3];
+                const implementation = error_enum.entries[3];
                 try testing.expectEqualSlices(u8, "implementation", implementation.name);
                 try testing.expectEqual(@as(u32, 1), implementation.since);
                 try testing.expectEqualSlices(u8, "3", implementation.value);
@@ -1152,26 +1166,26 @@ test "parsing" {
     }
 
     {
-        const wl_data_offer = protocol.interfaces.items[7];
+        const wl_data_offer = protocol.interfaces[7];
         try testing.expectEqualSlices(u8, "wl_data_offer", wl_data_offer.name);
         try testing.expectEqual(@as(u32, 3), wl_data_offer.version);
-        try testing.expectEqual(@as(usize, 5), wl_data_offer.requests.items.len);
-        try testing.expectEqual(@as(usize, 3), wl_data_offer.events.items.len);
-        try testing.expectEqual(@as(usize, 1), wl_data_offer.enums.items.len);
+        try testing.expectEqual(@as(usize, 5), wl_data_offer.requests.len);
+        try testing.expectEqual(@as(usize, 3), wl_data_offer.events.len);
+        try testing.expectEqual(@as(usize, 1), wl_data_offer.enums.len);
 
         {
-            const accept = wl_data_offer.requests.items[0];
+            const accept = wl_data_offer.requests[0];
             try testing.expectEqualSlices(u8, "accept", accept.name);
             try testing.expectEqual(@as(u32, 1), accept.since);
-            try testing.expectEqual(@as(usize, 2), accept.args.items.len);
+            try testing.expectEqual(@as(usize, 2), accept.args.len);
             {
-                const serial = accept.args.items[0];
+                const serial = accept.args[0];
                 try testing.expectEqualSlices(u8, "serial", serial.name);
                 try testing.expectEqual(Arg.Type.uint, serial.kind);
                 try testing.expectEqual(false, serial.allow_null);
             }
             {
-                const mime_type = accept.args.items[1];
+                const mime_type = accept.args[1];
                 try testing.expectEqualSlices(u8, "mime_type", mime_type.name);
                 try testing.expectEqual(Arg.Type.string, mime_type.kind);
                 try testing.expectEqual(true, mime_type.allow_null);
