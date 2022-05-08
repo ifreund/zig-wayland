@@ -493,34 +493,6 @@ const Interface = struct {
 
         // TODO: stop linking libwayland generated interface structs when
         // https://github.com/ziglang/zig/issues/131 is implemented
-        //
-        //try writer.print(
-        //    \\ = struct {{
-        //    \\ pub const interface = common.Interface{{
-        //    \\  .name = "{}",
-        //    \\  .version = {},
-        //    \\  .method_count = {},
-        //, .{
-        //    interface.name,
-        //    interface.version,
-        //    interface.requests.items.len,
-        //});
-        //if (interface.requests.items.len > 0) {
-        //    try writer.writeAll(".methods = &[_]common.Message{");
-        //    for (interface.requests.items) |request| try request.emitMessage(writer);
-        //    try writer.writeAll("},");
-        //} else {
-        //    try writer.writeAll(".methods = null,");
-        //}
-        //try writer.print(".event_count = {},", .{interface.events.items.len});
-        //if (interface.events.items.len > 0) {
-        //    try writer.writeAll(".events = &[_]common.Message{");
-        //    for (interface.events.items) |event| try event.emitMessage(writer);
-        //    try writer.writeAll("},");
-        //} else {
-        //    try writer.writeAll(".events = null,");
-        //}
-        //try writer.writeAll("};");
 
         try writer.print(
             \\ = struct {{
@@ -591,29 +563,6 @@ const Message = struct {
         };
         return error.UnexpectedEndOfFile;
     }
-
-    // TODO: restore this code when zig issue #131 is resoleved
-    //fn emitMessage(message: Message, writer: anytype) !void {
-    //    try writer.print(".{{ .name = \"{}\", .signature = \"", .{message.name});
-    //    for (message.args.items) |arg| try arg.emitSignature(writer);
-    //    try writer.writeAll("\", .types = ");
-    //    if (message.args.items.len > 0) {
-    //        try writer.writeAll("&[_]?*const common.Interface{");
-    //        for (message.args.items) |arg| {
-    //            switch (arg.kind) {
-    //                .object, .new_id => |interface| if (interface) |i|
-    //                    try writer.print("&common.{}.{}.interface,", .{ prefix(i), trimPrefix(i) })
-    //                else
-    //                    try writer.writeAll("null,"),
-    //                else => try writer.writeAll("null,"),
-    //            }
-    //        }
-    //        try writer.writeAll("},");
-    //    } else {
-    //        try writer.writeAll("null,");
-    //    }
-    //    try writer.writeAll("},");
-    //}
 
     fn emitField(message: Message, side: Side, writer: anytype) !void {
         try writer.print("{s}", .{fmtId(message.name)});
