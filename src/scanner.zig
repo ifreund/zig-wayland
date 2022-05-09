@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const fs = std.fs;
 const mem = std.mem;
 const fmtId = std.zig.fmtId;
@@ -8,7 +9,24 @@ const xml = @import("xml.zig");
 const gpa = allocator_instance.allocator();
 var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn scan(root_dir: fs.Dir, out_dir: fs.Dir, wayland_xml: []const u8, protocols: []const []const u8) !void {
+pub const Target = struct {
+    /// Name of the target global interface
+    name: []const u8,
+    /// Interface version for which to generate code.
+    /// If the version found in the protocol xml is less than this version,
+    /// an error will be printed and code generation will fail.
+    /// This version applies to interfaces that may be created through the
+    /// global interface as well.
+    version: u32,
+};
+
+pub fn scan(
+    root_dir: fs.Dir,
+    out_dir: fs.Dir,
+    wayland_xml: []const u8,
+    protocols: []const []const u8,
+    targets: []const Target,
+) !void {
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
     try wayland_file.writeAll(
         \\pub const client = @import("client.zig");
@@ -18,9 +36,10 @@ pub fn scan(root_dir: fs.Dir, out_dir: fs.Dir, wayland_xml: []const u8, protocol
 
     var scanner = Scanner{};
 
-    try scanner.scanProtocol(root_dir, out_dir, wayland_xml);
-    for (protocols) |xml_path|
-        try scanner.scanProtocol(root_dir, out_dir, xml_path);
+    try scanner.scanProtocol(root_dir, out_dir, wayland_xml, targets);
+    for (protocols) |xml_path| {
+        try scanner.scanProtocol(root_dir, out_dir, xml_path, targets);
+    }
 
     {
         const client_core_file = try out_dir.createFile("wayland_client_core.zig", .{});
@@ -90,7 +109,13 @@ const Scanner = struct {
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
-    fn scanProtocol(scanner: *Scanner, root_dir: fs.Dir, out_dir: fs.Dir, xml_path: []const u8) !void {
+    fn scanProtocol(
+        scanner: *Scanner,
+        root_dir: fs.Dir,
+        out_dir: fs.Dir,
+        xml_path: []const u8,
+        targets: []const Target,
+    ) !void {
         const xml_file = try root_dir.openFile(xml_path, .{});
         defer xml_file.close();
 
@@ -103,11 +128,12 @@ const Scanner = struct {
         const protocol_name = try gpa.dupe(u8, protocol.name);
         const protocol_namespace = try gpa.dupe(u8, protocol.namespace);
 
+        // TODO Use buffered I/O
         {
             const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_client.zig" });
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
-            try protocol.emitClient(client_file.writer());
+            try protocol.emitClient(targets, client_file.writer());
             try (try scanner.client.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, client_filename);
         }
 
@@ -115,7 +141,7 @@ const Scanner = struct {
             const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_server.zig" });
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
-            try protocol.emitServer(server_file.writer());
+            try protocol.emitServer(targets, server_file.writer());
             try (try scanner.server.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, server_filename);
         }
 
@@ -123,7 +149,7 @@ const Scanner = struct {
             const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_common.zig" });
             const common_file = try out_dir.createFile(common_filename, .{});
             defer common_file.close();
-            try protocol.emitCommon(common_file.writer());
+            try protocol.emitCommon(targets, common_file.writer());
             try (try scanner.common.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, common_filename);
         }
     }
@@ -131,11 +157,16 @@ const Scanner = struct {
 
 /// All data in this struct is immutable after creation in parse().
 const Protocol = struct {
+    const Global = struct {
+        interface: Interface,
+        children: []const Interface,
+    };
+
     name: []const u8,
     namespace: []const u8,
     copyright: ?[]const u8,
     toplevel_description: ?[]const u8,
-    interfaces: []const Interface,
+    globals: []const Global,
 
     fn parseXML(arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
         var parser = xml.Parser.init(xml_bytes);
@@ -150,7 +181,7 @@ const Protocol = struct {
         var name: ?[]const u8 = null;
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
-        var interfaces = std.ArrayList(Interface).init(gpa);
+        var interfaces = std.StringArrayHashMap(Interface).init(gpa);
         defer interfaces.deinit();
 
         while (parser.next()) |ev| switch (ev) {
@@ -179,7 +210,10 @@ const Protocol = struct {
                         return error.UnexpectedEndOfFile;
                     }
                 } else if (mem.eql(u8, tag, "interface")) {
-                    try interfaces.append(try Interface.parse(arena, parser));
+                    const interface = try Interface.parse(arena, parser);
+                    const gop = try interfaces.getOrPut(interface.name);
+                    if (gop.found_existing) return error.DuplicateInterfaceName;
+                    gop.value_ptr.* = interface;
                 }
             },
             .attribute => |attr| if (mem.eql(u8, attr.name, "name")) {
@@ -187,22 +221,112 @@ const Protocol = struct {
                 name = try attr.dupeValue(arena);
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
-                if (interfaces.items.len == 0) return error.NoInterfaces;
+                if (interfaces.count() == 0) return error.NoInterfaces;
+
+                const globals = try find_globals(arena, interfaces);
+                if (globals.len == 0) return error.NoGlobals;
+
+                const namespace = prefix(interfaces.values()[0].name) orelse return error.NoNamespace;
+                for (interfaces.values()) |interface| {
+                    const other = prefix(interface.name) orelse return error.NoNamespace;
+                    if (!mem.eql(u8, namespace, other)) return error.InconsistentNamespaces;
+                }
 
                 return Protocol{
                     .name = name orelse return error.MissingName,
-                    // TODO: support mixing namespaces in a protocol
-                    .namespace = prefix(interfaces.items[0].name) orelse return error.NoNamespace,
-                    .interfaces = try arena.dupe(Interface, interfaces.items),
+                    .namespace = namespace,
 
                     // Missing copyright or toplevel description is bad style, but not illegal.
                     .copyright = copyright,
                     .toplevel_description = toplevel_description,
+                    .globals = globals,
                 };
             },
             else => {},
         };
         return error.UnexpectedEndOfFile;
+    }
+
+    fn find_globals(arena: mem.Allocator, interfaces: std.StringArrayHashMap(Interface)) ![]const Global {
+        var non_globals = std.StringHashMap(void).init(gpa);
+        defer non_globals.deinit();
+
+        for (interfaces.values()) |interface| {
+            for (interface.requests) |message| {
+                if (message.kind == .constructor) {
+                    if (message.kind.constructor) |child_interface_name| {
+                        try non_globals.put(child_interface_name, {});
+                    }
+                }
+            }
+            for (interface.events) |message| {
+                if (message.kind == .constructor) {
+                    if (message.kind.constructor) |child_interface_name| {
+                        try non_globals.put(child_interface_name, {});
+                    }
+                }
+            }
+        }
+
+        var globals = std.ArrayList(Global).init(gpa);
+        defer globals.deinit();
+
+        for (interfaces.values()) |interface| {
+            if (!non_globals.contains(interface.name)) {
+                var children = std.ArrayList(Interface).init(gpa);
+                defer children.deinit();
+
+                try find_children(interface, interfaces, &children);
+
+                try globals.append(.{
+                    .interface = interface,
+                    .children = try arena.dupe(Interface, children.items),
+                });
+            }
+        }
+
+        return arena.dupe(Global, globals.items);
+    }
+
+    fn find_children(
+        parent: Interface,
+        interfaces: std.StringArrayHashMap(Interface),
+        children: *std.ArrayList(Interface),
+    ) error{ OutOfMemory, UnknownInterface }!void {
+        for (parent.requests) |message| {
+            if (message.kind == .constructor) {
+                if (message.kind.constructor) |child_name| {
+                    // wl_callback breaks the standard object hierarchy and
+                    // can be generated through multiple different globals.
+                    if (mem.eql(u8, child_name, "wl_callback") and
+                        !mem.eql(u8, parent.name, "wl_display"))
+                    {
+                        continue;
+                    }
+
+                    const child = interfaces.get(child_name) orelse return error.UnknownInterface;
+                    try children.append(child);
+                    try find_children(child, interfaces, children);
+                }
+            }
+        }
+        for (parent.events) |message| {
+            if (message.kind == .constructor) {
+                if (message.kind.constructor) |child_name| {
+                    // wl_callback breaks the standard object hierarchy and
+                    // can be generated through multiple different globals.
+                    if (mem.eql(u8, child_name, "wl_callback") and
+                        !mem.eql(u8, parent.name, "wl_display"))
+                    {
+                        continue;
+                    }
+
+                    const child = interfaces.get(child_name) orelse return error.UnknownInterface;
+                    try children.append(child);
+                    try find_children(child, interfaces, children);
+                }
+            }
+        }
     }
 
     fn emitCopyrightAndToplevelDescription(protocol: Protocol, writer: anytype) !void {
@@ -223,35 +347,74 @@ const Protocol = struct {
         }
     }
 
-    fn emitClient(protocol: Protocol, writer: anytype) !void {
+    fn emitClient(protocol: Protocol, targets: []const Target, writer: anytype) !void {
         try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
             \\const os = @import("std").os;
             \\const client = @import("wayland.zig").client;
             \\const common = @import("common.zig");
         );
-        for (protocol.interfaces) |interface|
-            try interface.emit(.client, protocol.namespace, writer);
+
+        for (targets) |target| {
+            for (protocol.globals) |global| {
+                if (mem.eql(u8, target.name, global.interface.name)) {
+                    if (global.interface.version < target.version) {
+                        std.log.err("requested {s} version {d} but only version {d} is available", .{
+                            target.name,
+                            target.version,
+                            global.interface.version,
+                        });
+                        return error.VersionMismatch;
+                    }
+                    try global.interface.emit(.client, target.version, protocol.namespace, writer);
+                    for (global.children) |child| {
+                        try child.emit(.client, target.version, protocol.namespace, writer);
+                    }
+                }
+            }
+        }
     }
 
-    fn emitServer(protocol: Protocol, writer: anytype) !void {
+    fn emitServer(protocol: Protocol, targets: []const Target, writer: anytype) !void {
         try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
             \\const os = @import("std").os;
             \\const server = @import("wayland.zig").server;
             \\const common = @import("common.zig");
         );
-        for (protocol.interfaces) |interface|
-            try interface.emit(.server, protocol.namespace, writer);
+        for (targets) |target| {
+            for (protocol.globals) |global| {
+                if (mem.eql(u8, target.name, global.interface.name)) {
+                    // We check this in emitClient() which is called first.
+                    assert(global.interface.version >= target.version);
+
+                    try global.interface.emit(.server, target.version, protocol.namespace, writer);
+                    for (global.children) |child| {
+                        try child.emit(.server, target.version, protocol.namespace, writer);
+                    }
+                }
+            }
+        }
     }
 
-    fn emitCommon(protocol: Protocol, writer: anytype) !void {
+    fn emitCommon(protocol: Protocol, targets: []const Target, writer: anytype) !void {
         try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
             \\const common = @import("common.zig");
         );
-        for (protocol.interfaces) |interface|
-            try interface.emitCommon(writer);
+        for (targets) |target| {
+            for (protocol.globals) |global| {
+                if (mem.eql(u8, target.name, global.interface.name)) {
+                    // We check this in emitClient() which is called first.
+                    assert(global.interface.version >= target.version);
+
+                    try global.interface.emitCommon(target.version, writer);
+                    for (global.children) |child| {
+                        try child.emitCommon(target.version, writer);
+                    }
+                }
+            }
+        }
     }
 };
 
@@ -306,7 +469,7 @@ const Interface = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emit(interface: Interface, side: Side, namespace: []const u8, writer: anytype) !void {
+    fn emit(interface: Interface, side: Side, target_version: u32, namespace: []const u8, writer: anytype) !void {
         try writer.print(
             \\pub const {[type]} = opaque {{
             \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
@@ -317,11 +480,13 @@ const Interface = struct {
         });
 
         for (interface.enums) |e| {
-            try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
-                .@"type" = titleCase(e.name),
-                .namespace = fmtId(namespace),
-                .interface = fmtId(trimPrefix(interface.name)),
-            });
+            if (e.since <= target_version) {
+                try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
+                    .@"type" = titleCase(e.name),
+                    .namespace = fmtId(namespace),
+                    .interface = fmtId(trimPrefix(interface.name)),
+                });
+            }
         }
 
         if (side == .client) {
@@ -334,9 +499,18 @@ const Interface = struct {
                 .interface = fmtId(trimPrefix(interface.name)),
                 .@"type" = titleCaseTrim(interface.name),
             });
-            if (interface.events.len > 0) {
+
+            const has_event = for (interface.events) |event| {
+                if (event.since <= target_version) break true;
+            } else false;
+
+            if (has_event) {
                 try writer.writeAll("pub const Event = union(enum) {");
-                for (interface.events) |event| try event.emitField(.client, writer);
+                for (interface.events) |event| {
+                    if (event.since <= target_version) {
+                        try event.emitField(.client, writer);
+                    }
+                }
                 try writer.writeAll("};\n");
                 try writer.print(
                     \\pub inline fn setListener(
@@ -357,8 +531,10 @@ const Interface = struct {
 
             var has_destroy = false;
             for (interface.requests) |request, opcode| {
-                if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
-                try request.emitFn(side, writer, interface, opcode);
+                if (request.since <= target_version) {
+                    if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
+                    try request.emitFn(side, writer, interface, opcode);
+                }
             }
 
             if (mem.eql(u8, interface.name, "wl_display")) {
@@ -420,9 +596,17 @@ const Interface = struct {
                 });
             }
 
-            if (interface.requests.len > 0) {
+            const has_request = for (interface.requests) |request| {
+                if (request.since <= target_version) break true;
+            } else false;
+
+            if (has_request) {
                 try writer.writeAll("pub const Request = union(enum) {");
-                for (interface.requests) |request| try request.emitField(.server, writer);
+                for (interface.requests) |request| {
+                    if (request.since <= target_version) {
+                        try request.emitField(.server, writer);
+                    }
+                }
                 try writer.writeAll("};\n");
                 @setEvalBranchQuota(2500);
                 try writer.print(
@@ -488,7 +672,7 @@ const Interface = struct {
         try writer.writeAll("};\n");
     }
 
-    fn emitCommon(interface: Interface, writer: anytype) !void {
+    fn emitCommon(interface: Interface, target_version: u32, writer: anytype) !void {
         try writer.print("pub const {}", .{fmtId(trimPrefix(interface.name))});
 
         // TODO: stop linking libwayland generated interface structs when
@@ -502,7 +686,11 @@ const Interface = struct {
             \\ }}
         , .{ .interface = interface.name });
 
-        for (interface.enums) |e| try e.emit(writer);
+        for (interface.enums) |e| {
+            if (e.since <= target_version) {
+                try e.emit(target_version, writer);
+            }
+        }
         try writer.writeAll("};");
     }
 };
@@ -873,26 +1061,28 @@ const Enum = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emit(e: Enum, writer: anytype) !void {
+    fn emit(e: Enum, target_version: u32, writer: anytype) !void {
         try writer.print("pub const {}", .{titleCase(e.name)});
 
         if (e.bitfield) {
             var entries_emitted: u8 = 0;
             try writer.writeAll(" = packed struct {");
             for (e.entries) |entry| {
-                const value = entry.intValue();
-                if (value != 0 and std.math.isPowerOfTwo(value)) {
-                    try writer.print("{s}", .{entry.name});
-                    if (entries_emitted == 0) {
-                        // Align the first field to ensure the entire packed
-                        // struct matches the alignment of a u32. This allows
-                        // using the packed struct as the field of an extern
-                        // struct where a u32 is expected.
-                        try writer.writeAll(": bool align(@alignOf(u32)) = false,");
-                    } else {
-                        try writer.writeAll(": bool = false,");
+                if (entry.since <= target_version) {
+                    const value = entry.intValue();
+                    if (value != 0 and std.math.isPowerOfTwo(value)) {
+                        try writer.print("{s}", .{entry.name});
+                        if (entries_emitted == 0) {
+                            // Align the first field to ensure the entire packed
+                            // struct matches the alignment of a u32. This allows
+                            // using the packed struct as the field of an extern
+                            // struct where a u32 is expected.
+                            try writer.writeAll(": bool align(@alignOf(u32)) = false,");
+                        } else {
+                            try writer.writeAll(": bool = false,");
+                        }
+                        entries_emitted += 1;
                     }
-                    entries_emitted += 1;
                 }
             }
             // Pad to 32 bits. Use only bools to avoid zig stage1 packed
@@ -908,7 +1098,9 @@ const Enum = struct {
 
         try writer.writeAll(" = enum(c_int) {");
         for (e.entries) |entry| {
-            try writer.print("{s}= {s},", .{ fmtId(entry.name), entry.value });
+            if (entry.since <= target_version) {
+                try writer.print("{s}= {s},", .{ fmtId(entry.name), entry.value });
+            }
         }
         // Always generate non-exhaustive enums to ensure forward compatability.
         // Entries have been added to wl_shm.format without bumping the version.
@@ -1027,10 +1219,10 @@ test "parsing" {
     const protocol = try Protocol.parseXML(arena.allocator(), @embedFile("../protocol/wayland.xml"));
 
     try testing.expectEqualSlices(u8, "wayland", protocol.name);
-    try testing.expectEqual(@as(usize, 22), protocol.interfaces.len);
+    try testing.expectEqual(@as(usize, 8), protocol.globals.len);
 
     {
-        const wl_display = protocol.interfaces[0];
+        const wl_display = protocol.globals[0].interface;
         try testing.expectEqualSlices(u8, "wl_display", wl_display.name);
         try testing.expectEqual(@as(u32, 1), wl_display.version);
         try testing.expectEqual(@as(usize, 2), wl_display.requests.len);
@@ -1115,7 +1307,7 @@ test "parsing" {
     }
 
     {
-        const wl_data_offer = protocol.interfaces[7];
+        const wl_data_offer = protocol.globals[3].children[2];
         try testing.expectEqualSlices(u8, "wl_data_offer", wl_data_offer.name);
         try testing.expectEqual(@as(u32, 3), wl_data_offer.version);
         try testing.expectEqual(@as(usize, 5), wl_data_offer.requests.len);

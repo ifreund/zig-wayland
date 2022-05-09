@@ -13,6 +13,11 @@ pub fn build(b: *zbs.Builder) void {
         .path = .{ .generated = &scanner.result },
     };
 
+    scanner.generate("wl_compositor", 1);
+    scanner.generate("wl_shm", 1);
+    scanner.generate("wl_seat", 2);
+    scanner.generate("wl_output", 1);
+
     inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(example, "example/" ++ example ++ ".zig");
         exe.setTarget(target);
@@ -64,6 +69,7 @@ pub const ScanProtocolsStep = struct {
 
     /// Slice of absolute paths of protocol xml files to be scanned
     protocol_paths: std.ArrayList([]const u8),
+    targets: std.ArrayList(scanner.Target),
 
     pub fn create(builder: *zbs.Builder) *ScanProtocolsStep {
         const ally = builder.allocator;
@@ -73,16 +79,18 @@ pub const ScanProtocolsStep = struct {
             .step = zbs.Step.init(.custom, "Scan Protocols", ally, make),
             .result = .{ .step = &self.step, .path = null },
             .protocol_paths = std.ArrayList([]const u8).init(ally),
+            .targets = std.ArrayList(scanner.Target).init(ally),
         };
+        self.targets.append(.{ .name = "wl_display", .version = 1 }) catch unreachable;
         return self;
     }
 
-    /// Generate bindings from the protocol xml at the given absolute or relative path
+    /// Scan the protocol xml at the given absolute or relative path
     pub fn addProtocolPath(self: *ScanProtocolsStep, path: []const u8) void {
         self.protocol_paths.append(path) catch unreachable;
     }
 
-    /// Generate bindings from protocol xml provided by the wayland-protocols
+    /// Scan the protocol xml provided by the wayland-protocols
     /// package given the relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
     pub fn addSystemProtocol(self: *ScanProtocolsStep, relative_path: []const u8) void {
         const protocol_dir = mem.trim(u8, self.builder.exec(
@@ -92,6 +100,15 @@ pub const ScanProtocolsStep = struct {
             self.builder.allocator,
             &[_][]const u8{ protocol_dir, relative_path },
         ) catch unreachable);
+    }
+
+    /// Generate code for the given global interface at the given version,
+    /// as well as all interfaces that can be created using it at that version.
+    /// If the version found in the protocol xml is less than the requested version,
+    /// an error will be printed and code generation will fail.
+    /// Code is always generated for wl_display, wl_registry, and wl_callback.
+    pub fn generate(self: *ScanProtocolsStep, global_interface: []const u8, version: u32) void {
+        self.targets.append(.{ .name = global_interface, .version = version }) catch unreachable;
     }
 
     fn make(step: *zbs.Step) !void {
@@ -109,7 +126,7 @@ pub const ScanProtocolsStep = struct {
         defer root_dir.close();
         var out_dir = try root_dir.makeOpenPath(out_path, .{});
         defer out_dir.close();
-        try scanner.scan(root_dir, out_dir, wayland_xml, self.protocol_paths.items);
+        try scanner.scan(root_dir, out_dir, wayland_xml, self.protocol_paths.items, self.targets.items);
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.

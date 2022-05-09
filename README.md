@@ -19,7 +19,19 @@ pub fn build(b: *Builder) void {
 
     const scanner = ScanProtocolsStep.create(b);
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
-    scanner.addProtocolPath("protocol/foobar.xml");
+    scanner.addSystemProtocol("staging/ext-session-lock/ext-session-lock-v1.xml");
+    scanner.addProtocolPath("protocol/private_foobar.xml");
+
+    // Pass the maximum version implemented by your wayland server or client.
+    // Requests, events, enums, etc. from newer versions will not be generated,
+    // ensuring forwards compatibility with newer protocol xml.
+    // This will also generate code for interfaces created using the provided
+    // global interface, in this example wl_keyboard, wl_pointer, xdg_surface,
+    // xdg_toplevel, etc. would be generated.
+    scanner.generate("wl_seat", 4);
+    scanner.generate("xdg_wm_base", 3);
+    scanner.generate("ext_session_lock_manager_v1", 1);
+    scanner.generate("private_foobar_manager", 1);
 
     const exe = b.addExecutable("foo", "foo.zig");
     exe.setTarget(target);
