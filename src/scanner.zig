@@ -34,11 +34,19 @@ pub fn scan(
     );
     defer wayland_file.close();
 
-    var scanner = Scanner{};
+    var scanner = try Scanner.init(targets);
+    defer scanner.deinit();
 
-    try scanner.scanProtocol(root_dir, out_dir, wayland_xml, targets);
+    try scanner.scanProtocol(root_dir, out_dir, wayland_xml);
     for (protocols) |xml_path| {
-        try scanner.scanProtocol(root_dir, out_dir, xml_path, targets);
+        try scanner.scanProtocol(root_dir, out_dir, xml_path);
+    }
+
+    if (scanner.remaining_targets.items.len != 0) {
+        std.log.err("requested global interface '{s}' not found in provided protocol xml", .{
+            scanner.remaining_targets.items[0].name,
+        });
+        return error.GlobalNotFound;
     }
 
     {
@@ -109,13 +117,23 @@ const Scanner = struct {
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
 
-    fn scanProtocol(
-        scanner: *Scanner,
-        root_dir: fs.Dir,
-        out_dir: fs.Dir,
-        xml_path: []const u8,
-        targets: []const Target,
-    ) !void {
+    remaining_targets: std.ArrayListUnmanaged(Target),
+
+    fn init(targets: []const Target) !Scanner {
+        return Scanner{
+            .remaining_targets = .{
+                .items = try gpa.dupe(Target, targets),
+                .capacity = targets.len,
+            },
+        };
+    }
+
+    fn deinit(scanner: *Scanner) void {
+        // TODO don't leak the client/server/common maps
+        scanner.remaining_targets.deinit(gpa);
+    }
+
+    fn scanProtocol(scanner: *Scanner, root_dir: fs.Dir, out_dir: fs.Dir, xml_path: []const u8) !void {
         const xml_file = try root_dir.openFile(xml_path, .{});
         defer xml_file.close();
 
@@ -133,7 +151,7 @@ const Scanner = struct {
             const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_client.zig" });
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
-            try protocol.emitClient(targets, client_file.writer());
+            try protocol.emitClient(scanner.remaining_targets.items, client_file.writer());
             try (try scanner.client.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, client_filename);
         }
 
@@ -141,7 +159,7 @@ const Scanner = struct {
             const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_server.zig" });
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
-            try protocol.emitServer(targets, server_file.writer());
+            try protocol.emitServer(scanner.remaining_targets.items, server_file.writer());
             try (try scanner.server.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, server_filename);
         }
 
@@ -149,8 +167,24 @@ const Scanner = struct {
             const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_common.zig" });
             const common_file = try out_dir.createFile(common_filename, .{});
             defer common_file.close();
-            try protocol.emitCommon(targets, common_file.writer());
+            try protocol.emitCommon(scanner.remaining_targets.items, common_file.writer());
             try (try scanner.common.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, common_filename);
+        }
+
+        {
+            var i: usize = 0;
+            outer: while (i < scanner.remaining_targets.items.len) {
+                const target = scanner.remaining_targets.items[i];
+                for (protocol.globals) |global| {
+                    if (mem.eql(u8, target.name, global.interface.name)) {
+                        // We check this in emitClient() which is called first.
+                        assert(global.interface.version >= target.version);
+                        _ = scanner.remaining_targets.swapRemove(i);
+                        continue :outer;
+                    }
+                }
+                i += 1;
+            }
         }
     }
 };
