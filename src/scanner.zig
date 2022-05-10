@@ -6,8 +6,8 @@ const fmtId = std.zig.fmtId;
 
 const xml = @import("xml.zig");
 
-const gpa = allocator_instance.allocator();
-var allocator_instance = std.heap.GeneralPurposeAllocator(.{}){};
+const gpa = general_purpose_allocator.allocator();
+var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub const Target = struct {
     /// Name of the target global interface
@@ -27,6 +27,8 @@ pub fn scan(
     protocols: []const []const u8,
     targets: []const Target,
 ) !void {
+    defer assert(!general_purpose_allocator.deinit());
+
     const wayland_file = try out_dir.createFile("wayland.zig", .{});
     try wayland_file.writeAll(
         \\pub const client = @import("client.zig");
@@ -112,7 +114,7 @@ const Side = enum {
 
 const Scanner = struct {
     /// Map from namespace to list of generated files
-    const Map = std.hash_map.StringHashMap(std.ArrayListUnmanaged([]const u8));
+    const Map = std.StringArrayHashMap(std.ArrayListUnmanaged([]const u8));
     client: Map = Map.init(gpa),
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
@@ -129,8 +131,24 @@ const Scanner = struct {
     }
 
     fn deinit(scanner: *Scanner) void {
-        // TODO don't leak the client/server/common maps
+        // Keys are shared between the maps
+        for (scanner.client.keys()) |namespace| gpa.free(namespace);
+
+        deinit_map_and_values(&scanner.client);
+        deinit_map_and_values(&scanner.server);
+        deinit_map_and_values(&scanner.common);
+
         scanner.remaining_targets.deinit(gpa);
+    }
+
+    fn deinit_map_and_values(map: *Map) void {
+        for (map.values()) |*list| {
+            for (list.items) |file_name| {
+                gpa.free(file_name);
+            }
+            list.deinit(gpa);
+        }
+        map.deinit();
     }
 
     fn scanProtocol(scanner: *Scanner, root_dir: fs.Dir, out_dir: fs.Dir, xml_path: []const u8) !void {
@@ -143,32 +161,31 @@ const Scanner = struct {
         const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
         const protocol = try Protocol.parseXML(arena.allocator(), xml_bytes);
 
-        const protocol_name = try gpa.dupe(u8, protocol.name);
-        const protocol_namespace = try gpa.dupe(u8, protocol.namespace);
+        const namespace = try gpa.dupe(u8, protocol.namespace);
 
         // TODO Use buffered I/O
         {
-            const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_client.zig" });
+            const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_client.zig" });
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
             try protocol.emitClient(scanner.remaining_targets.items, client_file.writer());
-            try (try scanner.client.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, client_filename);
+            try (try scanner.client.getOrPutValue(namespace, .{})).value_ptr.append(gpa, client_filename);
         }
 
         {
-            const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_server.zig" });
+            const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_server.zig" });
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
             try protocol.emitServer(scanner.remaining_targets.items, server_file.writer());
-            try (try scanner.server.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, server_filename);
+            try (try scanner.server.getOrPutValue(namespace, .{})).value_ptr.append(gpa, server_filename);
         }
 
         {
-            const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol_name, "_common.zig" });
+            const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_common.zig" });
             const common_file = try out_dir.createFile(common_filename, .{});
             defer common_file.close();
             try protocol.emitCommon(scanner.remaining_targets.items, common_file.writer());
-            try (try scanner.common.getOrPutValue(protocol_namespace, .{})).value_ptr.append(gpa, common_filename);
+            try (try scanner.common.getOrPutValue(namespace, .{})).value_ptr.append(gpa, common_filename);
         }
 
         {
