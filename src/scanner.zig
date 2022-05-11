@@ -132,21 +132,17 @@ const Scanner = struct {
     }
 
     fn deinit(scanner: *Scanner) void {
-        // Keys are shared between the maps
-        for (scanner.client.keys()) |namespace| gpa.free(namespace);
-
-        deinit_map_and_values(&scanner.client);
-        deinit_map_and_values(&scanner.server);
-        deinit_map_and_values(&scanner.common);
+        deinit_map(&scanner.client);
+        deinit_map(&scanner.server);
+        deinit_map(&scanner.common);
 
         scanner.remaining_targets.deinit(gpa);
     }
 
-    fn deinit_map_and_values(map: *Map) void {
+    fn deinit_map(map: *Map) void {
+        for (map.keys()) |namespace| gpa.free(namespace);
         for (map.values()) |*list| {
-            for (list.items) |file_name| {
-                gpa.free(file_name);
-            }
+            for (list.items) |file_name| gpa.free(file_name);
             list.deinit(gpa);
         }
         map.deinit();
@@ -162,31 +158,41 @@ const Scanner = struct {
         const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
         const protocol = try Protocol.parseXML(arena.allocator(), xml_bytes);
 
-        const namespace = try gpa.dupe(u8, protocol.namespace);
-
         // TODO Use buffered I/O
         {
             const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_client.zig" });
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
+
             try protocol.emitClient(scanner.remaining_targets.items, client_file.writer());
-            try (try scanner.client.getOrPutValue(namespace, .{})).value_ptr.append(gpa, client_filename);
+
+            const gop = try scanner.client.getOrPutValue(protocol.namespace, .{});
+            if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
+            try gop.value_ptr.append(gpa, client_filename);
         }
 
         {
             const server_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_server.zig" });
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
+
             try protocol.emitServer(scanner.remaining_targets.items, server_file.writer());
-            try (try scanner.server.getOrPutValue(namespace, .{})).value_ptr.append(gpa, server_filename);
+
+            const gop = try scanner.server.getOrPutValue(protocol.namespace, .{});
+            if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
+            try gop.value_ptr.append(gpa, server_filename);
         }
 
         {
             const common_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_common.zig" });
             const common_file = try out_dir.createFile(common_filename, .{});
             defer common_file.close();
+
             try protocol.emitCommon(scanner.remaining_targets.items, common_file.writer());
-            try (try scanner.common.getOrPutValue(namespace, .{})).value_ptr.append(gpa, common_filename);
+
+            const gop = try scanner.common.getOrPutValue(protocol.namespace, .{});
+            if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
+            try gop.value_ptr.append(gpa, common_filename);
         }
 
         {
