@@ -2,7 +2,10 @@ const std = @import("std");
 const assert = std.debug.assert;
 const fs = std.fs;
 const mem = std.mem;
+const os = std.os;
 const fmtId = std.zig.fmtId;
+
+const log = std.log.scoped(.@"zig-wayland");
 
 const xml = @import("xml.zig");
 
@@ -23,7 +26,6 @@ pub const Target = struct {
 pub fn scan(
     root_dir: fs.Dir,
     out_dir: fs.Dir,
-    wayland_xml: []const u8,
     protocols: []const []const u8,
     targets: []const Target,
 ) !void {
@@ -39,16 +41,15 @@ pub fn scan(
     var scanner = try Scanner.init(targets);
     defer scanner.deinit();
 
-    try scanner.scanProtocol(root_dir, out_dir, wayland_xml);
     for (protocols) |xml_path| {
         try scanner.scanProtocol(root_dir, out_dir, xml_path);
     }
 
     if (scanner.remaining_targets.items.len != 0) {
-        std.log.err("requested global interface '{s}' not found in provided protocol xml", .{
+        log.err("requested global interface '{s}' not found in provided protocol xml", .{
             scanner.remaining_targets.items[0].name,
         });
-        return error.GlobalNotFound;
+        os.exit(1);
     }
 
     {
@@ -410,12 +411,12 @@ const Protocol = struct {
             for (protocol.globals) |global| {
                 if (mem.eql(u8, target.name, global.interface.name)) {
                     if (global.interface.version < target.version) {
-                        std.log.err("requested {s} version {d} but only version {d} is available", .{
+                        log.err("requested {s} version {d} but only version {d} is available in provided xml", .{
                             target.name,
                             target.version,
                             global.interface.version,
                         });
-                        return error.VersionMismatch;
+                        os.exit(1);
                     }
                     try global.interface.emit(.client, target.version, protocol.namespace, writer);
                     for (global.children) |child| {
