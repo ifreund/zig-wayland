@@ -73,6 +73,10 @@ pub const ScanProtocolsStep = struct {
     system_protocols: std.ArrayList([]const u8),
     targets: std.ArrayList(scanner.Target),
 
+    /// Artifacts requiring the C interface definitions to be linked in.
+    /// TODO remove this after Zig issue #131 is implemented.
+    artifacts: std.ArrayList(*zbs.LibExeObjStep),
+
     pub fn create(builder: *zbs.Builder) *ScanProtocolsStep {
         const ally = builder.allocator;
         const self = ally.create(ScanProtocolsStep) catch oom();
@@ -83,6 +87,7 @@ pub const ScanProtocolsStep = struct {
             .protocol_paths = std.ArrayList([]const u8).init(ally),
             .system_protocols = std.ArrayList([]const u8).init(ally),
             .targets = std.ArrayList(scanner.Target).init(ally),
+            .artifacts = std.ArrayList(*zbs.LibExeObjStep).init(ally),
         };
         self.targets.append(.{ .name = "wl_display", .version = 1 }) catch oom();
         return self;
@@ -106,6 +111,12 @@ pub const ScanProtocolsStep = struct {
     /// Code is always generated for wl_display, wl_registry, and wl_callback.
     pub fn generate(self: *ScanProtocolsStep, global_interface: []const u8, version: u32) void {
         self.targets.append(.{ .name = global_interface, .version = version }) catch oom();
+    }
+
+    /// Add the necessary C source to the compilation unit.
+    /// Once https://github.com/ziglang/zig/issues/131 we can remove this.
+    pub fn addCSource(self: *ScanProtocolsStep, obj: *zbs.LibExeObjStep) void {
+        self.artifacts.append(obj) catch oom();
     }
 
     fn make(step: *zbs.Step) !void {
@@ -137,20 +148,17 @@ pub const ScanProtocolsStep = struct {
 
         // Once https://github.com/ziglang/zig/issues/131 is implemented
         // we can stop generating/linking C code.
-        for (self.protocol_paths.items) |path| {
+        for (self.protocol_paths.items) |protocol_path| {
+            const code_path = self.getCodePath(protocol_path);
             _ = try self.builder.exec(
-                &[_][]const u8{ "wayland-scanner", "private-code", path, self.getCodePath(path) },
+                &[_][]const u8{ "wayland-scanner", "private-code", protocol_path, code_path },
             );
+            for (self.artifacts.items) |artifact| {
+                artifact.addCSourceFile(code_path, &[_][]const u8{"-std=c99"});
+            }
         }
 
         self.result.path = try fs.path.join(ally, &[_][]const u8{ out_path, "wayland.zig" });
-    }
-    /// Add the necessary C source to the compilation unit.
-    /// Once https://github.com/ziglang/zig/issues/131 we can remove this.
-    pub fn addCSource(self: *ScanProtocolsStep, obj: *zbs.LibExeObjStep) void {
-        for (self.protocol_paths.items) |path| {
-            obj.addCSourceFile(self.getCodePath(path), &[_][]const u8{"-std=c99"});
-        }
     }
 
     fn getCodePath(self: *ScanProtocolsStep, xml_in_path: []const u8) []const u8 {
