@@ -331,14 +331,14 @@ const Protocol = struct {
 
         for (interfaces.values()) |interface| {
             if (!non_globals.contains(interface.name)) {
-                var children = std.ArrayList(Interface).init(gpa);
+                var children = std.StringArrayHashMap(Interface).init(gpa);
                 defer children.deinit();
 
                 try find_children(interface, interfaces, &children);
 
                 try globals.append(.{
                     .interface = interface,
-                    .children = try arena.dupe(Interface, children.items),
+                    .children = try arena.dupe(Interface, children.values()),
                 });
             }
         }
@@ -349,7 +349,7 @@ const Protocol = struct {
     fn find_children(
         parent: Interface,
         interfaces: std.StringArrayHashMap(Interface),
-        children: *std.ArrayList(Interface),
+        children: *std.StringArrayHashMap(Interface),
     ) error{ OutOfMemory, UnknownInterface }!void {
         for (parent.requests) |message| {
             if (message.kind == .constructor) {
@@ -363,7 +363,7 @@ const Protocol = struct {
                     }
 
                     const child = interfaces.get(child_name) orelse return error.UnknownInterface;
-                    try children.append(child);
+                    try children.put(child_name, child);
                     try find_children(child, interfaces, children);
                 }
             }
@@ -380,7 +380,7 @@ const Protocol = struct {
                     }
 
                     const child = interfaces.get(child_name) orelse return error.UnknownInterface;
-                    try children.append(child);
+                    try children.put(child_name, child);
                     try find_children(child, interfaces, children);
                 }
             }
