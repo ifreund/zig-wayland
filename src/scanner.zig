@@ -408,7 +408,8 @@ const Protocol = struct {
     fn emitClient(protocol: Protocol, targets: []const Target, writer: anytype) !void {
         try protocol.emitCopyrightAndToplevelDescription(writer);
         try writer.writeAll(
-            \\const os = @import("std").os;
+            \\const std = @import("std");
+            \\const os = std.os;
             \\const client = @import("wayland.zig").client;
             \\const common = @import("common.zig");
         );
@@ -530,9 +531,11 @@ const Interface = struct {
     fn emit(interface: Interface, side: Side, target_version: u32, namespace: []const u8, writer: anytype) !void {
         try writer.print(
             \\pub const {[type]} = opaque {{
+            \\ pub const generated_version = {[version]};
             \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
         , .{
             .@"type" = titleCaseTrim(interface.name),
+            .version = std.math.min(interface.version, target_version),
             .namespace = fmtId(namespace),
             .interface = fmtId(trimPrefix(interface.name)),
         });
@@ -939,7 +942,12 @@ const Message = struct {
                         .opcode = opcode,
                     });
                 } else {
-                    try writer.print("return @ptrCast(*T, try _proxy.marshalConstructorVersioned({}, &_args, T.getInterface(), _version));", .{opcode});
+                    try writer.print(
+                        \\const version_to_construct = std.math.min(T.generated_version, _version);
+                        \\return @ptrCast(*T, try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.getInterface(), version_to_construct));
+                    , .{
+                        .opcode = opcode,
+                    });
                 }
             },
         }
