@@ -873,10 +873,15 @@ const Message = struct {
         } else {
             try writer.writeAll(") !*T {");
         }
-        if (side == .server)
-            try writer.writeAll("const _resource = @ptrCast(*server.wl.Resource,_")
-        else
+        if (side == .server) {
+            try writer.writeAll("const _resource = @ptrCast(*server.wl.Resource,_");
+        } else {
+            // wl_registry.bind for example needs special handling
+            if (message.kind == .constructor and message.kind.constructor == null) {
+                try writer.writeAll("const version_to_construct = std.math.min(T.generated_version, _version);");
+            }
             try writer.writeAll("const _proxy = @ptrCast(*client.wl.Proxy,_");
+        }
         try writer.print("{});", .{fmtId(trimPrefix(interface.name))});
         if (message.args.len > 0) {
             try writer.writeAll("var _args = [_]common.Argument{");
@@ -917,7 +922,7 @@ const Message = struct {
                             if (new_iface == null) {
                                 try writer.writeAll(
                                     \\.{ .s = T.getInterface().name },
-                                    \\.{ .u = _version },
+                                    \\.{ .u = version_to_construct },
                                 );
                             }
                             try writer.writeAll(".{ .o = null },");
@@ -943,7 +948,6 @@ const Message = struct {
                     });
                 } else {
                     try writer.print(
-                        \\const version_to_construct = std.math.min(T.generated_version, _version);
                         \\return @ptrCast(*T, try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.getInterface(), version_to_construct));
                     , .{
                         .opcode = opcode,
