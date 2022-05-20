@@ -164,7 +164,7 @@ const Scanner = struct {
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
 
-            try protocol.emitClient(scanner.remaining_targets.items, client_file.writer());
+            try protocol.emit(.client, scanner.remaining_targets.items, client_file.writer());
 
             const gop = try scanner.client.getOrPutValue(protocol.namespace, .{});
             if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
@@ -176,7 +176,7 @@ const Scanner = struct {
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
 
-            try protocol.emitServer(scanner.remaining_targets.items, server_file.writer());
+            try protocol.emit(.server, scanner.remaining_targets.items, server_file.writer());
 
             const gop = try scanner.server.getOrPutValue(protocol.namespace, .{});
             if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
@@ -224,6 +224,8 @@ const Protocol = struct {
     namespace: []const u8,
     copyright: ?[]const u8,
     toplevel_description: ?[]const u8,
+
+    version_locked_interfaces: []const Interface,
     globals: []const Global,
 
     fn parseXML(arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
@@ -239,6 +241,8 @@ const Protocol = struct {
         var name: ?[]const u8 = null;
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
+        var version_locked_interfaces = std.ArrayList(Interface).init(gpa);
+        defer version_locked_interfaces.deinit();
         var interfaces = std.StringArrayHashMap(Interface).init(gpa);
         defer interfaces.deinit();
 
@@ -269,9 +273,13 @@ const Protocol = struct {
                     }
                 } else if (mem.eql(u8, tag, "interface")) {
                     const interface = try Interface.parse(arena, parser);
-                    const gop = try interfaces.getOrPut(interface.name);
-                    if (gop.found_existing) return error.DuplicateInterfaceName;
-                    gop.value_ptr.* = interface;
+                    if (Interface.version_locked(interface.name)) {
+                        try version_locked_interfaces.append(interface);
+                    } else {
+                        const gop = try interfaces.getOrPut(interface.name);
+                        if (gop.found_existing) return error.DuplicateInterfaceName;
+                        gop.value_ptr.* = interface;
+                    }
                 }
             },
             .attribute => |attr| if (mem.eql(u8, attr.name, "name")) {
@@ -297,6 +305,7 @@ const Protocol = struct {
                     // Missing copyright or toplevel description is bad style, but not illegal.
                     .copyright = copyright,
                     .toplevel_description = toplevel_description,
+                    .version_locked_interfaces = try arena.dupe(Interface, version_locked_interfaces.items),
                     .globals = globals,
                 };
             },
@@ -310,6 +319,7 @@ const Protocol = struct {
         defer non_globals.deinit();
 
         for (interfaces.values()) |interface| {
+            assert(!Interface.version_locked(interface.name));
             for (interface.requests) |message| {
                 if (message.kind == .constructor) {
                     if (message.kind.constructor) |child_interface_name| {
@@ -351,37 +361,19 @@ const Protocol = struct {
         interfaces: std.StringArrayHashMap(Interface),
         children: *std.StringArrayHashMap(Interface),
     ) error{ OutOfMemory, UnknownInterface }!void {
-        for (parent.requests) |message| {
-            if (message.kind == .constructor) {
-                if (message.kind.constructor) |child_name| {
-                    // wl_callback breaks the standard object hierarchy and
-                    // can be generated through multiple different globals.
-                    if (mem.eql(u8, child_name, "wl_callback") and
-                        !mem.eql(u8, parent.name, "wl_display"))
-                    {
-                        continue;
-                    }
+        for ([_][]const Message{ parent.requests, parent.events }) |messages| {
+            for (messages) |message| {
+                if (message.kind == .constructor) {
+                    if (message.kind.constructor) |child_name| {
+                        if (Interface.version_locked(child_name)) continue;
 
-                    const child = interfaces.get(child_name) orelse return error.UnknownInterface;
-                    try children.put(child_name, child);
-                    try find_children(child, interfaces, children);
-                }
-            }
-        }
-        for (parent.events) |message| {
-            if (message.kind == .constructor) {
-                if (message.kind.constructor) |child_name| {
-                    // wl_callback breaks the standard object hierarchy and
-                    // can be generated through multiple different globals.
-                    if (mem.eql(u8, child_name, "wl_callback") and
-                        !mem.eql(u8, parent.name, "wl_display"))
-                    {
-                        continue;
+                        const child = interfaces.get(child_name) orelse {
+                            log.err("unknown interface: {s}", .{child_name});
+                            os.exit(1);
+                        };
+                        try children.put(child_name, child);
+                        try find_children(child, interfaces, children);
                     }
-
-                    const child = interfaces.get(child_name) orelse return error.UnknownInterface;
-                    try children.put(child_name, child);
-                    try find_children(child, interfaces, children);
                 }
             }
         }
@@ -405,14 +397,26 @@ const Protocol = struct {
         }
     }
 
-    fn emitClient(protocol: Protocol, targets: []const Target, writer: anytype) !void {
+    fn emit(protocol: Protocol, side: Side, targets: []const Target, writer: anytype) !void {
         try protocol.emitCopyrightAndToplevelDescription(writer);
-        try writer.writeAll(
-            \\const std = @import("std");
-            \\const os = std.os;
-            \\const client = @import("wayland.zig").client;
-            \\const common = @import("common.zig");
-        );
+        switch (side) {
+            .client => try writer.writeAll(
+                \\const std = @import("std");
+                \\const os = std.os;
+                \\const client = @import("wayland.zig").client;
+                \\const common = @import("common.zig");
+            ),
+            .server => try writer.writeAll(
+                \\const os = @import("std").os;
+                \\const server = @import("wayland.zig").server;
+                \\const common = @import("common.zig");
+            ),
+        }
+
+        for (protocol.version_locked_interfaces) |interface| {
+            assert(interface.version == 1);
+            try interface.emit(side, 1, protocol.namespace, writer);
+        }
 
         for (targets) |target| {
             for (protocol.globals) |global| {
@@ -425,31 +429,9 @@ const Protocol = struct {
                         });
                         os.exit(1);
                     }
-                    try global.interface.emit(.client, target.version, protocol.namespace, writer);
+                    try global.interface.emit(side, target.version, protocol.namespace, writer);
                     for (global.children) |child| {
-                        try child.emit(.client, target.version, protocol.namespace, writer);
-                    }
-                }
-            }
-        }
-    }
-
-    fn emitServer(protocol: Protocol, targets: []const Target, writer: anytype) !void {
-        try protocol.emitCopyrightAndToplevelDescription(writer);
-        try writer.writeAll(
-            \\const os = @import("std").os;
-            \\const server = @import("wayland.zig").server;
-            \\const common = @import("common.zig");
-        );
-        for (targets) |target| {
-            for (protocol.globals) |global| {
-                if (mem.eql(u8, target.name, global.interface.name)) {
-                    // We check this in emitClient() which is called first.
-                    assert(global.interface.version >= target.version);
-
-                    try global.interface.emit(.server, target.version, protocol.namespace, writer);
-                    for (global.children) |child| {
-                        try child.emit(.server, target.version, protocol.namespace, writer);
+                        try child.emit(side, target.version, protocol.namespace, writer);
                     }
                 }
             }
@@ -461,6 +443,12 @@ const Protocol = struct {
         try writer.writeAll(
             \\const common = @import("common.zig");
         );
+
+        for (protocol.version_locked_interfaces) |interface| {
+            assert(interface.version == 1);
+            try interface.emitCommon(1, writer);
+        }
+
         for (targets) |target| {
             for (protocol.globals) |global| {
                 if (mem.eql(u8, target.name, global.interface.name)) {
@@ -484,6 +472,19 @@ const Interface = struct {
     requests: []const Message,
     events: []const Message,
     enums: []const Enum,
+
+    // These interfaces are special in that their version may never be increased.
+    // That is, they are pinned to version 1 forever. They also may break the
+    // normally required tree object creation hierarchy.
+    const version_locked_interfaces = std.ComptimeStringMap(void, .{
+        .{"wl_display"},
+        .{"wl_registry"},
+        .{"wl_callback"},
+        .{"wl_buffer"},
+    });
+    fn version_locked(interface_name: []const u8) bool {
+        return version_locked_interfaces.has(interface_name);
+    }
 
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Interface {
         var name: ?[]const u8 = null;

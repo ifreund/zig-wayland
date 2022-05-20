@@ -89,7 +89,6 @@ pub const ScanProtocolsStep = struct {
             .targets = std.ArrayList(scanner.Target).init(ally),
             .artifacts = std.ArrayList(*zbs.LibExeObjStep).init(ally),
         };
-        self.targets.append(.{ .name = "wl_display", .version = 1 }) catch oom();
         return self;
     }
 
@@ -108,7 +107,7 @@ pub const ScanProtocolsStep = struct {
     /// as well as all interfaces that can be created using it at that version.
     /// If the version found in the protocol xml is less than the requested version,
     /// an error will be printed and code generation will fail.
-    /// Code is always generated for wl_display, wl_registry, and wl_callback.
+    /// Code is always generated for wl_display, wl_registry, wl_callback, and wl_buffer.
     pub fn generate(self: *ScanProtocolsStep, global_interface: []const u8, version: u32) void {
         self.targets.append(.{ .name = global_interface, .version = version }) catch oom();
     }
