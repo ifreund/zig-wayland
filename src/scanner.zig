@@ -856,10 +856,11 @@ const Message = struct {
                 try writer.print(", _{s}:", .{arg.name});
                 if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeByte('*');
-                if (arg.kind.new_id) |iface|
-                    try writer.print("{}", .{titleCaseTrim(iface)})
-                else
+                if (arg.kind.new_id) |iface| {
+                    try printAbsolute(side, writer, iface);
+                } else {
                     try writer.writeAll("server.wl.Resource");
+                }
             } else if (side == .client and arg.kind == .new_id) {
                 if (arg.kind.new_id == null) try writer.writeAll(", comptime T: type, _version: u32");
             } else {
@@ -870,7 +871,9 @@ const Message = struct {
         if (side == .server or message.kind != .constructor) {
             try writer.writeAll(") void {");
         } else if (message.kind.constructor) |new_iface| {
-            try writer.print(") !*{}{{", .{titleCaseTrim(new_iface)});
+            try writer.writeAll(") !*");
+            try printAbsolute(side, writer, new_iface);
+            try writer.writeByte('{');
         } else {
             try writer.writeAll(") !*T {");
         }
@@ -943,10 +946,11 @@ const Message = struct {
             },
             .constructor => |new_iface| {
                 if (new_iface) |i| {
-                    try writer.print("return @ptrCast(*{[type]}, try _proxy.marshalConstructor({[opcode]}, &_args, {[type]}.getInterface()));", .{
-                        .@"type" = titleCaseTrim(i),
-                        .opcode = opcode,
-                    });
+                    try writer.writeAll("return @ptrCast(*");
+                    try printAbsolute(side, writer, i);
+                    try writer.print(", try _proxy.marshalConstructor({}, &_args, ", .{opcode});
+                    try printAbsolute(side, writer, i);
+                    try writer.writeAll(".getInterface()));");
                 } else {
                     try writer.print(
                         \\return @ptrCast(*T, try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.getInterface(), version_to_construct));
