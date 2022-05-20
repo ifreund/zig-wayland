@@ -1290,10 +1290,10 @@ test "parsing" {
     const protocol = try Protocol.parseXML(arena.allocator(), @embedFile("../protocol/wayland.xml"));
 
     try testing.expectEqualSlices(u8, "wayland", protocol.name);
-    try testing.expectEqual(@as(usize, 8), protocol.globals.len);
+    try testing.expectEqual(@as(usize, 7), protocol.globals.len);
 
     {
-        const wl_display = protocol.globals[0].interface;
+        const wl_display = protocol.version_locked_interfaces[0];
         try testing.expectEqualSlices(u8, "wl_display", wl_display.name);
         try testing.expectEqual(@as(u32, 1), wl_display.version);
         try testing.expectEqual(@as(usize, 2), wl_display.requests.len);
@@ -1378,7 +1378,7 @@ test "parsing" {
     }
 
     {
-        const wl_data_offer = protocol.globals[3].children[2];
+        const wl_data_offer = protocol.globals[2].children[2];
         try testing.expectEqualSlices(u8, "wl_data_offer", wl_data_offer.name);
         try testing.expectEqual(@as(u32, 3), wl_data_offer.version);
         try testing.expectEqual(@as(usize, 5), wl_data_offer.requests.len);
