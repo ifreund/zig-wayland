@@ -156,7 +156,10 @@ const Scanner = struct {
         defer arena.deinit();
 
         const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
-        const protocol = try Protocol.parseXML(arena.allocator(), xml_bytes);
+        const protocol = Protocol.parseXML(arena.allocator(), xml_bytes) catch |err| {
+            log.err("failed to parse {s}: {s}", .{ xml_path, @errorName(err) });
+            os.exit(1);
+        };
 
         // TODO Use buffered I/O
         {
@@ -360,7 +363,7 @@ const Protocol = struct {
         parent: Interface,
         interfaces: std.StringArrayHashMap(Interface),
         children: *std.StringArrayHashMap(Interface),
-    ) error{ OutOfMemory, UnknownInterface }!void {
+    ) error{ OutOfMemory, InvalidInterface }!void {
         for ([_][]const Message{ parent.requests, parent.events }) |messages| {
             for (messages) |message| {
                 if (message.kind == .constructor) {
@@ -368,8 +371,11 @@ const Protocol = struct {
                         if (Interface.version_locked(child_name)) continue;
 
                         const child = interfaces.get(child_name) orelse {
-                            log.err("unknown interface: {s}", .{child_name});
-                            os.exit(1);
+                            log.err("interface '{s}' constructed by message '{s}' not defined in the protocol and not wl_callback or wl_buffer", .{
+                                child_name,
+                                message.name,
+                            });
+                            return error.InvalidInterface;
                         };
                         try children.put(child_name, child);
                         try find_children(child, interfaces, children);
