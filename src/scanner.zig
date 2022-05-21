@@ -161,17 +161,23 @@ const Scanner = struct {
             os.exit(1);
         };
 
-        // TODO Use buffered I/O
+        var buffered_writer: std.io.BufferedWriter(4096, std.fs.File.Writer) = .{
+            .unbuffered_writer = undefined,
+        };
         {
             const client_filename = try mem.concat(gpa, u8, &[_][]const u8{ protocol.name, "_client.zig" });
             const client_file = try out_dir.createFile(client_filename, .{});
             defer client_file.close();
 
-            try protocol.emit(.client, scanner.remaining_targets.items, client_file.writer());
+            buffered_writer.unbuffered_writer = client_file.writer();
+
+            try protocol.emit(.client, scanner.remaining_targets.items, buffered_writer.writer());
 
             const gop = try scanner.client.getOrPutValue(protocol.namespace, .{});
             if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             try gop.value_ptr.append(gpa, client_filename);
+
+            try buffered_writer.flush();
         }
 
         {
@@ -179,11 +185,15 @@ const Scanner = struct {
             const server_file = try out_dir.createFile(server_filename, .{});
             defer server_file.close();
 
-            try protocol.emit(.server, scanner.remaining_targets.items, server_file.writer());
+            buffered_writer.unbuffered_writer = server_file.writer();
+
+            try protocol.emit(.server, scanner.remaining_targets.items, buffered_writer.writer());
 
             const gop = try scanner.server.getOrPutValue(protocol.namespace, .{});
             if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             try gop.value_ptr.append(gpa, server_filename);
+
+            try buffered_writer.flush();
         }
 
         {
@@ -191,11 +201,15 @@ const Scanner = struct {
             const common_file = try out_dir.createFile(common_filename, .{});
             defer common_file.close();
 
-            try protocol.emitCommon(scanner.remaining_targets.items, common_file.writer());
+            buffered_writer.unbuffered_writer = common_file.writer();
+
+            try protocol.emitCommon(scanner.remaining_targets.items, buffered_writer.writer());
 
             const gop = try scanner.common.getOrPutValue(protocol.namespace, .{});
             if (!gop.found_existing) gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             try gop.value_ptr.append(gpa, common_filename);
+
+            try buffered_writer.flush();
         }
 
         {
