@@ -21,7 +21,7 @@ jobs:
       - name: install deps
         run: |
           xbps-install -Sy xbps
-          xbps-install -uy
+          xbps-install -Suy
           xbps-install -y wayland-devel wayland-protocols pkgconf git gcc wget tar xz
 
           wget https://ziglang.org/download/0.9.1/zig-linux-x86_64-0.9.1.tar.xz
