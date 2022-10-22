@@ -695,7 +695,7 @@ const Interface = struct {
                     \\pub inline fn setHandler(
                     \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
-                    \\    handle_request: fn (_{[interface]}: *{[type]}, request: Request, data: T) void,
+                    \\    handle_request: *const fn (_{[interface]}: *{[type]}, request: Request, data: T) void,
                     \\    comptime handle_destroy: ?fn (_{[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) void {{
@@ -1166,16 +1166,7 @@ const Enum = struct {
                 if (entry.since <= target_version) {
                     const value = entry.intValue();
                     if (value != 0 and std.math.isPowerOfTwo(value)) {
-                        try writer.print("{s}", .{entry.name});
-                        if (entries_emitted == 0) {
-                            // Align the first field to ensure the entire packed
-                            // struct matches the alignment of a u32. This allows
-                            // using the packed struct as the field of an extern
-                            // struct where a u32 is expected.
-                            try writer.writeAll(": bool align(@alignOf(u32)) = false,");
-                        } else {
-                            try writer.writeAll(": bool = false,");
-                        }
+                        try writer.print("{s}: bool = false,", .{entry.name});
                         entries_emitted += 1;
                     }
                 }
@@ -1260,7 +1251,7 @@ fn trimPrefix(s: []const u8) []const u8 {
 
 const Case = enum { title, camel };
 
-fn formatCaseImpl(case: Case, comptime trim: bool) type {
+fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
     return struct {
         pub fn f(
             bytes: []const u8,

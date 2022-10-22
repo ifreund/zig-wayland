@@ -54,7 +54,7 @@ pub const Proxy = opaque {
             error.OutOfMemory;
     }
 
-    const DispatcherFn = fn (
+    const DispatcherFn = *const fn (
         implementation: ?*const anyopaque,
         proxy: *Proxy,
         opcode: u32,
