@@ -100,7 +100,7 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
                         }
                     }
 
-                    @ptrCast(fn (*Obj, Payload, Data) void, implementation)(
+                    @ptrCast(*const fn (*Obj, Payload, Data) void, implementation)(
                         @ptrCast(*Obj, object),
                         @unionInit(Payload, payload_field.name, payload_data),
                         @intToPtr(Data, @ptrToInt(object.getUserData())),

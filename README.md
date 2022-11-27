@@ -1,6 +1,6 @@
 # zig-wayland
 
-Zig 0.9 bindings and protocol scanner for libwayland.
+Zig 0.10 bindings and protocol scanner for libwayland.
 
 ## Usage
 
@@ -39,7 +39,7 @@ pub fn build(b: *Builder) void {
 
     exe.addPackage(.{
         .name = "wayland",
-        .path = .{ .generated = &scanner.result },
+        .source = .{ .generated = &scanner.result },
     });
     exe.step.dependOn(&scanner.step);
     exe.linkLibC();

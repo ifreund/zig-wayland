@@ -598,7 +598,7 @@ const Interface = struct {
                     \\pub inline fn setListener(
                     \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
-                    \\    _listener: fn ({[interface]}: *{[type]}, event: Event, data: T) void,
+                    \\    _listener: *const fn ({[interface]}: *{[type]}, event: Event, data: T) void,
                     \\    _data: T,
                     \\) void {{
                     \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
@@ -695,7 +695,7 @@ const Interface = struct {
                     \\pub inline fn setHandler(
                     \\    _{[interface]}: *{[type]},
                     \\    comptime T: type,
-                    \\    handle_request: fn (_{[interface]}: *{[type]}, request: Request, data: T) void,
+                    \\    handle_request: *const fn (_{[interface]}: *{[type]}, request: Request, data: T) void,
                     \\    comptime handle_destroy: ?fn (_{[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) void {{
@@ -1161,29 +1161,18 @@ const Enum = struct {
 
         if (e.bitfield) {
             var entries_emitted: u8 = 0;
-            try writer.writeAll(" = packed struct {");
+            try writer.writeAll(" = packed struct(u32) {");
             for (e.entries) |entry| {
                 if (entry.since <= target_version) {
                     const value = entry.intValue();
                     if (value != 0 and std.math.isPowerOfTwo(value)) {
-                        try writer.print("{s}", .{entry.name});
-                        if (entries_emitted == 0) {
-                            // Align the first field to ensure the entire packed
-                            // struct matches the alignment of a u32. This allows
-                            // using the packed struct as the field of an extern
-                            // struct where a u32 is expected.
-                            try writer.writeAll(": bool align(@alignOf(u32)) = false,");
-                        } else {
-                            try writer.writeAll(": bool = false,");
-                        }
+                        try writer.print("{s}: bool = false,", .{entry.name});
                         entries_emitted += 1;
                     }
                 }
             }
-            // Pad to 32 bits. Use only bools to avoid zig stage1 packed
-            // struct bugs.
-            while (entries_emitted < 32) : (entries_emitted += 1) {
-                try writer.print("_paddding{}: bool = false,\n", .{entries_emitted});
+            if (entries_emitted < 32) {
+                try writer.print("_padding: u{d} = 0,\n", .{32 - entries_emitted});
             }
 
             // Emit the normal C abi enum as well as it may be needed to interface
@@ -1260,7 +1249,7 @@ fn trimPrefix(s: []const u8) []const u8 {
 
 const Case = enum { title, camel };
 
-fn formatCaseImpl(case: Case, comptime trim: bool) type {
+fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
     return struct {
         pub fn f(
             bytes: []const u8,
@@ -1311,7 +1300,7 @@ test "parsing" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    const protocol = try Protocol.parseXML(arena.allocator(), @embedFile("../protocol/wayland.xml"));
+    const protocol = try Protocol.parseXML(arena.allocator(), @embedFile("test_data/wayland.xml"));
 
     try testing.expectEqualSlices(u8, "wayland", protocol.name);
     try testing.expectEqual(@as(usize, 7), protocol.globals.len);

@@ -10,7 +10,7 @@ pub fn build(b: *zbs.Builder) void {
     const scanner = ScanProtocolsStep.create(b);
     const wayland = zbs.Pkg{
         .name = "wayland",
-        .path = .{ .generated = &scanner.result },
+        .source = .{ .generated = &scanner.result },
     };
 
     scanner.generate("wl_compositor", 1);

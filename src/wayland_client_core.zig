@@ -63,13 +63,13 @@ pub const Proxy = opaque {
     ) callconv(.C) c_int;
     extern fn wl_proxy_add_dispatcher(
         proxy: *Proxy,
-        dispatcher: DispatcherFn,
+        dispatcher: *const DispatcherFn,
         implementation: ?*const anyopaque,
         data: ?*anyopaque,
     ) c_int;
     pub fn addDispatcher(
         proxy: *Proxy,
-        dispatcher: DispatcherFn,
+        dispatcher: *const DispatcherFn,
         implementation: ?*const anyopaque,
         data: ?*anyopaque,
     ) void {
