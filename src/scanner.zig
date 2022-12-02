@@ -747,8 +747,11 @@ const Interface = struct {
                 });
             }
 
-            for (interface.events) |event, opcode|
-                try event.emitFn(side, writer, interface, opcode);
+            for (interface.events) |event, opcode| {
+                if (event.since <= target_version) {
+                    try event.emitFn(side, writer, interface, opcode);
+                }
+            }
         }
 
         try writer.writeAll("};\n");
