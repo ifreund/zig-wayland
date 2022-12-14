@@ -682,7 +682,7 @@ pub const EventLoop = opaque {
         return wl_event_loop_add_idle(
             loop,
             struct {
-                fn _wrapper(_data: ?*anyopaque) callconv(.C) c_int {
+                fn _wrapper(_data: ?*anyopaque) callconv(.C) void {
                     return func(@ptrCast(T, @alignCast(@alignOf(T), _data)));
                 }
             }._wrapper,
