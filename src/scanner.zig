@@ -866,7 +866,11 @@ const Message = struct {
     fn emitFn(message: Message, side: Side, writer: anytype, interface: Interface, opcode: usize) !void {
         try writer.writeAll("pub fn ");
         if (side == .server) {
-            try writer.print("send{}", .{titleCase(message.name)});
+            if (message.kind == .destructor) {
+                try writer.print("destroySend{}", .{titleCase(message.name)});
+            } else {
+                try writer.print("send{}", .{titleCase(message.name)});
+            }
         } else {
             try writer.print("{}", .{camelCase(message.name)});
         }
@@ -962,6 +966,7 @@ const Message = struct {
         const args = if (message.args.len > 0) "&_args" else "null";
         if (side == .server) {
             try writer.print("_resource.postEvent({}, {s});", .{ opcode, args });
+            if (message.kind == .destructor) try writer.writeAll("_resource.destroy();");
         } else switch (message.kind) {
             .normal, .destructor => {
                 try writer.print("_proxy.marshal({}, {s});", .{ opcode, args });
