@@ -404,14 +404,14 @@ const Protocol = struct {
         if (protocol.copyright) |copyright| {
             var it = mem.split(u8, copyright, "\n");
             while (it.next()) |line| {
-                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.whitespace)});
             }
             try writer.writeByte('\n');
         }
         if (protocol.toplevel_description) |toplevel_description| {
             var it = mem.split(u8, toplevel_description, "\n");
             while (it.next()) |line| {
-                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.whitespace)});
             }
             try writer.writeByte('\n');
         }
@@ -555,7 +555,7 @@ const Interface = struct {
             \\ pub const generated_version = {[version]};
             \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
         , .{
-            .@"type" = titleCaseTrim(interface.name),
+            .type = titleCaseTrim(interface.name),
             .version = std.math.min(interface.version, target_version),
             .namespace = fmtId(namespace),
             .interface = fmtId(trimPrefix(interface.name)),
@@ -564,7 +564,7 @@ const Interface = struct {
         for (interface.enums) |e| {
             if (e.since <= target_version) {
                 try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
-                    .@"type" = titleCase(e.name),
+                    .type = titleCase(e.name),
                     .namespace = fmtId(namespace),
                     .interface = fmtId(trimPrefix(interface.name)),
                 });
@@ -579,7 +579,7 @@ const Interface = struct {
                 \\}}
             , .{
                 .interface = fmtId(trimPrefix(interface.name)),
-                .@"type" = titleCaseTrim(interface.name),
+                .type = titleCaseTrim(interface.name),
             });
 
             const has_event = for (interface.events) |event| {
@@ -607,7 +607,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
 
@@ -629,7 +629,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
         } else {
@@ -642,7 +642,7 @@ const Interface = struct {
                 \\    return @ptrCast(*{[type]}, server.wl.Resource.fromLink(_link));
                 \\}}
             , .{
-                .@"type" = titleCaseTrim(interface.name),
+                .type = titleCaseTrim(interface.name),
                 .interface = fmtId(trimPrefix(interface.name)),
             });
 
@@ -660,7 +660,7 @@ const Interface = struct {
                 , .{
                     .function = camelCase(func[0]),
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                     .return_type = camelCase(func[1]),
                 });
 
@@ -674,7 +674,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
 
@@ -716,7 +716,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             } else {
                 try writer.print(
@@ -743,7 +743,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
 

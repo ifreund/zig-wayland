@@ -124,10 +124,10 @@ pub const ScanProtocolsStep = struct {
 
         const wayland_dir = mem.trim(u8, try self.builder.exec(
             &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
-        ), &std.ascii.spaces);
+        ), &std.ascii.whitespace);
         const wayland_protocols_dir = mem.trim(u8, try self.builder.exec(
             &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
-        ), &std.ascii.spaces);
+        ), &std.ascii.whitespace);
 
         const wayland_xml = try fs.path.join(ally, &[_][]const u8{ wayland_dir, "wayland.xml" });
         try self.protocol_paths.append(wayland_xml);
@@ -137,9 +137,9 @@ pub const ScanProtocolsStep = struct {
             try self.protocol_paths.append(absolute_path);
         }
 
-        const out_path = try fs.path.join(ally, &[_][]const u8{ self.builder.cache_root, "zig-wayland" });
+        const out_path = try fs.path.join(ally, &[_][]const u8{ self.builder.cache_root.path.?, "zig-wayland" });
 
-        var root_dir = try fs.cwd().openDir(self.builder.build_root, .{});
+        var root_dir = try fs.cwd().openDir(self.builder.build_root.path.?, .{});
         defer root_dir.close();
         var out_dir = try root_dir.makeOpenPath(out_path, .{});
         defer out_dir.close();
@@ -167,8 +167,7 @@ pub const ScanProtocolsStep = struct {
         const basename_no_ext = basename[0..(basename.len - 4)];
         const code_filename = std.fmt.allocPrint(ally, "{s}-protocol.c", .{basename_no_ext}) catch oom();
         return fs.path.join(ally, &[_][]const u8{
-            self.builder.build_root,
-            self.builder.cache_root,
+            self.builder.cache_root.path.?,
             "zig-wayland",
             code_filename,
         }) catch oom();
