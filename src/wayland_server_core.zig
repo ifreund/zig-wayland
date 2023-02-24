@@ -368,6 +368,10 @@ pub const list = struct {
         prev: ?*Link,
         next: ?*Link,
 
+        pub fn init(link: *Link) void {
+            link.* = .{ .prev = link, .next = link };
+        }
+
         pub fn insertAfter(link: *Link, other: *Link) void {
             other.prev = link;
             other.next = link.next;
@@ -397,7 +401,7 @@ pub const list = struct {
             link: Link,
 
             pub fn init(head: *Self) void {
-                head.* = .{ .link = .{ .prev = &head.link, .next = &head.link } };
+                head.link.init();
             }
 
             pub fn prepend(head: *Self, elem: *T) void {
