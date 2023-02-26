@@ -372,7 +372,7 @@ pub const list = struct {
             link.* = .{ .prev = link, .next = link };
         }
 
-        pub fn insertAfter(link: *Link, other: *Link) void {
+        pub fn insert(link: *Link, other: *Link) void {
             other.prev = link;
             other.next = link.next;
             link.next = other;
@@ -383,6 +383,28 @@ pub const list = struct {
             link.prev.?.next = link.next;
             link.next.?.prev = link.prev;
             link.* = .{ .prev = null, .next = null };
+        }
+
+        pub fn replaceWith(link: *Link, other: *Link) void {
+            other.next = link.next;
+            other.next.?.prev = other;
+            other.prev = link.prev;
+            other.prev.?.next = other;
+
+            link.* = .{ .prev = null, .next = null };
+        }
+
+        pub fn swapWith(link: *Link, other: *Link) void {
+            const old_other_prev = other.prev.?;
+            other.remove();
+
+            link.replaceWith(other);
+
+            if (old_other_prev == link) {
+                other.insert(link);
+            } else {
+                old_other_prev.insert(link);
+            }
         }
     };
 
@@ -406,12 +428,12 @@ pub const list = struct {
 
             pub fn prepend(head: *Self, elem: *T) void {
                 const link = if (link_field) |f| &@field(elem, f) else elem.getLink();
-                head.link.insertAfter(link);
+                head.link.insert(link);
             }
 
             pub fn append(head: *Self, elem: *T) void {
                 const link = if (link_field) |f| &@field(elem, f) else elem.getLink();
-                head.link.prev.?.insertAfter(link);
+                head.link.prev.?.insert(link);
             }
 
             pub fn length(head: *const Self) usize {
@@ -577,7 +599,7 @@ pub fn Signal(comptime T: type) type {
                 const listener = @fieldParentPtr(Listener(T), "link", pos);
 
                 cursor.link.remove();
-                pos.insertAfter(&cursor.link);
+                pos.insert(&cursor.link);
 
                 listener.notify(listener, data);
             }

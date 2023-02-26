@@ -46,11 +46,10 @@ pub fn main() void {
             while (it.next()) |b| std.debug.print("{}\n", .{b.data});
         }
 
-        three.link.remove();
-        a.prepend(&three);
+        three.link.swapWith(&four.link);
 
         {
-            std.debug.print("reverse moved three\n", .{});
+            std.debug.print("reverse swapped 3/4\n", .{});
             var it = a.iterator(.reverse);
             while (it.next()) |b| std.debug.print("{}\n", .{b.data});
         }
@@ -81,11 +80,10 @@ pub fn main() void {
             while (it.next()) |b| std.debug.print("{}\n", .{b.data});
         }
 
-        three.link.remove();
-        a.prepend(&three);
+        two.link.swapWith(&five.link);
 
         {
-            std.debug.print("reverse moved three\n", .{});
+            std.debug.print("reverse swapped 2/5\n", .{});
             var it = a.iterator(.reverse);
             while (it.next()) |b| std.debug.print("{}\n", .{b.data});
         }
