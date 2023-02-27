@@ -415,7 +415,7 @@ pub const list = struct {
             link.next.?.prev = other.prev;
             link.next = other.next;
 
-            other.* = .{ .prev = null, .next = null };
+            other.init();
         }
     };
 
