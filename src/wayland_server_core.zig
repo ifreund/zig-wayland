@@ -443,7 +443,7 @@ pub const list = struct {
         return @Type(.{
             .Enum = .{
                 .layout = .Auto,
-                .tag_type = std.math.IntFittingRange(0, field_infos.len - 1),
+                .tag_type = std.math.IntFittingRange(0, field_infos.len -| 1),
                 .fields = &enum_fields,
                 .decls = &.{},
                 .is_exhaustive = true,
