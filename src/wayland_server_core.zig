@@ -424,37 +424,10 @@ pub const list = struct {
         reverse,
     };
 
-    /// Compared to std.meta.FieldEnum this version returns an empty enum for opaque types
-    /// and only supports structs and opaque types.
-    pub fn FieldEnum(comptime T: type) type {
-        const field_infos = switch (@typeInfo(T)) {
-            .Struct => |info| info.fields,
-            .Opaque => [_]void{},
-            else => unreachable,
-        };
-
-        var enum_fields: [field_infos.len]std.builtin.Type.EnumField = undefined;
-        for (field_infos) |field, i| {
-            enum_fields[i] = .{
-                .name = field.name,
-                .value = i,
-            };
-        }
-        return @Type(.{
-            .Enum = .{
-                .layout = .Auto,
-                .tag_type = std.math.IntFittingRange(0, field_infos.len -| 1),
-                .fields = &enum_fields,
-                .decls = &.{},
-                .is_exhaustive = true,
-            },
-        });
-    }
-
     /// This has the same ABI as wl.list.Link/wl_list. If link_field is null, then
     /// T.getLink()/T.fromLink() will be used. This allows for compatiability
     /// with wl.Client and wl.Resource
-    pub fn Head(comptime T: type, comptime link_field: ?FieldEnum(T)) type {
+    pub fn Head(comptime T: type, comptime link_field: ?@Type(.EnumLiteral)) type {
         return extern struct {
             const Self = @This();
 
