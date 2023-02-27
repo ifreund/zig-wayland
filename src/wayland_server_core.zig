@@ -406,6 +406,17 @@ pub const list = struct {
                 old_other_prev.insert(link);
             }
         }
+
+        /// private helper that doesn't handle empty lists and assumes that
+        /// other is the link of a Head.
+        fn insertList(link: *Link, other: *Link) void {
+            other.next.?.prev = link;
+            other.prev.?.next = link.next;
+            link.next.?.prev = other.prev;
+            link.next = other.next;
+
+            other.* = .{ .prev = null, .next = null };
+        }
     };
 
     pub const Direction = enum {
@@ -463,6 +474,16 @@ pub const list = struct {
                 head.link.prev.?.insert(link);
             }
 
+            pub fn prependList(head: *Self, other: *Self) void {
+                if (other.empty()) return;
+                head.link.insertList(&other.link);
+            }
+
+            pub fn appendList(head: *Self, other: *Self) void {
+                if (other.empty()) return;
+                head.link.prev.?.insertList(&other.link);
+            }
+
             pub fn length(head: *const Self) usize {
                 var count: usize = 0;
                 var current = head.link.next.?;
@@ -474,14 +495,6 @@ pub const list = struct {
 
             pub fn empty(head: *const Self) bool {
                 return head.link.next == &head.link;
-            }
-
-            pub fn insertList(head: *Self, other: *Self) void {
-                if (other.empty()) return;
-                other.link.next.?.prev = head.link;
-                other.link.prev.?.next = head.link.next;
-                head.link.next.?.prev = other.link.prev;
-                head.link.next = other.link.next;
             }
 
             /// Removal of elements during iteration is illegal

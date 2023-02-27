@@ -27,23 +27,31 @@ pub fn main() void {
         var one = B{ .data = 1 };
         var two = B{ .data = 2 };
         var three = B{ .data = 3 };
-        var four = B{ .data = 4 };
-        var five = B{ .data = 5 };
 
         std.debug.print("length: {} empty: {}\n", .{ a.length(), a.empty() });
 
         a.append(&one);
         a.append(&two);
         a.append(&three);
-        a.append(&four);
-        a.append(&five);
+
+        std.debug.print("length: {} empty: {}\n", .{ a.length(), a.empty() });
+
+        var b: wl.list.Head(B, .link) = undefined;
+        b.init();
+
+        var four = B{ .data = 4 };
+        var five = B{ .data = 5 };
+        b.append(&four);
+        b.append(&five);
+
+        a.appendList(&b);
 
         std.debug.print("length: {} empty: {}\n", .{ a.length(), a.empty() });
 
         {
             std.debug.print("forward\n", .{});
             var it = a.iterator(.forward);
-            while (it.next()) |b| std.debug.print("{}\n", .{b.data});
+            while (it.next()) |x| std.debug.print("{}\n", .{x.data});
         }
 
         three.link.swapWith(&four.link);
@@ -51,7 +59,7 @@ pub fn main() void {
         {
             std.debug.print("reverse swapped 3/4\n", .{});
             var it = a.iterator(.reverse);
-            while (it.next()) |b| std.debug.print("{}\n", .{b.data});
+            while (it.next()) |x| std.debug.print("{}\n", .{x.data});
         }
     }
     {
