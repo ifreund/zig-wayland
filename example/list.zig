@@ -21,7 +21,7 @@ const C = struct {
 
 pub fn main() void {
     {
-        var a: wl.list.Head(B, "link") = undefined;
+        var a: wl.list.Head(B, .link) = undefined;
         a.init();
 
         var one = B{ .data = 1 };
