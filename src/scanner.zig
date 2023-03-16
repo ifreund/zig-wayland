@@ -1265,6 +1265,10 @@ fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
             _: std.fmt.FormatOptions,
             writer: anytype,
         ) !void {
+            if (case == .camel and std.zig.Token.getKeyword(bytes) != null) {
+                try writer.print("@\"{s}\"", .{bytes});
+                return;
+            }
             var upper = case == .title;
             var str = if (trim) trimPrefix(bytes) else bytes;
             for (str) |c| {
