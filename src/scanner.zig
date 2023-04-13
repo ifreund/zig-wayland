@@ -404,14 +404,14 @@ const Protocol = struct {
         if (protocol.copyright) |copyright| {
             var it = mem.split(u8, copyright, "\n");
             while (it.next()) |line| {
-                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.whitespace)});
             }
             try writer.writeByte('\n');
         }
         if (protocol.toplevel_description) |toplevel_description| {
             var it = mem.split(u8, toplevel_description, "\n");
             while (it.next()) |line| {
-                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.whitespace)});
             }
             try writer.writeByte('\n');
         }

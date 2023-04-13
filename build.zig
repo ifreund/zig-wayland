@@ -3,11 +3,11 @@ const zbs = std.build;
 const fs = std.fs;
 const mem = std.mem;
 
-pub fn build(b: *zbs.Builder) void {
+pub fn build(b: *zbs.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const scanner = ScanProtocolsStep.create(b);
+    const scanner = try ScanProtocolsStep.createAuto(b);
     const wayland = zbs.Pkg{
         .name = "wayland",
         .source = .{ .generated = &scanner.result },
@@ -63,33 +63,52 @@ pub fn build(b: *zbs.Builder) void {
 pub const ScanProtocolsStep = struct {
     const scanner = @import("src/scanner.zig");
 
+    pub const Options = struct {
+        wayland_dir: []const u8,
+        wayland_protocols_dir: []const u8,
+
+        pub fn auto(builder: *zbs.Builder) !Options {
+            return .{
+                .wayland_dir = mem.trim(u8, try builder.exec(
+                    &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
+                ), &std.ascii.whitespace),
+                .wayland_protocols_dir = mem.trim(u8, try builder.exec(
+                    &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
+                ), &std.ascii.whitespace),
+            };
+        }
+    };
+
     builder: *zbs.Builder,
+    options: Options,
     step: zbs.Step,
     result: zbs.GeneratedFile,
 
     /// Absolute paths to protocol xml
     protocol_paths: std.ArrayList([]const u8),
-    /// Paths relative to the system wayland-protocol directory
-    system_protocols: std.ArrayList([]const u8),
     targets: std.ArrayList(scanner.Target),
 
     /// Artifacts requiring the C interface definitions to be linked in.
     /// TODO remove this after Zig issue #131 is implemented.
     artifacts: std.ArrayList(*zbs.LibExeObjStep),
 
-    pub fn create(builder: *zbs.Builder) *ScanProtocolsStep {
+    pub fn create(builder: *zbs.Builder, options: Options) *ScanProtocolsStep {
         const ally = builder.allocator;
         const self = ally.create(ScanProtocolsStep) catch oom();
         self.* = .{
             .builder = builder,
+            .options = options,
             .step = zbs.Step.init(.custom, "Scan Protocols", ally, make),
             .result = .{ .step = &self.step, .path = null },
             .protocol_paths = std.ArrayList([]const u8).init(ally),
-            .system_protocols = std.ArrayList([]const u8).init(ally),
             .targets = std.ArrayList(scanner.Target).init(ally),
             .artifacts = std.ArrayList(*zbs.LibExeObjStep).init(ally),
         };
         return self;
+    }
+
+    pub fn createAuto(builder: *zbs.Builder) !*ScanProtocolsStep {
+        return ScanProtocolsStep.create(builder, try Options.auto(builder));
     }
 
     /// Scan the protocol xml at the given absolute or relative path
@@ -100,7 +119,10 @@ pub const ScanProtocolsStep = struct {
     /// Scan the protocol xml provided by the wayland-protocols
     /// package given the relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
     pub fn addSystemProtocol(self: *ScanProtocolsStep, relative_path: []const u8) void {
-        self.system_protocols.append(relative_path) catch oom();
+        self.addProtocolPath(fs.path.join(self.builder.allocator, &[_][]const u8 {
+            self.options.wayland_protocols_dir,
+            relative_path,
+        }) catch oom());
     }
 
     /// Generate code for the given global interface at the given version,
@@ -122,20 +144,8 @@ pub const ScanProtocolsStep = struct {
         const self = @fieldParentPtr(ScanProtocolsStep, "step", step);
         const ally = self.builder.allocator;
 
-        const wayland_dir = mem.trim(u8, try self.builder.exec(
-            &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" },
-        ), &std.ascii.spaces);
-        const wayland_protocols_dir = mem.trim(u8, try self.builder.exec(
-            &[_][]const u8{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" },
-        ), &std.ascii.spaces);
-
-        const wayland_xml = try fs.path.join(ally, &[_][]const u8{ wayland_dir, "wayland.xml" });
+        const wayland_xml = try fs.path.join(ally, &[_][]const u8{ self.options.wayland_dir, "wayland.xml" });
         try self.protocol_paths.append(wayland_xml);
-
-        for (self.system_protocols.items) |relative_path| {
-            const absolute_path = try fs.path.join(ally, &[_][]const u8{ wayland_protocols_dir, relative_path });
-            try self.protocol_paths.append(absolute_path);
-        }
 
         const out_path = try fs.path.join(ally, &[_][]const u8{ self.builder.cache_root, "zig-wayland" });
 
