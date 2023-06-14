@@ -23,15 +23,48 @@ pub const Target = struct {
     version: u32,
 };
 
-pub fn scan(
-    root_dir: fs.Dir,
-    out_dir: fs.Dir,
+pub fn main() !void {
+    defer assert(general_purpose_allocator.deinit() == .ok);
+
+    var protocols = std.ArrayList([]const u8).init(gpa);
+    defer protocols.deinit();
+
+    var targets = std.ArrayList(Target).init(gpa);
+    defer targets.deinit();
+
+    var out_path_opt: ?[]const u8 = null;
+
+    var args = std.process.args();
+
+    while (args.next()) |arg| {
+        if (mem.eql(u8, arg, "-i")) {
+            const protocol_path = args.next() orelse return error.MissingArg;
+            try protocols.append(protocol_path);
+        } else if (mem.eql(u8, arg, "-g")) {
+            const name = args.next() orelse return error.MissingArg;
+            const version = args.next() orelse return error.MissingArg;
+            try targets.append(.{
+                .name = name,
+                .version = try std.fmt.parseInt(u32, version, 10),
+            });
+        } else if (mem.eql(u8, arg, "-o")) {
+            out_path_opt = args.next() orelse return error.MissingArg;
+        }
+    }
+
+    const out_path = out_path_opt orelse return error.MissingArg;
+    try scan(out_path, protocols.items, targets.items);
+}
+
+fn scan(
+    out_path: []const u8,
     protocols: []const []const u8,
     targets: []const Target,
 ) !void {
-    defer assert(!general_purpose_allocator.deinit());
+    const out_dir_path = fs.path.dirname(out_path) orelse return error.InvalidOutPath;
+    const out_dir = try fs.cwd().openDir(out_dir_path, .{});
 
-    const wayland_file = try out_dir.createFile("wayland.zig", .{});
+    const wayland_file = try out_dir.createFile(fs.path.basename(out_path), .{});
     try wayland_file.writeAll(
         \\pub const client = @import("client.zig");
         \\pub const server = @import("server.zig");
@@ -42,7 +75,7 @@ pub fn scan(
     defer scanner.deinit();
 
     for (protocols) |xml_path| {
-        try scanner.scanProtocol(root_dir, out_dir, xml_path);
+        try scanner.scanProtocol(out_dir, xml_path);
     }
 
     if (scanner.remaining_targets.items.len != 0) {
@@ -148,8 +181,8 @@ const Scanner = struct {
         map.deinit();
     }
 
-    fn scanProtocol(scanner: *Scanner, root_dir: fs.Dir, out_dir: fs.Dir, xml_path: []const u8) !void {
-        const xml_file = try root_dir.openFile(xml_path, .{});
+    fn scanProtocol(scanner: *Scanner, out_dir: fs.Dir, xml_path: []const u8) !void {
+        const xml_file = try fs.cwd().openFile(xml_path, .{});
         defer xml_file.close();
 
         var arena = std.heap.ArenaAllocator.init(gpa);
@@ -161,7 +194,7 @@ const Scanner = struct {
             os.exit(1);
         };
 
-        var buffered_writer: std.io.BufferedWriter(4096, std.fs.File.Writer) = .{
+        var buffered_writer: std.io.BufferedWriter(4096, fs.File.Writer) = .{
             .unbuffered_writer = undefined,
         };
         {
@@ -404,14 +437,14 @@ const Protocol = struct {
         if (protocol.copyright) |copyright| {
             var it = mem.split(u8, copyright, "\n");
             while (it.next()) |line| {
-                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.whitespace)});
             }
             try writer.writeByte('\n');
         }
         if (protocol.toplevel_description) |toplevel_description| {
             var it = mem.split(u8, toplevel_description, "\n");
             while (it.next()) |line| {
-                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.spaces)});
+                try writer.print("// {s}\n", .{mem.trim(u8, line, &std.ascii.whitespace)});
             }
             try writer.writeByte('\n');
         }
@@ -555,7 +588,7 @@ const Interface = struct {
             \\ pub const generated_version = {[version]};
             \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
         , .{
-            .@"type" = titleCaseTrim(interface.name),
+            .type = titleCaseTrim(interface.name),
             .version = std.math.min(interface.version, target_version),
             .namespace = fmtId(namespace),
             .interface = fmtId(trimPrefix(interface.name)),
@@ -564,7 +597,7 @@ const Interface = struct {
         for (interface.enums) |e| {
             if (e.since <= target_version) {
                 try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
-                    .@"type" = titleCase(e.name),
+                    .type = titleCase(e.name),
                     .namespace = fmtId(namespace),
                     .interface = fmtId(trimPrefix(interface.name)),
                 });
@@ -579,7 +612,7 @@ const Interface = struct {
                 \\}}
             , .{
                 .interface = fmtId(trimPrefix(interface.name)),
-                .@"type" = titleCaseTrim(interface.name),
+                .type = titleCaseTrim(interface.name),
             });
 
             const has_event = for (interface.events) |event| {
@@ -607,12 +640,12 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
 
             var has_destroy = false;
-            for (interface.requests) |request, opcode| {
+            for (interface.requests, 0..) |request, opcode| {
                 if (request.since <= target_version) {
                     if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
                     try request.emitFn(side, writer, interface, opcode);
@@ -629,7 +662,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
         } else {
@@ -642,7 +675,7 @@ const Interface = struct {
                 \\    return @ptrCast(*{[type]}, server.wl.Resource.fromLink(_link));
                 \\}}
             , .{
-                .@"type" = titleCaseTrim(interface.name),
+                .type = titleCaseTrim(interface.name),
                 .interface = fmtId(trimPrefix(interface.name)),
             });
 
@@ -660,7 +693,7 @@ const Interface = struct {
                 , .{
                     .function = camelCase(func[0]),
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                     .return_type = camelCase(func[1]),
                 });
 
@@ -674,7 +707,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
 
@@ -716,7 +749,7 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             } else {
                 try writer.print(
@@ -743,11 +776,11 @@ const Interface = struct {
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
-                    .@"type" = titleCaseTrim(interface.name),
+                    .type = titleCaseTrim(interface.name),
                 });
             }
 
-            for (interface.events) |event, opcode| {
+            for (interface.events, 0..) |event, opcode| {
                 if (event.since <= target_version) {
                     try event.emitFn(side, writer, interface, opcode);
                 }

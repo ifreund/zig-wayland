@@ -83,18 +83,18 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
             _: *const Message,
             args: [*]Argument,
         ) callconv(.C) c_int {
-            inline for (@typeInfo(Payload).Union.fields) |payload_field, payload_num| {
+            inline for (@typeInfo(Payload).Union.fields, 0..) |payload_field, payload_num| {
                 if (payload_num == opcode) {
-                    var payload_data: payload_field.field_type = undefined;
-                    if (payload_field.field_type != void) {
-                        inline for (@typeInfo(payload_field.field_type).Struct.fields) |f, i| {
-                            switch (@typeInfo(f.field_type)) {
+                    var payload_data: payload_field.type = undefined;
+                    if (payload_field.type != void) {
+                        inline for (@typeInfo(payload_field.type).Struct.fields, 0..) |f, i| {
+                            switch (@typeInfo(f.type)) {
                                 // signed/unsigned ints, fds, new_ids, bitfield enums
-                                .Int, .Struct => @field(payload_data, f.name) = @bitCast(f.field_type, args[i].u),
+                                .Int, .Struct => @field(payload_data, f.name) = @bitCast(f.type, args[i].u),
                                 // objects, strings, arrays
-                                .Pointer, .Optional => @field(payload_data, f.name) = @intToPtr(f.field_type, @ptrToInt(args[i].o)),
+                                .Pointer, .Optional => @field(payload_data, f.name) = @intToPtr(f.type, @ptrToInt(args[i].o)),
                                 // non-bitfield enums
-                                .Enum => @field(payload_data, f.name) = @intToEnum(f.field_type, args[i].i),
+                                .Enum => @field(payload_data, f.name) = @intToEnum(f.type, args[i].i),
                                 else => unreachable,
                             }
                         }
