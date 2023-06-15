@@ -7,7 +7,7 @@ pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const scanner = Scanner.create(b, "src/scanner.zig");
+    const scanner = Scanner.create(b);
     defer scanner.finish();
 
     const wayland = b.createModule(.{ .source_file = scanner.result });
@@ -74,10 +74,11 @@ pub const Scanner = struct {
     compiles: std.ArrayListUnmanaged(*Build.Step.Compile) = .{},
     protocols: std.ArrayListUnmanaged([]const u8) = .{},
 
-    pub fn create(b: *Build, path: []const u8) *Scanner {
+    pub fn create(b: *Build) *Scanner {
+        const zig_wayland_dir = fs.path.dirname(@src().file) orelse ".";
         const exe = b.addExecutable(.{
             .name = "zig-wayland-scanner",
-            .root_source_file = .{ .path = path },
+            .root_source_file = .{ .path = b.pathJoin(&.{ zig_wayland_dir, "src/scanner.zig" }) },
         });
 
         const run = b.addRunArtifact(exe);
@@ -98,7 +99,7 @@ pub const Scanner = struct {
         {
             const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
             const wayland_dir = mem.trim(u8, pc_output, &std.ascii.whitespace);
-            const wayland_xml = fs.path.join(b.allocator, &.{ wayland_dir, "wayland.xml" }) catch @panic("OOM");
+            const wayland_xml = b.pathJoin(&.{ wayland_dir, "wayland.xml" });
 
             run.addArg("-i");
             run.addFileSourceArg(.{ .path = wayland_xml });
@@ -111,7 +112,7 @@ pub const Scanner = struct {
     /// at the given relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
     pub fn addSystemProtocol(scanner: *Scanner, path: []const u8) void {
         const b = scanner.run.step.owner;
-        const absolute_path = fs.path.join(b.allocator, &.{ scanner.system_protocol_path, path }) catch @panic("OOM");
+        const absolute_path = b.pathJoin(&.{ scanner.system_protocol_path, path });
 
         scanner.run.addArg("-i");
         scanner.run.addFileSourceArg(.{ .path = absolute_path });
