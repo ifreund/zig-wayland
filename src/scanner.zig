@@ -589,7 +589,7 @@ const Interface = struct {
             \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
         , .{
             .type = titleCaseTrim(interface.name),
-            .version = std.math.min(interface.version, target_version),
+            .version = @min(interface.version, target_version),
             .namespace = fmtId(namespace),
             .interface = fmtId(trimPrefix(interface.name)),
         });
@@ -942,7 +942,7 @@ const Message = struct {
         } else {
             // wl_registry.bind for example needs special handling
             if (message.kind == .constructor and message.kind.constructor == null) {
-                try writer.writeAll("const version_to_construct = std.math.min(T.generated_version, _version);");
+                try writer.writeAll("const version_to_construct = @min(T.generated_version, _version);");
             }
             try writer.writeAll("const _proxy: *client.wl.Proxy = @ptrCast(_");
         }
