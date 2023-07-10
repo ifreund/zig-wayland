@@ -635,7 +635,7 @@ const Interface = struct {
                     \\    _data: T,
                     \\) void {{
                     \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
-                    \\    const _mut_data = @intToPtr(?*anyopaque, @ptrToInt(_data));
+                    \\    const _mut_data = @ptrFromInt(?*anyopaque, @intFromPtr(_data));
                     \\    _proxy.addDispatcher(common.Dispatcher({[type]}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{
@@ -703,7 +703,7 @@ const Interface = struct {
             if (has_error) {
                 try writer.print(
                     \\pub fn postError({[interface]}: *{[type]}, _err: Error, _message: [*:0]const u8) void {{
-                    \\    return @ptrCast(*server.wl.Resource, {[interface]}).postError(@intCast(u32, @enumToInt(_err)), _message);
+                    \\    return @ptrCast(*server.wl.Resource, {[interface]}).postError(@intCast(u32, @intFromEnum(_err)), _message);
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
@@ -736,12 +736,12 @@ const Interface = struct {
                     \\    _resource.setDispatcher(
                     \\        common.Dispatcher({[type]}, T).dispatcher,
                     \\        handle_request,
-                    \\        @intToPtr(?*anyopaque, @ptrToInt(_data)),
+                    \\        @ptrFromInt(?*anyopaque, @intFromPtr(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.always_inline, _handler, .{{
                     \\                    @ptrCast(*{[type]}, __resource),
-                    \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
+                    \\                    @ptrFromInt(T, @intFromPtr(__resource.getUserData())),
                     \\                }});
                     \\            }}
                     \\        }}._wrapper else null,
@@ -763,12 +763,12 @@ const Interface = struct {
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
-                    \\        @intToPtr(?*anyopaque, @ptrToInt(_data)),
+                    \\        @ptrFromInt(?*anyopaque, @intFromPtr(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.always_inline, _handler, .{{
                     \\                    @ptrCast(*{[type]}, __resource),
-                    \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
+                    \\                    @ptrFromInt(T, @intFromPtr(__resource.getUserData())),
                     \\                }});
                     \\            }}
                     \\        }}._wrapper else null,
@@ -964,7 +964,7 @@ const Message = struct {
                             const c_type = if (arg.kind == .uint) "u32" else "i32";
                             try writer.print(
                                 \\ )) {{
-                                \\    .Enum => @intCast({[ct]s}, @enumToInt(_{[an]})),
+                                \\    .Enum => @intCast({[ct]s}, @intFromEnum(_{[an]})),
                                 \\    .Struct => @bitCast(u32, _{[an]}),
                                 \\    else => unreachable,
                                 \\ }}
