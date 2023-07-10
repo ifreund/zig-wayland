@@ -15,7 +15,7 @@ pub fn main() !void {
 fn listener(registry: *wl.Registry, event: wl.Registry.Event, running: *bool) void {
     switch (event) {
         .global => |global| {
-            if (std.cstr.cmp(global.interface, wl.Seat.getInterface().name) == 0) {
+            if (std.mem.orderZ(u8, global.interface, wl.Seat.getInterface().name) == .eq) {
                 const seat = registry.bind(global.name, wl.Seat, 1) catch return;
                 seat.setListener(*bool, seatListener, running);
             }
