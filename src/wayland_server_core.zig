@@ -556,7 +556,7 @@ pub fn Listener(comptime T: type) type {
             else
                 struct {
                     fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.C) void {
-                        @call(.always_inline, notify, .{ listener, @intToPtr(T, @ptrToInt(data)) });
+                        @call(.always_inline, notify, .{ listener, @ptrFromInt(T, @intFromPtr(data)) });
                     }
                 }.wrapper;
         }
