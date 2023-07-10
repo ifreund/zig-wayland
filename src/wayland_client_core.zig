@@ -119,7 +119,7 @@ pub const EglWindow = opaque {
 pub const CursorTheme = opaque {
     extern fn wl_cursor_theme_load(name: ?[*:0]const u8, size: c_int, shm: *client.wl.Shm) ?*CursorTheme;
     pub fn load(name: ?[*:0]const u8, size: i32, shm: *client.wl.Shm) error{LoadThemeFailed}!*CursorTheme {
-        return wl_cursor_theme_load(name, @intCast(c_int, size), shm) orelse error.LoadThemeFailed;
+        return wl_cursor_theme_load(name, @intCast(size), shm) orelse error.LoadThemeFailed;
     }
 
     extern fn wl_cursor_theme_destroy(wl_cursor_theme: *CursorTheme) void;

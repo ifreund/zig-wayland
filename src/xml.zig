@@ -197,7 +197,7 @@ pub const Parser = struct {
 
         if (parseEntity(p.document[1..], &p.char_buffer)) |semi| {
             const codepoint = mem.bytesToValue(u32, &p.char_buffer);
-            const n = std.unicode.utf8Encode(@intCast(u21, codepoint), &p.char_buffer) catch return null;
+            const n = std.unicode.utf8Encode(@intCast(codepoint), &p.char_buffer) catch return null;
             p.document = p.document[semi + 2 ..];
             p.mode = .chars;
             return Event{ .character_data = p.char_buffer[0..n] };
@@ -294,7 +294,7 @@ pub const Attribute = struct {
         if (attr.raw_value[0] == '&') {
             if (Parser.parseEntity(attr.raw_value[1..], &attr.char_buffer)) |semi| {
                 const codepoint = mem.bytesToValue(u32, &attr.char_buffer);
-                const n = std.unicode.utf8Encode(@intCast(u21, codepoint), &attr.char_buffer) catch return null;
+                const n = std.unicode.utf8Encode(@intCast(codepoint), &attr.char_buffer) catch return null;
                 attr.raw_value = attr.raw_value[semi + 2 ..];
                 return attr.char_buffer[0..n];
             } else {
