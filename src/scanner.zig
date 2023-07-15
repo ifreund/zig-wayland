@@ -589,7 +589,7 @@ const Interface = struct {
             \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
         , .{
             .type = titleCaseTrim(interface.name),
-            .version = std.math.min(interface.version, target_version),
+            .version = @min(interface.version, target_version),
             .namespace = fmtId(namespace),
             .interface = fmtId(trimPrefix(interface.name)),
         });
@@ -607,7 +607,7 @@ const Interface = struct {
         if (side == .client) {
             try writer.print(
                 \\pub fn setQueue(_{[interface]}: *{[type]}, _queue: *client.wl.EventQueue) void {{
-                \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
+                \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
                 \\    _proxy.setQueue(_queue);
                 \\}}
             , .{
@@ -634,8 +634,8 @@ const Interface = struct {
                     \\    _listener: *const fn ({[interface]}: *{[type]}, event: Event, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
-                    \\    const _mut_data = @intToPtr(?*anyopaque, @ptrToInt(_data));
+                    \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
+                    \\    const _mut_data: ?*anyopaque = @ptrCast(_data);
                     \\    _proxy.addDispatcher(common.Dispatcher({[type]}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{
@@ -657,7 +657,7 @@ const Interface = struct {
             } else if (!has_destroy) {
                 try writer.print(
                     \\pub fn destroy(_{[interface]}: *{[type]}) void {{
-                    \\    const _proxy = @ptrCast(*client.wl.Proxy, _{[interface]});
+                    \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
                     \\    _proxy.destroy();
                     \\}}
                 , .{
@@ -668,11 +668,11 @@ const Interface = struct {
         } else {
             try writer.print(
                 \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{(tc)} {{
-                \\    return @ptrCast(*{[type]}, try server.wl.Resource.create(_client, {[type]}, _version, _id));
+                \\    return @as(*{[type]}, @ptrCast(try server.wl.Resource.create(_client, {[type]}, _version, _id)));
                 \\}}pub fn destroy(_{[interface]}: *{[type]}) void {{
-                \\    return @ptrCast(*server.wl.Resource, _{[interface]}).destroy();
+                \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]})).destroy();
                 \\}}pub fn fromLink(_link: *server.wl.list.Link) *{[type]} {{
-                \\    return @ptrCast(*{[type]}, server.wl.Resource.fromLink(_link));
+                \\    return @as(*{[type]}, @ptrCast(server.wl.Resource.fromLink(_link)));
                 \\}}
             , .{
                 .type = titleCaseTrim(interface.name),
@@ -688,7 +688,8 @@ const Interface = struct {
             }) |func|
                 try writer.print(
                     \\pub fn {[function]}(_{[interface]}: *{[type]}) {[return_type]} {{
-                    \\    return @ptrCast(*server.wl.Resource, _{[interface]}).{[function]}();
+                    \\    const resource: *server.wl.Resource = @ptrCast(_{[interface]});
+                    \\    return resource.{[function]}();
                     \\}}
                 , .{
                     .function = camelCase(func[0]),
@@ -703,7 +704,8 @@ const Interface = struct {
             if (has_error) {
                 try writer.print(
                     \\pub fn postError({[interface]}: *{[type]}, _err: Error, _message: [*:0]const u8) void {{
-                    \\    return @ptrCast(*server.wl.Resource, {[interface]}).postError(@intCast(u32, @enumToInt(_err)), _message);
+                    \\    const resource: *server.wl.Resource = @ptrCast({[interface]});
+                    \\    return resource.postError(@intCast(@intFromEnum(_err)), _message);
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
@@ -732,16 +734,16 @@ const Interface = struct {
                     \\    comptime handle_destroy: ?fn (_{[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, _{[interface]});
+                    \\    const _resource: *server.wl.Resource  = @ptrCast(_{[interface]});
                     \\    _resource.setDispatcher(
                     \\        common.Dispatcher({[type]}, T).dispatcher,
                     \\        handle_request,
-                    \\        @intToPtr(?*anyopaque, @ptrToInt(_data)),
+                    \\        @as(?*anyopaque, @ptrFromInt(@intFromPtr(_data))),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.always_inline, _handler, .{{
-                    \\                    @ptrCast(*{[type]}, __resource),
-                    \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
+                    \\                    @as(*{[type]}, @ptrCast(__resource)),
+                    \\                    @as(T, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
                     \\                }});
                     \\            }}
                     \\        }}._wrapper else null,
@@ -759,16 +761,16 @@ const Interface = struct {
                     \\    comptime handle_destroy: ?fn (_{[interface]}: *{[type]}, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _resource = @ptrCast(*server.wl.Resource, _{[interface]});
+                    \\    const _resource: *server.wl.Resource = @ptrCast(_{[interface]});
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
-                    \\        @intToPtr(?*anyopaque, @ptrToInt(_data)),
+                    \\        @as(?*anyopaque, @intFromPtr(@intFromPtr(_data))),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.always_inline, _handler, .{{
-                    \\                    @ptrCast(*{[type]}, __resource),
-                    \\                    @intToPtr(T, @ptrToInt(__resource.getUserData())),
+                    \\                    @as(*{[type]}, @ptrCast(__resource)),
+                    \\                    @as(T, @ptrFromInt(@intFromPtr(__resource.getUserData))),
                     \\                }});
                     \\            }}
                     \\        }}._wrapper else null,
@@ -938,13 +940,13 @@ const Message = struct {
             try writer.writeAll(") !*T {");
         }
         if (side == .server) {
-            try writer.writeAll("const _resource = @ptrCast(*server.wl.Resource,_");
+            try writer.writeAll("const _resource: *server.wl.Resource = @ptrCast(_");
         } else {
             // wl_registry.bind for example needs special handling
             if (message.kind == .constructor and message.kind.constructor == null) {
-                try writer.writeAll("const version_to_construct = std.math.min(T.generated_version, _version);");
+                try writer.writeAll("const version_to_construct = @min(T.generated_version, _version);");
             }
-            try writer.writeAll("const _proxy = @ptrCast(*client.wl.Proxy,_");
+            try writer.writeAll("const _proxy: *client.wl.Proxy = @ptrCast(_");
         }
         try writer.print("{});", .{fmtId(trimPrefix(interface.name))});
         if (message.args.len > 0) {
@@ -964,8 +966,8 @@ const Message = struct {
                             const c_type = if (arg.kind == .uint) "u32" else "i32";
                             try writer.print(
                                 \\ )) {{
-                                \\    .Enum => @intCast({[ct]s}, @enumToInt(_{[an]})),
-                                \\    .Struct => @bitCast(u32, _{[an]}),
+                                \\    .Enum => @as({[ct]s}, @intCast(@intFromEnum(_{[an]}))),
+                                \\    .Struct => @as(u32,  @bitCast(_{[an]})),
                                 \\    else => unreachable,
                                 \\ }}
                             , .{ .ct = c_type, .an = fmtId(arg.name) });
@@ -977,11 +979,11 @@ const Message = struct {
                     .object, .new_id => |new_iface| {
                         if (arg.kind == .object or side == .server) {
                             if (arg.allow_null) {
-                                try writer.writeAll(".{ .o = @ptrCast(?*common.Object, _");
+                                try writer.writeAll(".{ .o = @as(?*common.Object, @ptrCast(_");
                             } else {
-                                try writer.writeAll(".{ .o = @ptrCast(*common.Object, _");
+                                try writer.writeAll(".{ .o = @as(*common.Object, @ptrCast(_");
                             }
-                            try writer.print("{s}) }},", .{arg.name});
+                            try writer.print("{s})) }},", .{arg.name});
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
@@ -1007,14 +1009,14 @@ const Message = struct {
             },
             .constructor => |new_iface| {
                 if (new_iface) |i| {
-                    try writer.writeAll("return @ptrCast(*");
+                    try writer.writeAll("return @as(*");
                     try printAbsolute(side, writer, i);
-                    try writer.print(", try _proxy.marshalConstructor({}, &_args, ", .{opcode});
+                    try writer.print(", @ptrCast(try _proxy.marshalConstructor({}, &_args, ", .{opcode});
                     try printAbsolute(side, writer, i);
-                    try writer.writeAll(".getInterface()));");
+                    try writer.writeAll(".getInterface())));");
                 } else {
                     try writer.print(
-                        \\return @ptrCast(*T, try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.getInterface(), version_to_construct));
+                        \\return @as(*T, @ptrCast(try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.getInterface(), version_to_construct)));
                     , .{
                         .opcode = opcode,
                     });

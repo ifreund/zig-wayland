@@ -35,7 +35,7 @@ pub const Array = extern struct {
     pub fn slice(array: Array, comptime T: type) []T {
         const data = array.data orelse return &[0]T{};
         // The wire protocol/libwayland only guarantee 32-bit word alignment.
-        const ptr = @ptrCast([*]T, @alignCast(4, data));
+        const ptr = @as([*]align(4) T, @ptrCast(data));
         return ptr[0..@divExact(array.size, @sizeOf(T))];
     }
 };
@@ -45,19 +45,19 @@ pub const Fixed = enum(i32) {
     _,
 
     pub fn toInt(f: Fixed) i24 {
-        return @truncate(i24, @enumToInt(f) >> 8);
+        return @as(i24, @truncate(@intFromEnum(f) >> 8));
     }
 
     pub fn fromInt(i: i24) Fixed {
-        return @intToEnum(Fixed, @as(i32, i) << 8);
+        return @as(Fixed, @enumFromInt(@as(i32, i) << 8));
     }
 
     pub fn toDouble(f: Fixed) f64 {
-        return @intToFloat(f64, @enumToInt(f)) / 256;
+        return @as(f64, @floatFromInt(@intFromEnum(f))) / 256;
     }
 
     pub fn fromDouble(d: f64) Fixed {
-        return @intToEnum(Fixed, @floatToInt(i32, d * 256));
+        return @as(Fixed, @enumFromInt(@as(i32, @intFromFloat(d * 256))));
     }
 };
 
@@ -90,21 +90,21 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
                         inline for (@typeInfo(payload_field.type).Struct.fields, 0..) |f, i| {
                             switch (@typeInfo(f.type)) {
                                 // signed/unsigned ints, fds, new_ids, bitfield enums
-                                .Int, .Struct => @field(payload_data, f.name) = @bitCast(f.type, args[i].u),
+                                .Int, .Struct => @field(payload_data, f.name) = @as(f.type, @bitCast(args[i].u)),
                                 // objects, strings, arrays
-                                .Pointer, .Optional => @field(payload_data, f.name) = @intToPtr(f.type, @ptrToInt(args[i].o)),
+                                .Pointer, .Optional => @field(payload_data, f.name) = @as(f.type, @ptrFromInt(@intFromPtr(args[i].o))),
                                 // non-bitfield enums
-                                .Enum => @field(payload_data, f.name) = @intToEnum(f.type, args[i].i),
+                                .Enum => @field(payload_data, f.name) = @as(f.type, @enumFromInt(args[i].i)),
                                 else => unreachable,
                             }
                         }
                     }
 
                     const HandlerFn = fn (*Obj, Payload, Data) void;
-                    @ptrCast(*const HandlerFn, @alignCast(@alignOf(HandlerFn), implementation))(
-                        @ptrCast(*Obj, object),
+                    @as(*const HandlerFn, @ptrCast(@alignCast(implementation)))(
+                        @as(*Obj, @ptrCast(object)),
                         @unionInit(Payload, payload_field.name, payload_data),
-                        @intToPtr(Data, @ptrToInt(object.getUserData())),
+                        @as(Data, @ptrFromInt(@intFromPtr(object.getUserData()))),
                     );
 
                     return 0;

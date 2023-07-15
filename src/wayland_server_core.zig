@@ -95,7 +95,7 @@ pub const Server = opaque {
             server,
             struct {
                 fn wrapper(_client: *const Client, _global: *const Global, _data: ?*anyopaque) callconv(.C) bool {
-                    filter(_client, _global, @ptrCast(T, @alignCast(@alignOf(T), _data)));
+                    filter(_client, _global, @as(T, @ptrCast(@alignCast(_data))));
                 }
             }._wrapper,
             data,
@@ -130,7 +130,7 @@ pub const Server = opaque {
             server,
             struct {
                 fn _wrapper(_data: ?*anyopaque, _direction: ProtocolLogger.Type, _message: *const ProtocolLogger.LogMessage) callconv(.C) void {
-                    func(@ptrCast(T, @alignCast(@alignOf(T), _data)), _direction, _message);
+                    func(@as(T, @ptrCast(@alignCast(_data))), _direction, _message);
                 }
             },
             data,
@@ -201,7 +201,7 @@ pub const Client = opaque {
             client,
             struct {
                 fn _wrapper(_resource: *Resource, _data: ?*anyopaque) callconv(.C) IteratorResult {
-                    return iterator(_resource, @ptrCast(T, @alignCast(@alignOf(T), _data)));
+                    return iterator(_resource, @as(T, @ptrCast(@alignCast(_data))));
                 }
             }._wrapper,
             data,
@@ -234,11 +234,11 @@ pub const Global = opaque {
         return wl_global_create(
             server,
             T.getInterface(),
-            @intCast(c_int, version),
+            @as(c_int, @intCast(version)),
             data,
             struct {
                 fn _wrapper(_client: *Client, _data: ?*anyopaque, _version: u32, _id: u32) callconv(.C) void {
-                    bind(_client, @ptrCast(DataT, @alignCast(@alignOf(DataT), _data)), _version, _id);
+                    bind(_client, @as(DataT, @ptrCast(@alignCast(_data))), _version, _id);
                 }
             }._wrapper,
         ) orelse error.GlobalCreateFailed;
@@ -262,7 +262,7 @@ pub const Resource = opaque {
     pub inline fn create(client: *Client, comptime T: type, version: u32, id: u32) error{ResourceCreateFailed}!*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
-        return wl_resource_create(client, T.getInterface(), @intCast(c_int, version), id) orelse error.ResourceCreateFailed;
+        return wl_resource_create(client, T.getInterface(), @as(c_int, @intCast(version)), id) orelse error.ResourceCreateFailed;
     }
 
     extern fn wl_resource_destroy(resource: *Resource) void;
@@ -328,7 +328,7 @@ pub const Resource = opaque {
         // The fact that wl_resource.version is a int in libwayland is
         // a mistake. Negative versions are impossible and u32 is used
         // everywhere else in libwayland
-        return @intCast(u32, wl_resource_get_version(resource));
+        return @as(u32, @intCast(wl_resource_get_version(resource)));
     }
 
     // TOOD: unsure if this should be bound
@@ -556,7 +556,7 @@ pub fn Listener(comptime T: type) type {
             else
                 struct {
                     fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.C) void {
-                        @call(.always_inline, notify, .{ listener, @intToPtr(T, @ptrToInt(data)) });
+                        @call(.always_inline, notify, .{ listener, @as(T, @ptrFromInt(@intFromPtr(data))) });
                     }
                 }.wrapper;
         }
@@ -653,7 +653,7 @@ pub const EventLoop = opaque {
             mask,
             struct {
                 fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.C) c_int {
-                    return func(_fd, _mask, @ptrCast(T, @alignCast(@alignOf(T), _data)));
+                    return func(_fd, _mask, @as(T, @ptrCast(@alignCast(_data))));
                 }
             }._wrapper,
             data,
@@ -675,7 +675,7 @@ pub const EventLoop = opaque {
             loop,
             struct {
                 fn _wrapper(_data: ?*anyopaque) callconv(.C) c_int {
-                    return func(@ptrCast(T, @alignCast(@alignOf(T), _data)));
+                    return func(@as(T, @ptrCast(@alignCast(_data))));
                 }
             }._wrapper,
             data,
@@ -700,7 +700,7 @@ pub const EventLoop = opaque {
             signal_number,
             struct {
                 fn _wrapper(_signal_number: c_int, _data: ?*anyopaque) callconv(.C) c_int {
-                    return func(_signal_number, @ptrCast(T, @alignCast(@alignOf(T), _data)));
+                    return func(_signal_number, @as(T, @ptrCast(@alignCast(_data))));
                 }
             }._wrapper,
             data,
@@ -722,7 +722,7 @@ pub const EventLoop = opaque {
             loop,
             struct {
                 fn _wrapper(_data: ?*anyopaque) callconv(.C) void {
-                    return func(@ptrCast(T, @alignCast(@alignOf(T), _data)));
+                    return func(@as(T, @ptrCast(@alignCast(_data))));
                 }
             }._wrapper,
             data,
