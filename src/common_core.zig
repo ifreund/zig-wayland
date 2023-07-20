@@ -32,10 +32,10 @@ pub const Array = extern struct {
         };
     }
 
-    pub fn slice(array: Array, comptime T: type) []T {
+    pub fn slice(array: Array, comptime T: type) []align(4) T {
         const data = array.data orelse return &[0]T{};
         // The wire protocol/libwayland only guarantee 32-bit word alignment.
-        const ptr: [*]T = @ptrCast(@alignCast(data));
+        const ptr: [*]align(4) T = @ptrCast(@alignCast(data));
         return ptr[0..@divExact(array.size, @sizeOf(T))];
     }
 };
