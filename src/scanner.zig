@@ -740,7 +740,7 @@ const Interface = struct {
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
                     \\                @call(.always_inline, _handler, .{{
-                    \\                    @as({[type]}, @ptrCast(__resource)),
+                    \\                    @as(*{[type]}, @ptrCast(__resource)),
                     \\                    @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
                     \\                }});
                     \\            }}
