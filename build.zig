@@ -65,7 +65,7 @@ pub fn build(b: *Build) void {
 
 pub const Scanner = struct {
     run: *Build.Step.Run,
-    result: Build.FileSource,
+    result: Build.LazyPath,
 
     /// Path to the system protocol directory, stored to avoid invoking pkg-config N times.
     system_protocol_path: []const u8,
@@ -102,7 +102,7 @@ pub const Scanner = struct {
             const wayland_xml = b.pathJoin(&.{ wayland_dir, "wayland.xml" });
 
             run.addArg("-i");
-            run.addFileSourceArg(.{ .path = wayland_xml });
+            run.addFileArg(.{ .path = wayland_xml });
         }
 
         return scanner;
@@ -115,7 +115,7 @@ pub const Scanner = struct {
         const absolute_path = b.pathJoin(&.{ scanner.system_protocol_path, path });
 
         scanner.run.addArg("-i");
-        scanner.run.addFileSourceArg(.{ .path = absolute_path });
+        scanner.run.addFileArg(.{ .path = absolute_path });
 
         scanner.protocols.append(b.allocator, absolute_path) catch @panic("OOM");
     }
@@ -125,7 +125,7 @@ pub const Scanner = struct {
         const b = scanner.run.step.owner;
 
         scanner.run.addArg("-i");
-        scanner.run.addFileSourceArg(.{ .path = path });
+        scanner.run.addFileArg(.{ .path = path });
 
         scanner.protocols.append(b.allocator, b.dupe(path)) catch @panic("OOM");
     }
@@ -165,9 +165,9 @@ pub const Scanner = struct {
             const c_source = cmd.addOutputFileArg(out_name);
 
             for (scanner.compiles.items) |compile| {
-                compile.addCSourceFileSource(.{
-                    .source = c_source,
-                    .args = &.{ "-std=c99", "-O2" },
+                compile.addCSourceFile(.{
+                    .file = c_source,
+                    .flags = &.{ "-std=c99", "-O2" },
                 });
             }
         }
