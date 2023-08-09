@@ -1,6 +1,6 @@
 # zig-wayland
 
-Zig 0.10 bindings and protocol scanner for libwayland.
+Zig 0.11 bindings and protocol scanner for libwayland.
 
 ## Usage
 
