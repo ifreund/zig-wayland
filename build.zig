@@ -8,7 +8,6 @@ pub fn build(b: *Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const scanner = Scanner.create(b);
-    defer scanner.finish();
 
     const wayland = b.createModule(.{ .source_file = scanner.result });
 
@@ -72,7 +71,7 @@ pub const Scanner = struct {
 
     // TODO remove these when the workaround for zig issue #131 is no longer needed.
     compiles: std.ArrayListUnmanaged(*Build.Step.Compile) = .{},
-    protocols: std.ArrayListUnmanaged([]const u8) = .{},
+    c_sources: std.ArrayListUnmanaged(Build.LazyPath) = .{},
 
     pub fn create(b: *Build) *Scanner {
         const zig_wayland_dir = fs.path.dirname(@src().file) orelse ".";
@@ -108,8 +107,9 @@ pub const Scanner = struct {
         return scanner;
     }
 
-    /// Scan protocol xml provided by the wayland-protocols package
-    /// at the given relative path (e.g. "stable/xdg-shell/xdg-shell.xml")
+    /// Scan protocol xml provided by the wayland-protocols package at the
+    /// given path relative to the system wayland-protocols installation
+    /// (e.g. "stable/xdg-shell/xdg-shell.xml")
     pub fn addSystemProtocol(scanner: *Scanner, path: []const u8) void {
         const b = scanner.run.step.owner;
         const absolute_path = b.pathJoin(&.{ scanner.system_protocol_path, path });
@@ -117,17 +117,15 @@ pub const Scanner = struct {
         scanner.run.addArg("-i");
         scanner.run.addFileArg(.{ .path = absolute_path });
 
-        scanner.protocols.append(b.allocator, absolute_path) catch @panic("OOM");
+        scanner.generateCSource(absolute_path);
     }
 
     /// Scan the protocol xml at the given path
     pub fn addCustomProtocol(scanner: *Scanner, path: []const u8) void {
-        const b = scanner.run.step.owner;
-
         scanner.run.addArg("-i");
         scanner.run.addFileArg(.{ .path = path });
 
-        scanner.protocols.append(b.allocator, b.dupe(path)) catch @panic("OOM");
+        scanner.generateCSource(path);
     }
 
     /// Generate code for the given global interface at the given version,
@@ -145,31 +143,34 @@ pub const Scanner = struct {
     /// Generate and add the necessary C source to the compilation unit.
     /// Once https://github.com/ziglang/zig/issues/131 is resolved we can remove this.
     pub fn addCSource(scanner: *Scanner, compile: *Build.Step.Compile) void {
-        scanner.compiles.append(scanner.run.step.owner.allocator, compile) catch @panic("OOM");
-    }
-
-    /// This only exists as we need to generate and link C code due to the fact that we can't
-    /// create self-referential static data in zig yet.
-    /// TODO remove this after https://github.com/ziglang/zig/issues/131 is implemented.
-    pub fn finish(scanner: *Scanner) void {
         const b = scanner.run.step.owner;
 
-        for (scanner.protocols.items) |protocol| {
-            const cmd = b.addSystemCommand(&.{ "wayland-scanner", "private-code", protocol });
-
-            // Extension is .xml, so slice off the last 4 characters
-            const basename = fs.path.basename(protocol);
-            const basename_no_ext = basename[0..(basename.len - 4)];
-            const out_name = mem.concat(b.allocator, u8, &.{ basename_no_ext, "-protocol.c" }) catch @panic("OOM");
-
-            const c_source = cmd.addOutputFileArg(out_name);
-
-            for (scanner.compiles.items) |compile| {
-                compile.addCSourceFile(.{
-                    .file = c_source,
-                    .flags = &.{ "-std=c99", "-O2" },
-                });
-            }
+        for (scanner.c_sources.items) |c_source| {
+            compile.addCSourceFile(.{
+                .file = c_source,
+                .flags = &.{ "-std=c99", "-O2" },
+            });
         }
+
+        scanner.compiles.append(b.allocator, compile) catch @panic("OOM");
+    }
+
+    /// Once https://github.com/ziglang/zig/issues/131 is resolved we can remove this.
+    fn generateCSource(scanner: *Scanner, protocol: []const u8) void {
+        const b = scanner.run.step.owner;
+        const cmd = b.addSystemCommand(&.{ "wayland-scanner", "private-code", protocol });
+
+        const out_name = mem.concat(b.allocator, u8, &.{ fs.path.stem(protocol), "-protocol.c" }) catch @panic("OOM");
+
+        const c_source = cmd.addOutputFileArg(out_name);
+
+        for (scanner.compiles.items) |compile| {
+            compile.addCSourceFile(.{
+                .file = c_source,
+                .flags = &.{ "-std=c99", "-O2" },
+            });
+        }
+
+        scanner.c_sources.append(b.allocator, c_source) catch @panic("OOM");
     }
 };
