@@ -7,7 +7,7 @@ pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const scanner = Scanner.create(b);
+    const scanner = Scanner.create(b, .{});
 
     const wayland = b.createModule(.{ .source_file = scanner.result });
 
@@ -67,13 +67,31 @@ pub const Scanner = struct {
     result: Build.LazyPath,
 
     /// Path to the system protocol directory, stored to avoid invoking pkg-config N times.
-    system_protocol_path: []const u8,
+    wayland_protocols_path: []const u8,
 
     // TODO remove these when the workaround for zig issue #131 is no longer needed.
     compiles: std.ArrayListUnmanaged(*Build.Step.Compile) = .{},
     c_sources: std.ArrayListUnmanaged(Build.LazyPath) = .{},
 
-    pub fn create(b: *Build) *Scanner {
+    pub const Options = struct {
+        /// Path to the wayland.xml file.
+        /// If null, the output of `pkg-config --variable=pkgdatadir wayland-scanner` will be used.
+        wayland_xml_path: ?[]const u8 = null,
+        /// Path to the wayland-protocols installation.
+        /// If null, the output of `pkg-config --variable=pkgdatadir wayland-protocols` will be used.
+        wayland_protocols_path: ?[]const u8 = null,
+    };
+
+    pub fn create(b: *Build, options: Options) *Scanner {
+        const wayland_xml_path = options.wayland_xml_path orelse blk: {
+            const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
+            break :blk b.pathJoin(&.{ mem.trim(u8, pc_output, &std.ascii.whitespace), "wayland.xml" });
+        };
+        const wayland_protocols_path = options.wayland_protocols_path orelse blk: {
+            const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" });
+            break :blk mem.trim(u8, pc_output, &std.ascii.whitespace);
+        };
+
         const zig_wayland_dir = fs.path.dirname(@src().file) orelse ".";
         const exe = b.addExecutable(.{
             .name = "zig-wayland-scanner",
@@ -85,42 +103,32 @@ pub const Scanner = struct {
         run.addArg("-o");
         const result = run.addOutputFileArg("wayland.zig");
 
+        run.addArg("-i");
+        run.addFileArg(.{ .path = wayland_xml_path });
+
         const scanner = b.allocator.create(Scanner) catch @panic("OOM");
         scanner.* = .{
             .run = run,
             .result = result,
-            .system_protocol_path = blk: {
-                const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" });
-                break :blk mem.trim(u8, pc_output, &std.ascii.whitespace);
-            },
+            .wayland_protocols_path = wayland_protocols_path,
         };
-
-        {
-            const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
-            const wayland_dir = mem.trim(u8, pc_output, &std.ascii.whitespace);
-            const wayland_xml = b.pathJoin(&.{ wayland_dir, "wayland.xml" });
-
-            run.addArg("-i");
-            run.addFileArg(.{ .path = wayland_xml });
-        }
 
         return scanner;
     }
 
-    /// Scan protocol xml provided by the wayland-protocols package at the
-    /// given path relative to the system wayland-protocols installation
-    /// (e.g. "stable/xdg-shell/xdg-shell.xml")
-    pub fn addSystemProtocol(scanner: *Scanner, path: []const u8) void {
+    /// Scan protocol xml provided by the wayland-protocols package at the given path
+    /// relative to the wayland-protocols installation. (e.g. "stable/xdg-shell/xdg-shell.xml")
+    pub fn addSystemProtocol(scanner: *Scanner, relative_path: []const u8) void {
         const b = scanner.run.step.owner;
-        const absolute_path = b.pathJoin(&.{ scanner.system_protocol_path, path });
+        const full_path = b.pathJoin(&.{ scanner.wayland_protocols_path, relative_path });
 
         scanner.run.addArg("-i");
-        scanner.run.addFileArg(.{ .path = absolute_path });
+        scanner.run.addFileArg(.{ .path = full_path });
 
-        scanner.generateCSource(absolute_path);
+        scanner.generateCSource(full_path);
     }
 
-    /// Scan the protocol xml at the given path
+    /// Scan the protocol xml at the given path.
     pub fn addCustomProtocol(scanner: *Scanner, path: []const u8) void {
         scanner.run.addArg("-i");
         scanner.run.addFileArg(.{ .path = path });
