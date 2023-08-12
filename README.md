@@ -4,20 +4,21 @@ Zig 0.11 bindings and protocol scanner for libwayland.
 
 ## Usage
 
-A `ScanProtocolsStep` is provided which you may integrate with your
-`build.zig`:
+A `Scanner` interface is provided which you may integrate with your `build.zig`:
 
 ```zig
 const std = @import("std");
-const Builder = std.build.Builder;
 
-const ScanProtocolsStep = @import("zig-wayland/build.zig").ScanProtocolsStep;
+const Scanner = @import("deps/zig-wayland/build.zig").Scanner;
 
-pub fn build(b: *Builder) void {
+pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
 
-    const scanner = ScanProtocolsStep.create(b);
+    const scanner = Scanner.create(b, .{});
+
+    const wayland = b.createModule(.{ .source_file = scanner.result });
+
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("staging/ext-session-lock/ext-session-lock-v1.xml");
     scanner.addProtocolPath("protocol/private_foobar.xml");
@@ -27,33 +28,31 @@ pub fn build(b: *Builder) void {
     // ensuring forwards compatibility with newer protocol xml.
     // This will also generate code for interfaces created using the provided
     // global interface, in this example wl_keyboard, wl_pointer, xdg_surface,
-    // xdg_toplevel, etc. would be generated.
+    // xdg_toplevel, etc. would be generated as well.
     scanner.generate("wl_seat", 4);
     scanner.generate("xdg_wm_base", 3);
     scanner.generate("ext_session_lock_manager_v1", 1);
     scanner.generate("private_foobar_manager", 1);
 
-    const exe = b.addExecutable("foo", "foo.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
-
-    exe.addPackage(.{
-        .name = "wayland",
-        .source = .{ .generated = &scanner.result },
+    const exe = b.addExecutable(.{
+        .name = "foobar",
+        .root_source_file = .{ .path = "foobar.zig" },
+        .target = target,
+        .optimize = optimize,
     });
-    exe.step.dependOn(&scanner.step);
+
+    exe.addModule("wayland", wayland);
     exe.linkLibC();
     exe.linkSystemLibrary("wayland-client");
 
     // TODO: remove when https://github.com/ziglang/zig/issues/131 is implemented
     scanner.addCSource(exe);
 
-    exe.install();
+    b.installArtifact(exe);
 }
-
 ```
 
-Then, you may import the provided package in your project:
+Then, you may import the provided module in your project:
 
 ```zig
 const wayland = @import("wayland");
