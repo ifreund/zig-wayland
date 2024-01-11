@@ -60,7 +60,7 @@ const wl = wayland.client.wl;
 ```
 
 There is an example project using zig-wayland here:
-[hello-zig-wayland](https://github.com/ifreund/hello-zig-wayland).
+[hello-zig-wayland](https://codeberg.org/ifreund/hello-zig-wayland).
 
 Note that zig-wayland does not currently do extensive verification of Wayland
 protocol xml or provide good error messages if protocol xml is invalid. It is
