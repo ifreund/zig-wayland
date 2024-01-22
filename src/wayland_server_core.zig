@@ -253,6 +253,9 @@ pub const Global = opaque {
     extern fn wl_global_get_interface(global: *const Global) *const Interface;
     pub const getInterface = wl_global_get_interface;
 
+    extern fn wl_global_get_name(global: *const Global, client: *const Client) u32;
+    pub const getName = wl_global_get_name;
+
     extern fn wl_global_get_user_data(global: *const Global) ?*anyopaque;
     pub const getUserData = wl_global_get_user_data;
 };
