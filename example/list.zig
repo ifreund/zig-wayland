@@ -15,7 +15,7 @@ const C = struct {
     }
 
     pub fn fromLink(link: *wl.list.Link) *C {
-        return @fieldParentPtr(C, "link", link);
+        return @fieldParentPtr("link", link);
     }
 };
 

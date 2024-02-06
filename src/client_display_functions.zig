@@ -15,38 +15,38 @@ extern fn wl_display_get_fd(display: *Display) c_int;
 pub const getFd = wl_display_get_fd;
 
 extern fn wl_display_dispatch(display: *Display) c_int;
-pub inline fn dispatch(display: *Display) os.E {
-    return os.errno(wl_display_dispatch(display));
+pub inline fn dispatch(display: *Display) posix.E {
+    return posix.errno(wl_display_dispatch(display));
 }
 
 extern fn wl_display_dispatch_queue(display: *Display, queue: *client.wl.EventQueue) c_int;
-pub inline fn dispatchQueue(display: *Display, queue: *client.wl.EventQueue) os.E {
-    return os.errno(wl_display_dispatch_queue(display, queue));
+pub inline fn dispatchQueue(display: *Display, queue: *client.wl.EventQueue) posix.E {
+    return posix.errno(wl_display_dispatch_queue(display, queue));
 }
 
 extern fn wl_display_dispatch_pending(display: *Display) c_int;
-pub inline fn dispatchPending(display: *Display) os.E {
-    return os.errno(wl_display_dispatch_pending(display));
+pub inline fn dispatchPending(display: *Display) posix.E {
+    return posix.errno(wl_display_dispatch_pending(display));
 }
 
 extern fn wl_display_dispatch_queue_pending(display: *Display, queue: *client.wl.EventQueue) c_int;
-pub inline fn dispatchQueuePending(display: *Display, queue: *client.wl.EventQueue) os.E {
-    return os.errno(wl_display_dispatch_queue_pending(display, queue));
+pub inline fn dispatchQueuePending(display: *Display, queue: *client.wl.EventQueue) posix.E {
+    return posix.errno(wl_display_dispatch_queue_pending(display, queue));
 }
 
 extern fn wl_display_roundtrip(display: *Display) c_int;
-pub inline fn roundtrip(display: *Display) os.E {
-    return os.errno(wl_display_roundtrip(display));
+pub inline fn roundtrip(display: *Display) posix.E {
+    return posix.errno(wl_display_roundtrip(display));
 }
 
 extern fn wl_display_roundtrip_queue(display: *Display, queue: *client.wl.EventQueue) c_int;
-pub inline fn roundtripQueue(display: *Display, queue: *client.wl.EventQueue) os.E {
-    return os.errno(wl_display_roundtrip_queue(display, queue));
+pub inline fn roundtripQueue(display: *Display, queue: *client.wl.EventQueue) posix.E {
+    return posix.errno(wl_display_roundtrip_queue(display, queue));
 }
 
 extern fn wl_display_flush(display: *Display) c_int;
-pub inline fn flush(display: *Display) os.E {
-    return os.errno(wl_display_flush(display));
+pub inline fn flush(display: *Display) posix.E {
+    return posix.errno(wl_display_flush(display));
 }
 
 extern fn wl_display_create_queue(display: *Display) ?*client.wl.EventQueue;
@@ -83,6 +83,6 @@ extern fn wl_display_cancel_read(display: *Display) void;
 pub const cancelRead = wl_display_cancel_read;
 
 extern fn wl_display_read_events(display: *Display) c_int;
-pub inline fn readEvents(display: *Display) os.E {
-    return os.errno(wl_display_read_events(display));
+pub inline fn readEvents(display: *Display) posix.E {
+    return posix.errno(wl_display_read_events(display));
 }

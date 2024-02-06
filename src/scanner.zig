@@ -1,8 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const posix = std.posix;
 const fs = std.fs;
 const mem = std.mem;
-const os = std.os;
 const fmtId = std.zig.fmtId;
 
 const log = std.log.scoped(.@"zig-wayland");
@@ -82,7 +82,7 @@ fn scan(
         log.err("requested global interface '{s}' not found in provided protocol xml", .{
             scanner.remaining_targets.items[0].name,
         });
-        os.exit(1);
+        posix.exit(1);
     }
 
     {
@@ -191,7 +191,7 @@ const Scanner = struct {
         const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
         const protocol = Protocol.parseXML(arena.allocator(), xml_bytes) catch |err| {
             log.err("failed to parse {s}: {s}", .{ xml_path, @errorName(err) });
-            os.exit(1);
+            posix.exit(1);
         };
 
         var buffered_writer: std.io.BufferedWriter(4096, fs.File.Writer) = .{
@@ -455,12 +455,11 @@ const Protocol = struct {
         switch (side) {
             .client => try writer.writeAll(
                 \\const std = @import("std");
-                \\const os = std.os;
+                \\const posix = std.posix;
                 \\const client = @import("wayland.zig").client;
                 \\const common = @import("common.zig");
             ),
             .server => try writer.writeAll(
-                \\const os = @import("std").os;
                 \\const server = @import("wayland.zig").server;
                 \\const common = @import("common.zig");
             ),
@@ -480,7 +479,7 @@ const Protocol = struct {
                             target.version,
                             global.interface.version,
                         });
-                        os.exit(1);
+                        posix.exit(1);
                     }
                     try global.interface.emit(side, target.version, protocol.namespace, writer);
                     for (global.children) |child| {
@@ -871,7 +870,7 @@ const Message = struct {
     }
 
     fn emitField(message: Message, side: Side, writer: anytype) !void {
-        try writer.print("{s}", .{fmtId(message.name)});
+        try writer.print("{}", .{fmtId(message.name)});
         if (message.args.len == 0) {
             try writer.writeAll(": void,");
             return;
@@ -1222,7 +1221,7 @@ const Enum = struct {
         try writer.writeAll(" = enum(c_int) {");
         for (e.entries) |entry| {
             if (entry.since <= target_version) {
-                try writer.print("{s}= {s},", .{ fmtId(entry.name), entry.value });
+                try writer.print("{}= {s},", .{ fmtId(entry.name), entry.value });
             }
         }
         // Always generate non-exhaustive enums to ensure forward compatability.
@@ -1301,7 +1300,7 @@ fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
                 return;
             }
             var upper = case == .title;
-            var str = if (trim) trimPrefix(bytes) else bytes;
+            const str = if (trim) trimPrefix(bytes) else bytes;
             for (str) |c| {
                 if (c == '_') {
                     upper = true;

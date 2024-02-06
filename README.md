@@ -1,6 +1,6 @@
 # zig-wayland
 
-Zig 0.11 bindings and protocol scanner for libwayland.
+Zig 0.12 bindings and protocol scanner for libwayland.
 
 The main repository is on [codeberg](https://codeberg.org/ifreund/zig-wayland),
 which is where the issue tracker may be found and where contributions are accepted.
@@ -14,16 +14,17 @@ A `Scanner` interface is provided which you may integrate with your `build.zig`:
 
 ```zig
 const std = @import("std");
+const Build = std.Build;
 
-const Scanner = @import("deps/zig-wayland/build.zig").Scanner;
+const Scanner = @import("zig-wayland").Scanner;
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     const scanner = Scanner.create(b, .{});
 
-    const wayland = b.createModule(.{ .source_file = scanner.result });
+    const wayland = b.createModule(.{ .root_source_file = scanner.result });
 
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("staging/ext-session-lock/ext-session-lock-v1.xml");
@@ -47,7 +48,7 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
     });
 
-    exe.addModule("wayland", wayland);
+    exe.root_module.addImport("wayland", wayland);
     exe.linkLibC();
     exe.linkSystemLibrary("wayland-client");
 

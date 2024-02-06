@@ -1,0 +1,12 @@
+.{
+    .name = "zig-wayland",
+    // There are not yet any tagged releases of zig-wayland
+    .version = "0.0.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+    },
+    .dependencies = .{},
+}

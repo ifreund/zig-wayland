@@ -1,5 +1,5 @@
 const std = @import("std");
-const os = std.os;
+const posix = std.posix;
 
 const common = @import("common.zig");
 pub const Object = common.Object;
@@ -155,11 +155,11 @@ pub const Client = opaque {
     pub const fromLink = wl_client_from_link;
 
     const Credentials = struct {
-        pid: os.pid_t,
-        gid: os.gid_t,
-        uid: os.uid_t,
+        pid: posix.pid_t,
+        gid: posix.gid_t,
+        uid: posix.uid_t,
     };
-    extern fn wl_client_get_credentials(client: *Client, pid: *os.pid_t, uid: *os.uid_t, gid: *os.gid_t) void;
+    extern fn wl_client_get_credentials(client: *Client, pid: *posix.pid_t, uid: *posix.uid_t, gid: *posix.gid_t) void;
     pub fn getCredentials(client: *Client) Credentials {
         var credentials: Credentials = undefined;
         wl_client_get_credentials(client, &credentials.pid, &credentials.uid, &credentials.gid);
@@ -552,7 +552,7 @@ pub const list = struct {
 
             fn elemFromLink(link: *Link) *T {
                 if (link_field) |f| {
-                    return @fieldParentPtr(T, @tagName(f), link);
+                    return @fieldParentPtr(@tagName(f), link);
                 } else {
                     return T.fromLink(link);
                 }
@@ -642,7 +642,7 @@ pub fn Signal(comptime T: type) type {
 
             while (cursor.link.next != &end.link) {
                 const pos = cursor.link.next.?;
-                const listener = @fieldParentPtr(Listener(T), "link", pos);
+                const listener: *Listener(T) = @fieldParentPtr("link", pos);
 
                 cursor.link.remove();
                 pos.insert(&cursor.link);
@@ -765,10 +765,10 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_dispatch(loop: *EventLoop, timeout: c_int) c_int;
     pub fn dispatch(loop: *EventLoop, timeout: c_int) !void {
         const rc = wl_event_loop_dispatch(loop, timeout);
-        switch (os.errno(rc)) {
+        switch (posix.errno(rc)) {
             .SUCCESS => return,
             // TODO
-            else => |err| return os.unexpectedErrno(err),
+            else => |err| return posix.unexpectedErrno(err),
         }
     }
 
@@ -797,20 +797,20 @@ pub const EventSource = opaque {
     extern fn wl_event_source_fd_update(source: *EventSource, mask: u32) c_int;
     pub fn fdUpdate(source: *EventSource, mask: u32) !void {
         const rc = wl_event_source_fd_update(source, mask);
-        switch (os.errno(rc)) {
+        switch (posix.errno(rc)) {
             .SUCCESS => return,
             // TODO
-            else => |err| return os.unexpectedErrno(err),
+            else => |err| return posix.unexpectedErrno(err),
         }
     }
 
     extern fn wl_event_source_timer_update(source: *EventSource, ms_delay: c_int) c_int;
     pub fn timerUpdate(source: *EventSource, ms_delay: c_int) !void {
         const rc = wl_event_source_timer_update(source, ms_delay);
-        switch (os.errno(rc)) {
+        switch (posix.errno(rc)) {
             .SUCCESS => return,
             // TODO
-            else => |err| return os.unexpectedErrno(err),
+            else => |err| return posix.unexpectedErrno(err),
         }
     }
 };

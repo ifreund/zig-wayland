@@ -9,7 +9,7 @@ pub fn build(b: *Build) void {
 
     const scanner = Scanner.create(b, .{});
 
-    const wayland = b.createModule(.{ .source_file = scanner.result });
+    const wayland = b.createModule(.{ .root_source_file = scanner.result });
 
     scanner.generate("wl_compositor", 1);
     scanner.generate("wl_shm", 1);
@@ -24,7 +24,7 @@ pub fn build(b: *Build) void {
             .optimize = optimize,
         });
 
-        exe.addModule("wayland", wayland);
+        exe.root_module.addImport("wayland", wayland);
         scanner.addCSource(exe);
         exe.linkLibC();
         exe.linkSystemLibrary("wayland-client");
@@ -40,7 +40,7 @@ pub fn build(b: *Build) void {
             .optimize = optimize,
         });
 
-        scanner_tests.addModule("wayland", wayland);
+        scanner_tests.root_module.addImport("wayland", wayland);
 
         test_step.dependOn(&scanner_tests.step);
     }
@@ -51,7 +51,7 @@ pub fn build(b: *Build) void {
             .optimize = optimize,
         });
 
-        ref_all.addModule("wayland", wayland);
+        ref_all.root_module.addImport("wayland", wayland);
         scanner.addCSource(ref_all);
         ref_all.linkLibC();
         ref_all.linkSystemLibrary("wayland-client");
@@ -84,11 +84,11 @@ pub const Scanner = struct {
 
     pub fn create(b: *Build, options: Options) *Scanner {
         const wayland_xml_path = options.wayland_xml_path orelse blk: {
-            const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
+            const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
             break :blk b.pathJoin(&.{ mem.trim(u8, pc_output, &std.ascii.whitespace), "wayland.xml" });
         };
         const wayland_protocols_path = options.wayland_protocols_path orelse blk: {
-            const pc_output = b.exec(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" });
+            const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" });
             break :blk mem.trim(u8, pc_output, &std.ascii.whitespace);
         };
 
@@ -96,6 +96,7 @@ pub const Scanner = struct {
         const exe = b.addExecutable(.{
             .name = "zig-wayland-scanner",
             .root_source_file = .{ .path = b.pathJoin(&.{ zig_wayland_dir, "src/scanner.zig" }) },
+            .target = b.host,
         });
 
         const run = b.addRunArtifact(exe);
