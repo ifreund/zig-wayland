@@ -3,7 +3,7 @@
 Zig 0.11 bindings and protocol scanner for libwayland.
 
 The main repository is on [codeberg](https://codeberg.org/ifreund/zig-wayland),
-this is where the issue tracker may be found and where contributions are accepted.
+which is where the issue tracker may be found and where contributions are accepted.
 
 Read-only mirrors exist on [sourcehut](https://git.sr.ht/~ifreund/zig-wayland)
 and [github](https://github.com/ifreund/zig-wayland).
