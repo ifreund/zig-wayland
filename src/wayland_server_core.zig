@@ -95,7 +95,7 @@ pub const Server = opaque {
             server,
             struct {
                 fn _wrapper(_client: *const Client, _global: *const Global, _data: ?*anyopaque) callconv(.C) bool {
-                    filter(_client, _global, @ptrCast(@alignCast(_data)));
+                    return filter(_client, _global, @ptrCast(@alignCast(_data)));
                 }
             }._wrapper,
             data,
