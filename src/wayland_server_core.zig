@@ -441,13 +441,11 @@ pub const list = struct {
             }
 
             pub fn prepend(head: *Self, elem: *T) void {
-                const link = if (link_field) |f| &@field(elem, @tagName(f)) else elem.getLink();
-                head.link.insert(link);
+                head.link.insert(linkFromElem(elem));
             }
 
             pub fn append(head: *Self, elem: *T) void {
-                const link = if (link_field) |f| &@field(elem, @tagName(f)) else elem.getLink();
-                head.link.prev.?.insert(link);
+                head.link.prev.?.insert(linkFromElem(elem));
             }
 
             pub fn prependList(head: *Self, other: *Self) void {
@@ -458,6 +456,22 @@ pub const list = struct {
             pub fn appendList(head: *Self, other: *Self) void {
                 if (other.empty()) return;
                 head.link.prev.?.insertList(&other.link);
+            }
+
+            pub fn first(head: *Self) ?*T {
+                if (head.empty()) {
+                    return null;
+                } else {
+                    return elemFromLink(head.link.next.?);
+                }
+            }
+
+            pub fn last(head: *Self) ?*T {
+                if (head.empty()) {
+                    return null;
+                } else {
+                    return elemFromLink(head.link.prev.?);
+                }
             }
 
             pub fn length(head: *const Self) usize {
@@ -485,7 +499,7 @@ pub const list = struct {
                             .reverse => it.current.prev.?,
                         };
                         if (it.current == it.head) return null;
-                        return if (link_field) |f| @fieldParentPtr(T, @tagName(f), it.current) else T.fromLink(it.current);
+                        return elemFromLink(it.current);
                     }
                 };
             }
@@ -510,7 +524,7 @@ pub const list = struct {
                             .reverse => it.future.prev.?,
                         };
                         if (it.current == it.head) return null;
-                        return if (link_field) |f| @fieldParentPtr(T, @tagName(f), it.current) else T.fromLink(it.current);
+                        return elemFromLink(it.current);
                     }
                 };
             }
@@ -526,6 +540,22 @@ pub const list = struct {
                         .reverse => head.link.prev.?,
                     },
                 };
+            }
+
+            fn linkFromElem(elem: *T) *Link {
+                if (link_field) |f| {
+                    return &@field(elem, @tagName(f));
+                } else {
+                    return elem.getLink();
+                }
+            }
+
+            fn elemFromLink(link: *Link) *T {
+                if (link_field) |f| {
+                    return @fieldParentPtr(T, @tagName(f), link);
+                } else {
+                    return T.fromLink(link);
+                }
             }
         };
     }
