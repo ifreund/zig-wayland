@@ -1,7 +1,6 @@
 .{
     .name = "zig-wayland",
-    // There are not yet any tagged releases of zig-wayland
-    .version = "0.0.0",
+    .version = "0.1.0-dev",
     .paths = .{
         "build.zig",
         "build.zig.zon",
