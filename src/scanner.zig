@@ -528,7 +528,7 @@ const Interface = struct {
     // These interfaces are special in that their version may never be increased.
     // That is, they are pinned to version 1 forever. They also may break the
     // normally required tree object creation hierarchy.
-    const version_locked_interfaces = std.ComptimeStringMap(void, .{
+    const version_locked_interfaces = std.StaticStringMap(void).initComptime(.{
         .{"wl_display"},
         .{"wl_registry"},
         .{"wl_callback"},

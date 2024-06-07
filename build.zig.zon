@@ -1,6 +1,7 @@
 .{
     .name = "zig-wayland",
     .version = "0.2.0-dev",
+    .minimum_zig_version = "0.13.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",

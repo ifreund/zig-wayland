@@ -19,7 +19,7 @@ pub fn build(b: *Build) void {
     inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(.{
             .name = example,
-            .root_source_file = .{ .path = "example/" ++ example ++ ".zig" },
+            .root_source_file = b.path("example/" ++ example ++ ".zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -35,7 +35,7 @@ pub fn build(b: *Build) void {
     const test_step = b.step("test", "Run the tests");
     {
         const scanner_tests = b.addTest(.{
-            .root_source_file = .{ .path = "src/scanner.zig" },
+            .root_source_file = b.path("src/scanner.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -46,7 +46,7 @@ pub fn build(b: *Build) void {
     }
     {
         const ref_all = b.addTest(.{
-            .root_source_file = .{ .path = "src/ref_all.zig" },
+            .root_source_file = b.path("src/ref_all.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -95,7 +95,7 @@ pub const Scanner = struct {
         const zig_wayland_dir = fs.path.dirname(@src().file) orelse ".";
         const exe = b.addExecutable(.{
             .name = "zig-wayland-scanner",
-            .root_source_file = .{ .path = b.pathJoin(&.{ zig_wayland_dir, "src/scanner.zig" }) },
+            .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ zig_wayland_dir, "src/scanner.zig" }) },
             .target = b.host,
         });
 
@@ -105,7 +105,7 @@ pub const Scanner = struct {
         const result = run.addOutputFileArg("wayland.zig");
 
         run.addArg("-i");
-        run.addFileArg(.{ .path = wayland_xml_path });
+        run.addFileArg(.{ .cwd_relative = wayland_xml_path });
 
         const scanner = b.allocator.create(Scanner) catch @panic("OOM");
         scanner.* = .{
@@ -124,15 +124,18 @@ pub const Scanner = struct {
         const full_path = b.pathJoin(&.{ scanner.wayland_protocols_path, relative_path });
 
         scanner.run.addArg("-i");
-        scanner.run.addFileArg(.{ .path = full_path });
+        scanner.run.addFileArg(.{ .cwd_relative = full_path });
 
         scanner.generateCSource(full_path);
     }
 
     /// Scan the protocol xml at the given path.
     pub fn addCustomProtocol(scanner: *Scanner, path: []const u8) void {
+        // TODO should this take an std.Build.LazyPath instead? I think the answer is yes but
+        // I haven't looked closely enough to justify the breaking change to myself yet.
+
         scanner.run.addArg("-i");
-        scanner.run.addFileArg(.{ .path = path });
+        scanner.run.addFileArg(.{ .cwd_relative = path });
 
         scanner.generateCSource(path);
     }
