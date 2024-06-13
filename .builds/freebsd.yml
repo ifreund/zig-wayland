@@ -1,0 +1,35 @@
+image: freebsd/latest
+packages:
+  - devel/libepoll-shim
+  - devel/meson
+  - devel/pkgconf
+  - gmake
+  - graphics/wayland-protocols
+  - security/ca_root_nss
+  - textproc/libxml2
+  - wget
+sources:
+  - https://codeberg.org/ifreund/zig-wayland
+  - https://gitlab.freedesktop.org/wayland/wayland.git
+tasks:
+  - install_deps: |
+      cd wayland
+      git checkout 1.22.0
+      meson setup build -Ddocumentation=false -Dtests=false --prefix /usr
+      sudo ninja -C build install
+      cd ..
+
+      # Eat Github's resources rather than the Zig Software Foundation's resources!
+      wget -nv https://github.com/ifreund/zig-tarball-mirror/releases/download/0.13.0/zig-freebsd-x86_64-0.13.0.tar.xz
+      tar xf zig-freebsd-x86_64-0.13.0.tar.xz
+      sudo mv zig-freebsd-x86_64-0.13.0/zig /usr/bin/
+      sudo mv zig-freebsd-x86_64-0.13.0/lib /usr/lib/zig
+  - build: |
+      cd zig-wayland
+      zig build --summary all
+  - fmt: |
+      cd zig-wayland
+      zig fmt --check build.zig
+      zig fmt --check build.zig.zon
+      zig fmt --check src/
+      zig fmt --check example/
