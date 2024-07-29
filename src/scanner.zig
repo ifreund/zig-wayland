@@ -684,6 +684,7 @@ const Interface = struct {
                 .{ "getId", "u32" },
                 .{ "getVersion", "u32" },
                 .{ "postNoMemory", "void" },
+                .{ "getUserData", "?*anyopaque" },
             }) |func|
                 try writer.print(
                     \\pub fn {[function]}(_{[interface]}: *{[type]}) {[return_type]} {{
