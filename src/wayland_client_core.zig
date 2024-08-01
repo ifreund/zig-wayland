@@ -4,6 +4,7 @@ const common = @import("common.zig");
 pub const Object = common.Object;
 pub const Message = common.Message;
 pub const Interface = common.Interface;
+pub const list = common.list;
 pub const Array = common.Array;
 pub const Fixed = common.Fixed;
 pub const Argument = common.Argument;

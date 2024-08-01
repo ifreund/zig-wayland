@@ -18,17 +18,212 @@ pub const Interface = extern struct {
     events: ?[*]const Message,
 };
 
+pub const list = struct {
+    pub const Link = extern struct {
+        prev: ?*Link,
+        next: ?*Link,
+
+        pub fn init(link: *Link) void {
+            link.* = .{ .prev = link, .next = link };
+        }
+
+        pub fn insert(link: *Link, other: *Link) void {
+            other.prev = link;
+            other.next = link.next;
+            link.next = other;
+            other.next.?.prev = other;
+        }
+
+        pub fn remove(link: *Link) void {
+            link.prev.?.next = link.next;
+            link.next.?.prev = link.prev;
+            link.* = .{ .prev = null, .next = null };
+        }
+
+        pub fn replaceWith(link: *Link, other: *Link) void {
+            other.next = link.next;
+            other.next.?.prev = other;
+            other.prev = link.prev;
+            other.prev.?.next = other;
+
+            link.* = .{ .prev = null, .next = null };
+        }
+
+        pub fn swapWith(link: *Link, other: *Link) void {
+            const old_other_prev = other.prev.?;
+            other.remove();
+
+            link.replaceWith(other);
+
+            if (old_other_prev == link) {
+                other.insert(link);
+            } else {
+                old_other_prev.insert(link);
+            }
+        }
+
+        /// private helper that doesn't handle empty lists and assumes that
+        /// other is the link of a Head.
+        fn insertList(link: *Link, other: *Link) void {
+            other.next.?.prev = link;
+            other.prev.?.next = link.next;
+            link.next.?.prev = other.prev;
+            link.next = other.next;
+
+            other.init();
+        }
+    };
+
+    pub const Direction = enum {
+        forward,
+        reverse,
+    };
+
+    /// This has the same ABI as wl.list.Link/wl_list. If link_field is null, then
+    /// T.getLink()/T.fromLink() will be used. This allows for compatiability
+    /// with wl.Client and wl.Resource
+    pub fn Head(comptime T: type, comptime link_field: ?@Type(.EnumLiteral)) type {
+        return extern struct {
+            const Self = @This();
+
+            link: Link,
+
+            pub fn init(head: *Self) void {
+                head.link.init();
+            }
+
+            pub fn prepend(head: *Self, elem: *T) void {
+                head.link.insert(linkFromElem(elem));
+            }
+
+            pub fn append(head: *Self, elem: *T) void {
+                head.link.prev.?.insert(linkFromElem(elem));
+            }
+
+            pub fn prependList(head: *Self, other: *Self) void {
+                if (other.empty()) return;
+                head.link.insertList(&other.link);
+            }
+
+            pub fn appendList(head: *Self, other: *Self) void {
+                if (other.empty()) return;
+                head.link.prev.?.insertList(&other.link);
+            }
+
+            pub fn first(head: *Self) ?*T {
+                if (head.empty()) {
+                    return null;
+                } else {
+                    return elemFromLink(head.link.next.?);
+                }
+            }
+
+            pub fn last(head: *Self) ?*T {
+                if (head.empty()) {
+                    return null;
+                } else {
+                    return elemFromLink(head.link.prev.?);
+                }
+            }
+
+            pub fn length(head: *const Self) usize {
+                var count: usize = 0;
+                var current = head.link.next.?;
+                while (current != &head.link) : (current = current.next.?) {
+                    count += 1;
+                }
+                return count;
+            }
+
+            pub fn empty(head: *const Self) bool {
+                return head.link.next == &head.link;
+            }
+
+            /// Removal of elements during iteration is illegal
+            pub fn Iterator(comptime direction: Direction) type {
+                return struct {
+                    head: *Link,
+                    current: *Link,
+
+                    pub fn next(it: *@This()) ?*T {
+                        it.current = switch (direction) {
+                            .forward => it.current.next.?,
+                            .reverse => it.current.prev.?,
+                        };
+                        if (it.current == it.head) return null;
+                        return elemFromLink(it.current);
+                    }
+                };
+            }
+
+            /// Removal of elements during iteration is illegal
+            pub fn iterator(head: *Self, comptime direction: Direction) Iterator(direction) {
+                return .{ .head = &head.link, .current = &head.link };
+            }
+
+            /// Removal of the current element during iteration is permitted.
+            /// Removal of other elements is illegal.
+            pub fn SafeIterator(comptime direction: Direction) type {
+                return struct {
+                    head: *Link,
+                    current: *Link,
+                    future: *Link,
+
+                    pub fn next(it: *@This()) ?*T {
+                        it.current = it.future;
+                        it.future = switch (direction) {
+                            .forward => it.future.next.?,
+                            .reverse => it.future.prev.?,
+                        };
+                        if (it.current == it.head) return null;
+                        return elemFromLink(it.current);
+                    }
+                };
+            }
+
+            /// Removal of the current element during iteration is permitted.
+            /// Removal of other elements is illegal.
+            pub fn safeIterator(head: *Self, comptime direction: Direction) SafeIterator(direction) {
+                return .{
+                    .head = &head.link,
+                    .current = &head.link,
+                    .future = switch (direction) {
+                        .forward => head.link.next.?,
+                        .reverse => head.link.prev.?,
+                    },
+                };
+            }
+
+            fn linkFromElem(elem: *T) *Link {
+                if (link_field) |f| {
+                    return &@field(elem, @tagName(f));
+                } else {
+                    return elem.getLink();
+                }
+            }
+
+            fn elemFromLink(link: *Link) *T {
+                if (link_field) |f| {
+                    return @fieldParentPtr(@tagName(f), link);
+                } else {
+                    return T.fromLink(link);
+                }
+            }
+        };
+    }
+};
+
 pub const Array = extern struct {
     size: usize,
     alloc: usize,
     data: ?*anyopaque,
 
     /// Does not clone memory
-    pub fn fromArrayList(comptime T: type, list: std.ArrayList(T)) Array {
+    pub fn fromArrayList(comptime T: type, array_list: std.ArrayList(T)) Array {
         return Array{
-            .size = list.items.len * @sizeOf(T),
-            .alloc = list.capacity * @sizeOf(T),
-            .data = list.items.ptr,
+            .size = array_list.items.len * @sizeOf(T),
+            .alloc = array_list.capacity * @sizeOf(T),
+            .data = array_list.items.ptr,
         };
     }
 
