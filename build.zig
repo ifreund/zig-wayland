@@ -126,16 +126,13 @@ pub const Scanner = struct {
         scanner.run.addArg("-i");
         scanner.run.addFileArg(.{ .cwd_relative = full_path });
 
-        scanner.generateCSource(full_path);
+        scanner.generateCSource(.{ .cwd_relative = full_path });
     }
 
     /// Scan the protocol xml at the given path.
-    pub fn addCustomProtocol(scanner: *Scanner, path: []const u8) void {
-        // TODO should this take an std.Build.LazyPath instead? I think the answer is yes but
-        // I haven't looked closely enough to justify the breaking change to myself yet.
-
+    pub fn addCustomProtocol(scanner: *Scanner, path: Build.LazyPath) void {
         scanner.run.addArg("-i");
-        scanner.run.addFileArg(.{ .cwd_relative = path });
+        scanner.run.addFileArg(path);
 
         scanner.generateCSource(path);
     }
@@ -168,11 +165,12 @@ pub const Scanner = struct {
     }
 
     /// Once https://github.com/ziglang/zig/issues/131 is resolved we can remove this.
-    fn generateCSource(scanner: *Scanner, protocol: []const u8) void {
+    fn generateCSource(scanner: *Scanner, protocol: Build.LazyPath) void {
         const b = scanner.run.step.owner;
-        const cmd = b.addSystemCommand(&.{ "wayland-scanner", "private-code", protocol });
+        const cmd = b.addSystemCommand(&.{ "wayland-scanner", "private-code" });
+        cmd.addFileArg(protocol);
 
-        const out_name = mem.concat(b.allocator, u8, &.{ fs.path.stem(protocol), "-protocol.c" }) catch @panic("OOM");
+        const out_name = mem.concat(b.allocator, u8, &.{ fs.path.stem(protocol.getDisplayName()), "-protocol.c" }) catch @panic("OOM");
 
         const c_source = cmd.addOutputFileArg(out_name);
 
