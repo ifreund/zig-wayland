@@ -28,7 +28,7 @@ pub fn build(b: *Build) !void {
 
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("staging/ext-session-lock/ext-session-lock-v1.xml");
-    scanner.addCustomProtocol("protocol/private_foobar.xml");
+    scanner.addCustomProtocol(b.path("protocol/private_foobar.xml"));
 
     // Pass the maximum version implemented by your wayland server or client.
     // Requests, events, enums, etc. from newer versions will not be generated,
