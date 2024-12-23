@@ -234,7 +234,7 @@ pub const Global = opaque {
     ) error{GlobalCreateFailed}!*Global {
         return wl_global_create(
             server,
-            T.getInterface(),
+            T.interface,
             @as(c_int, @intCast(version)),
             data,
             struct {
@@ -266,7 +266,7 @@ pub const Resource = opaque {
     pub inline fn create(client: *Client, comptime T: type, version: u32, id: u32) error{ResourceCreateFailed}!*Resource {
         // This is only a c_int because of legacy libwayland reasons. Negative versions are invalid.
         // Version is a u32 on the wire and for wl_global, wl_proxy, etc.
-        return wl_resource_create(client, T.getInterface(), @as(c_int, @intCast(version)), id) orelse error.ResourceCreateFailed;
+        return wl_resource_create(client, T.interface, @as(c_int, @intCast(version)), id) orelse error.ResourceCreateFailed;
     }
 
     extern fn wl_resource_destroy(resource: *Resource) void;

@@ -52,9 +52,6 @@ pub fn build(b: *Build) !void {
     exe.linkLibC();
     exe.linkSystemLibrary("wayland-client");
 
-    // TODO: remove when https://github.com/ziglang/zig/issues/131 is implemented
-    scanner.addCSource(exe);
-
     b.installArtifact(exe);
 }
 ```

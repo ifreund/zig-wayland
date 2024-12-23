@@ -25,7 +25,6 @@ pub fn build(b: *Build) void {
         });
 
         exe.root_module.addImport("wayland", wayland);
-        scanner.addCSource(exe);
         exe.linkLibC();
         exe.linkSystemLibrary("wayland-client");
 
@@ -52,7 +51,6 @@ pub fn build(b: *Build) void {
         });
 
         ref_all.root_module.addImport("wayland", wayland);
-        scanner.addCSource(ref_all);
         ref_all.linkLibC();
         ref_all.linkSystemLibrary("wayland-client");
         ref_all.linkSystemLibrary("wayland-server");
@@ -68,10 +66,6 @@ pub const Scanner = struct {
 
     /// Path to the system protocol directory, stored to avoid invoking pkg-config N times.
     wayland_protocols_path: []const u8,
-
-    // TODO remove these when the workaround for zig issue #131 is no longer needed.
-    compiles: std.ArrayListUnmanaged(*Build.Step.Compile) = .{},
-    c_sources: std.ArrayListUnmanaged(Build.LazyPath) = .{},
 
     pub const Options = struct {
         /// Path to the wayland.xml file.
@@ -125,16 +119,12 @@ pub const Scanner = struct {
 
         scanner.run.addArg("-i");
         scanner.run.addFileArg(.{ .cwd_relative = full_path });
-
-        scanner.generateCSource(.{ .cwd_relative = full_path });
     }
 
     /// Scan the protocol xml at the given path.
     pub fn addCustomProtocol(scanner: *Scanner, path: Build.LazyPath) void {
         scanner.run.addArg("-i");
         scanner.run.addFileArg(path);
-
-        scanner.generateCSource(path);
     }
 
     /// Generate code for the given global interface at the given version,
@@ -147,40 +137,5 @@ pub const Scanner = struct {
         const version_str = std.fmt.bufPrint(&buffer, "{}", .{version}) catch unreachable;
 
         scanner.run.addArgs(&.{ "-g", global_interface, version_str });
-    }
-
-    /// Generate and add the necessary C source to the compilation unit.
-    /// Once https://github.com/ziglang/zig/issues/131 is resolved we can remove this.
-    pub fn addCSource(scanner: *Scanner, compile: *Build.Step.Compile) void {
-        const b = scanner.run.step.owner;
-
-        for (scanner.c_sources.items) |c_source| {
-            compile.addCSourceFile(.{
-                .file = c_source,
-                .flags = &.{ "-std=c99", "-O2" },
-            });
-        }
-
-        scanner.compiles.append(b.allocator, compile) catch @panic("OOM");
-    }
-
-    /// Once https://github.com/ziglang/zig/issues/131 is resolved we can remove this.
-    fn generateCSource(scanner: *Scanner, protocol: Build.LazyPath) void {
-        const b = scanner.run.step.owner;
-        const cmd = b.addSystemCommand(&.{ "wayland-scanner", "private-code" });
-        cmd.addFileArg(protocol);
-
-        const out_name = mem.concat(b.allocator, u8, &.{ fs.path.stem(protocol.getDisplayName()), "-protocol.c" }) catch @panic("OOM");
-
-        const c_source = cmd.addOutputFileArg(out_name);
-
-        for (scanner.compiles.items) |compile| {
-            compile.addCSourceFile(.{
-                .file = c_source,
-                .flags = &.{ "-std=c99", "-O2" },
-            });
-        }
-
-        scanner.c_sources.append(b.allocator, c_source) catch @panic("OOM");
     }
 };

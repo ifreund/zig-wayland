@@ -585,7 +585,7 @@ const Interface = struct {
         try writer.print(
             \\pub const {[type]} = opaque {{
             \\ pub const generated_version = {[version]};
-            \\ pub const getInterface = common.{[namespace]}.{[interface]}.getInterface;
+            \\ pub const interface = &common.{[namespace]}.{[interface]}.interface;
         , .{
             .type = titleCaseTrim(interface.name),
             .version = @min(interface.version, target_version),
@@ -791,18 +791,50 @@ const Interface = struct {
     }
 
     fn emitCommon(interface: Interface, target_version: u32, writer: anytype) !void {
-        try writer.print("pub const {}", .{fmtId(trimPrefix(interface.name))});
+        try writer.print("pub const {} = struct {{", .{fmtId(trimPrefix(interface.name))});
 
         // TODO: stop linking libwayland generated interface structs when
         // https://github.com/ziglang/zig/issues/131 is implemented
 
         try writer.print(
-            \\ = struct {{
-            \\ extern const {[interface]s}_interface: common.Interface;
-            \\ pub inline fn getInterface() *const common.Interface {{
-            \\  return &{[interface]s}_interface;
-            \\ }}
-        , .{ .interface = interface.name });
+            \\pub const interface: common.Interface = .{{
+            \\    .name = "{[name]s}",
+            \\    .version = {[version]d},
+            \\    .method_count = {[requests_len]d},
+        , .{
+            .name = interface.name,
+            .version = interface.version,
+            .requests_len = interface.requests.len,
+        });
+        if (interface.requests.len == 0) {
+            try writer.writeAll(".methods = null,");
+        } else {
+            try writer.writeAll(".methods = &.{");
+            for (interface.requests) |request| {
+                try request.emitCommon(writer);
+            }
+            try writer.writeAll("},");
+        }
+        try writer.print(".event_count = {d},", .{interface.events.len});
+        if (interface.events.len == 0) {
+            try writer.writeAll(".events = null,");
+        } else {
+            try writer.writeAll(".events = &.{");
+            for (interface.events) |event| {
+                try event.emitCommon(writer);
+            }
+            try writer.writeAll("},");
+        }
+        try writer.writeAll("};");
+
+        try writer.print(
+            \\comptime {{
+            \\    @export(interface, .{{
+            \\        .name = "{s}_interface",
+            \\        .visibility = .hidden,
+            \\    }});
+            \\}}
+        , .{interface.name});
 
         for (interface.enums) |e| {
             if (e.since <= target_version) {
@@ -883,7 +915,7 @@ const Message = struct {
             } else if (side == .client and arg.kind == .new_id) {
                 try writer.print("{}: *", .{fmtId(arg.name)});
                 try printAbsolute(.client, writer, arg.kind.new_id.?);
-                std.debug.assert(!arg.allow_null);
+                assert(!arg.allow_null);
             } else {
                 try writer.print("{}:", .{fmtId(arg.name)});
                 // See notes on NULL in doc comment for wl_message in wayland-util.h
@@ -952,9 +984,15 @@ const Message = struct {
             for (message.args) |arg| {
                 switch (arg.kind) {
                     .int, .uint, .fixed, .string, .array, .fd => {
-                        try writer.writeAll(".{ .");
-                        try arg.emitSignature(writer);
-                        try writer.writeAll(" = ");
+                        try writer.writeAll(switch (arg.kind) {
+                            .int => ".{ .i = ",
+                            .uint => ".{ .u = ",
+                            .fixed => ".{ .f = ",
+                            .string => ".{ .s = ",
+                            .array => ".{ .a = ",
+                            .fd => ".{ .h = ",
+                            else => unreachable,
+                        });
                         if (arg.enum_name != null) {
                             try writer.writeAll("switch (@typeInfo(");
                             try arg.emitType(side, writer);
@@ -985,7 +1023,7 @@ const Message = struct {
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
-                                    \\.{ .s = T.getInterface().name },
+                                    \\.{ .s = T.interface.name },
                                     \\.{ .u = version_to_construct },
                                 );
                             }
@@ -1009,10 +1047,10 @@ const Message = struct {
                 if (new_iface) |i| {
                     try writer.print("return @ptrCast(try _proxy.marshalConstructor({}, &_args, ", .{opcode});
                     try printAbsolute(side, writer, i);
-                    try writer.writeAll(".getInterface()));");
+                    try writer.writeAll(".interface));");
                 } else {
                     try writer.print(
-                        \\return @ptrCast(try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.getInterface(), version_to_construct));
+                        \\return @ptrCast(try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.interface, version_to_construct));
                     , .{
                         .opcode = opcode,
                     });
@@ -1020,6 +1058,53 @@ const Message = struct {
             },
         }
         try writer.writeAll("}\n");
+    }
+
+    fn emitCommon(message: Message, writer: anytype) !void {
+        try writer.print(
+            \\.{{ .name = "{s}", .signature = "
+        , .{message.name});
+        if (message.since > 1) {
+            try writer.print("{d}", .{message.since});
+        }
+        for (message.args) |arg| {
+            try arg.emitSignature(writer);
+        }
+        try writer.writeAll("\",");
+        if (message.args.len == 0) {
+            try writer.writeAll(".types = null,");
+        } else {
+            try writer.writeAll(".types = &.{");
+            for (message.args) |arg| {
+                switch (arg.kind) {
+                    .new_id, .object => |interface| {
+                        if (interface) |name| {
+                            try writer.print(
+                                \\blk: {{
+                                \\    _ = common.{s}.{s};
+                                \\    break :blk @extern(*const common.Interface, .{{ .name = "{s}_interface" }});
+                                \\}},
+                            , .{
+                                prefix(name).?,
+                                trimPrefix(name),
+                                name,
+                            });
+                        } else {
+                            try writer.writeAll("null,");
+                        }
+                    },
+                    .int,
+                    .uint,
+                    .fixed,
+                    .string,
+                    .array,
+                    .fd,
+                    => try writer.writeAll("null,"),
+                }
+            }
+            try writer.writeAll("},");
+        }
+        try writer.writeAll("},");
     }
 };
 
@@ -1095,12 +1180,18 @@ const Arg = struct {
             .int => try writer.writeByte('i'),
             .uint => try writer.writeByte('u'),
             .fixed => try writer.writeByte('f'),
-            .string => try writer.writeByte('s'),
+            .string => {
+                if (arg.allow_null) try writer.writeByte('?');
+                try writer.writeByte('s');
+            },
             .new_id => |interface| if (interface == null)
                 try writer.writeAll("sun")
             else
                 try writer.writeByte('n'),
-            .object => try writer.writeByte('o'),
+            .object => {
+                if (arg.allow_null) try writer.writeByte('?');
+                try writer.writeByte('o');
+            },
             .array => try writer.writeByte('a'),
             .fd => try writer.writeByte('h'),
         }
@@ -1141,7 +1232,6 @@ const Arg = struct {
                 try writer.writeAll("*common.Object");
             },
             .array => {
-                if (arg.allow_null) try writer.writeByte('?');
                 try writer.writeAll("*common.Array");
             },
             .fd => try writer.writeAll("i32"),
