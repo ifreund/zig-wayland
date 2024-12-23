@@ -501,8 +501,8 @@ const Protocol = struct {
             try interface.emitCommon(1, writer);
         }
 
-        for (targets) |target| {
-            for (protocol.globals) |global| {
+        for (protocol.globals) |global| {
+            for (targets) |target| {
                 if (mem.eql(u8, target.name, global.interface.name)) {
                     // We check this in emitClient() which is called first.
                     assert(global.interface.version >= target.version);
@@ -511,6 +511,12 @@ const Protocol = struct {
                     for (global.children) |child| {
                         try child.emitCommon(target.version, writer);
                     }
+                    break;
+                }
+            } else {
+                try global.interface.emitCommon(null, writer);
+                for (global.children) |child| {
+                    try child.emitCommon(null, writer);
                 }
             }
         }
@@ -790,7 +796,7 @@ const Interface = struct {
         try writer.writeAll("};\n");
     }
 
-    fn emitCommon(interface: Interface, target_version: u32, writer: anytype) !void {
+    fn emitCommon(interface: Interface, target_version: ?u32, writer: anytype) !void {
         try writer.print("pub const {} = struct {{", .{fmtId(trimPrefix(interface.name))});
 
         // TODO: stop linking libwayland generated interface structs when
@@ -836,11 +842,14 @@ const Interface = struct {
             \\}}
         , .{interface.name});
 
-        for (interface.enums) |e| {
-            if (e.since <= target_version) {
-                try e.emit(target_version, writer);
+        if (target_version) |target| {
+            for (interface.enums) |e| {
+                if (e.since <= target) {
+                    try e.emit(target, writer);
+                }
             }
         }
+
         try writer.writeAll("};");
     }
 };
