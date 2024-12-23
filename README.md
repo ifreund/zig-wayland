@@ -1,6 +1,6 @@
 # zig-wayland
 
-Zig 0.13 bindings and protocol scanner for libwayland.
+Zig 0.14 bindings and protocol scanner for libwayland.
 
 The main repository is on [codeberg](https://codeberg.org/ifreund/zig-wayland),
 which is where the issue tracker may be found and where contributions are accepted.

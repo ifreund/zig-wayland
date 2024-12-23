@@ -101,7 +101,7 @@ pub const Scanner = struct {
                 b.dependencyFromBuildZig(zig_wayland_build_zig, .{}).path("src/scanner.zig")
             else
                 b.path("src/scanner.zig"),
-            .target = b.host,
+            .target = b.graph.host,
         });
 
         const run = b.addRunArtifact(exe);

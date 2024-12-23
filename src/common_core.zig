@@ -82,7 +82,7 @@ pub const list = struct {
     /// This has the same ABI as wl.list.Link/wl_list. If link_field is null, then
     /// T.getLink()/T.fromLink() will be used. This allows for compatiability
     /// with wl.Client and wl.Resource
-    pub fn Head(comptime T: type, comptime link_field: ?@Type(.EnumLiteral)) type {
+    pub fn Head(comptime T: type, comptime link_field: ?@Type(.enum_literal)) type {
         return extern struct {
             const Self = @This();
 
@@ -278,18 +278,18 @@ pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
             _: *const Message,
             args: [*]Argument,
         ) callconv(.C) c_int {
-            inline for (@typeInfo(Payload).Union.fields, 0..) |payload_field, payload_num| {
+            inline for (@typeInfo(Payload).@"union".fields, 0..) |payload_field, payload_num| {
                 if (payload_num == opcode) {
                     var payload_data: payload_field.type = undefined;
                     if (payload_field.type != void) {
-                        inline for (@typeInfo(payload_field.type).Struct.fields, 0..) |f, i| {
+                        inline for (@typeInfo(payload_field.type).@"struct".fields, 0..) |f, i| {
                             switch (@typeInfo(f.type)) {
                                 // signed/unsigned ints, fds, new_ids, bitfield enums
-                                .Int, .Struct => @field(payload_data, f.name) = @as(f.type, @bitCast(args[i].u)),
+                                .int, .@"struct" => @field(payload_data, f.name) = @as(f.type, @bitCast(args[i].u)),
                                 // objects, strings, arrays
-                                .Pointer, .Optional => @field(payload_data, f.name) = @as(f.type, @ptrFromInt(@intFromPtr(args[i].o))),
+                                .pointer, .optional => @field(payload_data, f.name) = @as(f.type, @ptrFromInt(@intFromPtr(args[i].o))),
                                 // non-bitfield enums
-                                .Enum => @field(payload_data, f.name) = @as(f.type, @enumFromInt(args[i].i)),
+                                .@"enum" => @field(payload_data, f.name) = @as(f.type, @enumFromInt(args[i].i)),
                                 else => unreachable,
                             }
                         }
