@@ -610,6 +610,23 @@ const Interface = struct {
         }
 
         if (side == .client) {
+            inline for (.{
+                .{ .name = "getId", .return_type = "u32" },
+                .{ .name = "getVersion", .return_type = "u32" },
+                .{ .name = "getUserData", .return_type = "?*anyopaque" },
+            }) |func| {
+                try writer.print(
+                    \\pub fn {[function]s}(_{[interface]}: *{[type]}) {[return_type]s} {{
+                    \\    return @as(*client.wl.Proxy, @ptrCast(_{[interface]})).{[function]s}();
+                    \\}}
+                , .{
+                    .function = func.name,
+                    .interface = fmtId(trimPrefix(interface.name)),
+                    .type = titleCaseTrim(interface.name),
+                    .return_type = func.return_type,
+                });
+            }
+
             try writer.print(
                 \\pub fn setQueue(_{[interface]}: *{[type]}, _queue: *client.wl.EventQueue) void {{
                 \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
@@ -684,23 +701,23 @@ const Interface = struct {
                 .interface = fmtId(trimPrefix(interface.name)),
             });
 
-            for ([_][2][]const u8{
-                .{ "getLink", "*server.wl.list.Link" },
-                .{ "getClient", "*server.wl.Client" },
-                .{ "getId", "u32" },
-                .{ "getVersion", "u32" },
-                .{ "postNoMemory", "void" },
-                .{ "getUserData", "?*anyopaque" },
+            inline for (.{
+                .{ .name = "getLink", .return_type = "*server.wl.list.Link" },
+                .{ .name = "getClient", .return_type = "*server.wl.Client" },
+                .{ .name = "getId", .return_type = "u32" },
+                .{ .name = "getVersion", .return_type = "u32" },
+                .{ .name = "postNoMemory", .return_type = "void" },
+                .{ .name = "getUserData", .return_type = "?*anyopaque" },
             }) |func|
                 try writer.print(
-                    \\pub fn {[function]}(_{[interface]}: *{[type]}) {[return_type]} {{
-                    \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]})).{[function]}();
+                    \\pub fn {[function]s}(_{[interface]}: *{[type]}) {[return_type]s} {{
+                    \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]})).{[function]s}();
                     \\}}
                 , .{
-                    .function = camelCase(func[0]),
+                    .function = func.name,
                     .interface = fmtId(trimPrefix(interface.name)),
                     .type = titleCaseTrim(interface.name),
-                    .return_type = camelCase(func[1]),
+                    .return_type = func.return_type,
                 });
 
             const has_error = for (interface.enums) |e| {
