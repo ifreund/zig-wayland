@@ -1115,6 +1115,8 @@ const Message = struct {
                                 trimPrefix(name),
                                 name,
                             });
+                        } else if (arg.kind == .new_id) {
+                            try writer.writeAll("null,null,null,");
                         } else {
                             try writer.writeAll("null,");
                         }
