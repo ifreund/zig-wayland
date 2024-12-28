@@ -1317,19 +1317,21 @@ const Enum = struct {
         try writer.print("pub const {}", .{titleCase(e.name)});
 
         if (e.bitfield) {
-            var entries_emitted: u8 = 0;
             try writer.writeAll(" = packed struct(u32) {");
-            for (e.entries) |entry| {
-                if (entry.since <= target_version) {
+            for (0..32) |i| {
+                for (e.entries) |entry| {
+                    if (entry.since > target_version) continue;
+
                     const value = entry.intValue();
-                    if (value != 0 and std.math.isPowerOfTwo(value)) {
+                    if (value == 0) continue;
+
+                    if (value == (@as(u32, 1) << @intCast(i))) {
                         try writer.print("{s}: bool = false,", .{entry.name});
-                        entries_emitted += 1;
+                        break;
                     }
+                } else {
+                    try writer.print("_padding{}: bool = false,", .{i});
                 }
-            }
-            if (entries_emitted < 32) {
-                try writer.print("_padding: u{d} = 0,\n", .{32 - entries_emitted});
             }
 
             // Emit the normal C abi enum as well as it may be needed to interface
