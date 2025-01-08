@@ -7,7 +7,8 @@ pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const scanner = Scanner.create(b, .{});
+    var dependency: Build.Dependency = .{ .builder = b };
+    const scanner = Scanner.create(&dependency, .{});
 
     const wayland = b.createModule(.{ .root_source_file = scanner.result });
 
@@ -64,32 +65,37 @@ pub const Scanner = struct {
     run: *Build.Step.Run,
     result: Build.LazyPath,
 
-    /// Path to the system protocol directory, stored to avoid invoking pkg-config N times.
-    wayland_protocols_path: []const u8,
+    wayland_protocols: Build.LazyPath,
 
     pub const Options = struct {
         /// Path to the wayland.xml file.
         /// If null, the output of `pkg-config --variable=pkgdatadir wayland-scanner` will be used.
-        wayland_xml_path: ?[]const u8 = null,
+        wayland_xml: ?Build.LazyPath = null,
         /// Path to the wayland-protocols installation.
         /// If null, the output of `pkg-config --variable=pkgdatadir wayland-protocols` will be used.
-        wayland_protocols_path: ?[]const u8 = null,
+        wayland_protocols: ?Build.LazyPath = null,
     };
 
-    pub fn create(b: *Build, options: Options) *Scanner {
-        const wayland_xml_path = options.wayland_xml_path orelse blk: {
+    /// Requires the zig-wayland dependency as the first argument, for example:
+    /// Scanner.create(b.dependency("zig-wayland", .{}), .{})
+    pub fn create(dependency: *Build.Dependency, options: Options) *Scanner {
+        const b = dependency.builder;
+        const wayland_xml: Build.LazyPath = options.wayland_xml orelse blk: {
             const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
-            break :blk b.pathJoin(&.{ mem.trim(u8, pc_output, &std.ascii.whitespace), "wayland.xml" });
+            break :blk .{
+                .cwd_relative = b.pathJoin(&.{ mem.trim(u8, pc_output, &std.ascii.whitespace), "wayland.xml" }),
+            };
         };
-        const wayland_protocols_path = options.wayland_protocols_path orelse blk: {
+        const wayland_protocols: Build.LazyPath = options.wayland_protocols orelse blk: {
             const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" });
-            break :blk mem.trim(u8, pc_output, &std.ascii.whitespace);
+            break :blk .{
+                .cwd_relative = mem.trim(u8, pc_output, &std.ascii.whitespace),
+            };
         };
 
-        const zig_wayland_dir = fs.path.dirname(@src().file) orelse ".";
         const exe = b.addExecutable(.{
             .name = "zig-wayland-scanner",
-            .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ zig_wayland_dir, "src/scanner.zig" }) },
+            .root_source_file = b.path("src/scanner.zig"),
             .target = b.host,
         });
 
@@ -99,13 +105,13 @@ pub const Scanner = struct {
         const result = run.addOutputFileArg("wayland.zig");
 
         run.addArg("-i");
-        run.addFileArg(.{ .cwd_relative = wayland_xml_path });
+        run.addFileArg(wayland_xml);
 
         const scanner = b.allocator.create(Scanner) catch @panic("OOM");
         scanner.* = .{
             .run = run,
             .result = result,
-            .wayland_protocols_path = wayland_protocols_path,
+            .wayland_protocols = wayland_protocols,
         };
 
         return scanner;
@@ -113,12 +119,11 @@ pub const Scanner = struct {
 
     /// Scan protocol xml provided by the wayland-protocols package at the given path
     /// relative to the wayland-protocols installation. (e.g. "stable/xdg-shell/xdg-shell.xml")
-    pub fn addSystemProtocol(scanner: *Scanner, relative_path: []const u8) void {
+    pub fn addSystemProtocol(scanner: *Scanner, sub_path: []const u8) void {
         const b = scanner.run.step.owner;
-        const full_path = b.pathJoin(&.{ scanner.wayland_protocols_path, relative_path });
 
         scanner.run.addArg("-i");
-        scanner.run.addFileArg(.{ .cwd_relative = full_path });
+        scanner.run.addFileArg(scanner.wayland_protocols.path(b, sub_path));
     }
 
     /// Scan the protocol xml at the given path.
