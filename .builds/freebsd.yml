@@ -27,6 +27,9 @@ tasks:
   - build: |
       cd zig-wayland
       zig build --summary all
+  - hello: |
+      cd zig-wayland/example/hello
+      zig build --summary all
   - fmt: |
       cd zig-wayland
       zig fmt --check build.zig

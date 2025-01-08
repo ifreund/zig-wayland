@@ -1,0 +1,10 @@
+.{
+    .name = "hello-zig-wayland",
+    .version = "0.0.0",
+    .paths = .{""},
+    .dependencies = .{
+        .@"zig-wayland" = .{
+            .path = "../..",
+        },
+    },
+}

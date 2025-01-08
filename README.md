@@ -63,8 +63,8 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 ```
 
-There is an example project using zig-wayland here:
-[hello-zig-wayland](https://codeberg.org/ifreund/hello-zig-wayland).
+There is an example project using zig-wayland here in the
+[example/hello](./example/hello) directory of this repository.
 
 Note that zig-wayland does not currently do extensive verification of Wayland
 protocol xml or provide good error messages if protocol xml is invalid. It is
@@ -89,3 +89,5 @@ and start the version numbers with `1` instead of `0`.
 ## License
 
 zig-wayland is released under the MIT (expat) license.
+
+The contents of the hello-zig-wayland directory are not part of zig-wayland and are released under the Zero Clause BSD license.
