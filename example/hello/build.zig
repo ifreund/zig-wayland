@@ -7,7 +7,7 @@ pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const scanner = Scanner.create(b.dependency("zig-wayland", .{}), .{});
+    const scanner = Scanner.create(b, .{});
 
     const wayland = b.createModule(.{ .root_source_file = scanner.result });
 

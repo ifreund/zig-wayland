@@ -23,7 +23,7 @@ tasks:
       sudo mv zig-linux-x86_64-0.13.0/lib /usr/lib/zig
   - build: |
       cd zig-wayland
-      zig build -Denable-tests --summary all
+      zig build --summary all
   - hello: |
       cd zig-wayland/example/hello
       zig build --summary all

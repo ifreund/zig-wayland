@@ -4,15 +4,10 @@ const fs = std.fs;
 const mem = std.mem;
 
 pub fn build(b: *Build) void {
-    const enable_tests = b.option(bool, "enable-tests", "allow running tests") orelse false;
-
-    if (!enable_tests) return;
-
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    var dependency: Build.Dependency = .{ .builder = b };
-    const scanner = Scanner.create(&dependency, .{});
+    const scanner = Scanner.create(b, .{});
 
     const wayland = b.createModule(.{ .root_source_file = scanner.result });
 
@@ -65,6 +60,8 @@ pub fn build(b: *Build) void {
     }
 }
 
+const zig_wayland_build_zig = @This();
+
 pub const Scanner = struct {
     run: *Build.Step.Run,
     result: Build.LazyPath,
@@ -80,10 +77,7 @@ pub const Scanner = struct {
         wayland_protocols: ?Build.LazyPath = null,
     };
 
-    /// Requires the zig-wayland dependency as the first argument, for example:
-    /// Scanner.create(b.dependency("zig-wayland", .{}), .{})
-    pub fn create(dependency: *Build.Dependency, options: Options) *Scanner {
-        const b = dependency.builder;
+    pub fn create(b: *Build, options: Options) *Scanner {
         const wayland_xml: Build.LazyPath = options.wayland_xml orelse blk: {
             const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
             break :blk .{
@@ -99,7 +93,10 @@ pub const Scanner = struct {
 
         const exe = b.addExecutable(.{
             .name = "zig-wayland-scanner",
-            .root_source_file = b.path("src/scanner.zig"),
+            .root_source_file = if (b.available_deps.len > 0)
+                b.dependencyFromBuildZig(zig_wayland_build_zig, .{}).path("src/scanner.zig")
+            else
+                b.path("src/scanner.zig"),
             .target = b.host,
         });
 
