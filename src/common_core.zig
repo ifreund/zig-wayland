@@ -1,6 +1,3 @@
-const std = @import("std");
-const wayland = @import("wayland.zig");
-
 pub const Object = opaque {};
 
 pub const Message = extern struct {
@@ -268,12 +265,12 @@ pub const Argument = extern union {
 };
 
 pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
-    const client = @hasDecl(Obj, "Event");
-    const Payload = if (client) Obj.Event else Obj.Request;
+    const client_side = @hasDecl(Obj, "Event");
+    const Payload = if (client_side) Obj.Event else Obj.Request;
     return struct {
         pub fn dispatcher(
             implementation: ?*const anyopaque,
-            object: if (client) *wayland.client.wl.Proxy else *wayland.server.wl.Resource,
+            object: if (client_side) *client.wl.Proxy else *server.wl.Resource,
             opcode: u32,
             _: *const Message,
             args: [*]Argument,

@@ -1,6 +1,3 @@
-const assert = @import("std").debug.assert;
-const client = @import("wayland.zig").client;
-const common = @import("common.zig");
 pub const Object = common.Object;
 pub const Message = common.Message;
 pub const Interface = common.Interface;
