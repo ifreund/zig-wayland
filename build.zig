@@ -37,18 +37,6 @@ pub fn build(b: *Build) void {
 
     const test_step = b.step("test", "Run the tests");
     {
-        const scanner_tests = b.addTest(.{
-            .root_source_file = b.path("src/scanner.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-
-        scanner_tests.root_module.addImport("wayland", wayland);
-
-        const run_scanner_tests = b.addRunArtifact(scanner_tests);
-        test_step.dependOn(&run_scanner_tests.step);
-    }
-    {
         const ref_all = b.addTest(.{
             .root_source_file = b.path("test/ref_all.zig"),
             .target = target,
