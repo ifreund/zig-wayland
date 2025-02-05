@@ -45,11 +45,12 @@ pub fn build(b: *Build) void {
 
         scanner_tests.root_module.addImport("wayland", wayland);
 
-        test_step.dependOn(&scanner_tests.step);
+        const run_scanner_tests = b.addRunArtifact(scanner_tests);
+        test_step.dependOn(&run_scanner_tests.step);
     }
     {
         const ref_all = b.addTest(.{
-            .root_source_file = b.path("src/ref_all.zig"),
+            .root_source_file = b.path("test/ref_all.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -60,7 +61,24 @@ pub fn build(b: *Build) void {
         ref_all.linkSystemLibrary("wayland-server");
         ref_all.linkSystemLibrary("wayland-egl");
         ref_all.linkSystemLibrary("wayland-cursor");
-        test_step.dependOn(&ref_all.step);
+
+        const run_ref_all = b.addRunArtifact(ref_all);
+        test_step.dependOn(&run_ref_all.step);
+    }
+    {
+        const snapshot = b.addTest(.{
+            .root_source_file = b.path("test/snapshot.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const options = b.addOptions();
+        options.addOptionPath("snapshot_actual", scanner.result);
+
+        snapshot.root_module.addOptions("build_options", options);
+
+        const run_snapshot = b.addRunArtifact(snapshot);
+        test_step.dependOn(&run_snapshot.step);
     }
 }
 
