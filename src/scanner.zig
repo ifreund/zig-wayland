@@ -971,12 +971,7 @@ const Message = struct {
                     },
                     .object, .new_id => |new_iface| {
                         if (arg.kind == .object or side == .server) {
-                            if (arg.allow_null) {
-                                try writer.writeAll(".{ .o = @ptrCast(_");
-                            } else {
-                                try writer.writeAll(".{ .o = @ptrCast(_");
-                            }
-                            try writer.print("{s}) }},", .{arg.name});
+                            try writer.print(".{{ .o = @ptrCast(_{s}) }},", .{arg.name});
                         } else {
                             if (new_iface == null) {
                                 try writer.writeAll(
