@@ -2770,16 +2770,16 @@ pub const server = struct {
     };
 };
 
-pub const common = struct {
-    pub const Object = opaque {};
+const common = struct {
+    const Object = opaque {};
 
-    pub const Message = extern struct {
+    const Message = extern struct {
         name: [*:0]const u8,
         signature: [*:0]const u8,
         types: ?[*]const ?*const Interface,
     };
 
-    pub const Interface = extern struct {
+    const Interface = extern struct {
         name: [*:0]const u8,
         version: c_int,
         method_count: c_int,
@@ -2788,7 +2788,7 @@ pub const common = struct {
         events: ?[*]const Message,
     };
 
-    pub const list = struct {
+    const list = struct {
         pub const Link = extern struct {
             prev: ?*Link,
             next: ?*Link,
@@ -2983,7 +2983,7 @@ pub const common = struct {
         }
     };
 
-    pub const Array = extern struct {
+    const Array = extern struct {
         size: usize,
         alloc: usize,
         data: ?*anyopaque,
@@ -3006,7 +3006,7 @@ pub const common = struct {
     };
 
     /// A 24.8 signed fixed-point number.
-    pub const Fixed = enum(i32) {
+    const Fixed = enum(i32) {
         _,
 
         pub fn toInt(f: Fixed) i24 {
@@ -3026,7 +3026,7 @@ pub const common = struct {
         }
     };
 
-    pub const Argument = extern union {
+    const Argument = extern union {
         i: i32,
         u: u32,
         f: Fixed,
@@ -3037,11 +3037,11 @@ pub const common = struct {
         h: i32,
     };
 
-    pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
+    fn Dispatcher(comptime Obj: type, comptime Data: type) type {
         const client_side = @hasDecl(Obj, "Event");
         const Payload = if (client_side) Obj.Event else Obj.Request;
         return struct {
-            pub fn dispatcher(
+            fn dispatcher(
                 implementation: ?*const anyopaque,
                 object: if (client_side) *client.wl.Proxy else *server.wl.Resource,
                 opcode: u32,
@@ -3079,9 +3079,9 @@ pub const common = struct {
             }
         };
     }
-    pub const wl = struct {
-        pub const display = struct {
-            pub const interface: common.Interface = .{
+    const wl = struct {
+        const display = struct {
+            const interface: common.Interface = .{
                 .name = "wl_display",
                 .version = 1,
                 .method_count = 2,
@@ -3121,7 +3121,7 @@ pub const common = struct {
                     },
                 },
             };
-            pub const Error = enum(c_int) {
+            const Error = enum(c_int) {
                 invalid_object = 0,
                 invalid_method = 1,
                 no_memory = 2,
@@ -3129,8 +3129,8 @@ pub const common = struct {
                 _,
             };
         };
-        pub const registry = struct {
-            pub const interface: common.Interface = .{
+        const registry = struct {
+            const interface: common.Interface = .{
                 .name = "wl_registry",
                 .version = 1,
                 .method_count = 1,
@@ -3167,8 +3167,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const callback = struct {
-            pub const interface: common.Interface = .{
+        const callback = struct {
+            const interface: common.Interface = .{
                 .name = "wl_callback",
                 .version = 1,
                 .method_count = 0,
@@ -3185,8 +3185,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const buffer = struct {
-            pub const interface: common.Interface = .{
+        const buffer = struct {
+            const interface: common.Interface = .{
                 .name = "wl_buffer",
                 .version = 1,
                 .method_count = 1,
@@ -3207,8 +3207,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const compositor = struct {
-            pub const interface: common.Interface = .{
+        const compositor = struct {
+            const interface: common.Interface = .{
                 .name = "wl_compositor",
                 .version = 6,
                 .method_count = 2,
@@ -3232,8 +3232,8 @@ pub const common = struct {
                 .events = null,
             };
         };
-        pub const surface = struct {
-            pub const interface: common.Interface = .{
+        const surface = struct {
+            const interface: common.Interface = .{
                 .name = "wl_surface",
                 .version = 6,
                 .method_count = 11,
@@ -3353,7 +3353,7 @@ pub const common = struct {
                     },
                 },
             };
-            pub const Error = enum(c_int) {
+            const Error = enum(c_int) {
                 invalid_scale = 0,
                 invalid_transform = 1,
                 invalid_size = 2,
@@ -3362,8 +3362,8 @@ pub const common = struct {
                 _,
             };
         };
-        pub const region = struct {
-            pub const interface: common.Interface = .{
+        const region = struct {
+            const interface: common.Interface = .{
                 .name = "wl_region",
                 .version = 1,
                 .method_count = 3,
@@ -3398,8 +3398,8 @@ pub const common = struct {
                 .events = null,
             };
         };
-        pub const shm = struct {
-            pub const interface: common.Interface = .{
+        const shm = struct {
+            const interface: common.Interface = .{
                 .name = "wl_shm",
                 .version = 2,
                 .method_count = 2,
@@ -3430,13 +3430,13 @@ pub const common = struct {
                     },
                 },
             };
-            pub const Error = enum(c_int) {
+            const Error = enum(c_int) {
                 invalid_format = 0,
                 invalid_stride = 1,
                 invalid_fd = 2,
                 _,
             };
-            pub const Format = enum(c_int) {
+            const Format = enum(c_int) {
                 argb8888 = 0,
                 xrgb8888 = 1,
                 c8 = 0x20203843,
@@ -3563,8 +3563,8 @@ pub const common = struct {
                 _,
             };
         };
-        pub const shm_pool = struct {
-            pub const interface: common.Interface = .{
+        const shm_pool = struct {
+            const interface: common.Interface = .{
                 .name = "wl_shm_pool",
                 .version = 2,
                 .method_count = 3,
@@ -3598,8 +3598,8 @@ pub const common = struct {
                 .events = null,
             };
         };
-        pub const data_device_manager = struct {
-            pub const interface: common.Interface = .{
+        const data_device_manager = struct {
+            const interface: common.Interface = .{
                 .name = "wl_data_device_manager",
                 .version = 3,
                 .method_count = 2,
@@ -3624,8 +3624,8 @@ pub const common = struct {
                 .events = null,
             };
         };
-        pub const data_source = struct {
-            pub const interface: common.Interface = .{
+        const data_source = struct {
+            const interface: common.Interface = .{
                 .name = "wl_data_source",
                 .version = 3,
                 .method_count = 3,
@@ -3692,8 +3692,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const data_device = struct {
-            pub const interface: common.Interface = .{
+        const data_device = struct {
+            const interface: common.Interface = .{
                 .name = "wl_data_device",
                 .version = 3,
                 .method_count = 3,
@@ -3771,8 +3771,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const data_offer = struct {
-            pub const interface: common.Interface = .{
+        const data_offer = struct {
+            const interface: common.Interface = .{
                 .name = "wl_data_offer",
                 .version = 3,
                 .method_count = 5,
@@ -3838,8 +3838,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const shell = struct {
-            pub const interface: common.Interface = .{
+        const shell = struct {
+            const interface: common.Interface = .{
                 .name = "wl_shell",
                 .version = 1,
                 .method_count = 1,
@@ -3857,8 +3857,8 @@ pub const common = struct {
                 .events = null,
             };
         };
-        pub const shell_surface = struct {
-            pub const interface: common.Interface = .{
+        const shell_surface = struct {
+            const interface: common.Interface = .{
                 .name = "wl_shell_surface",
                 .version = 1,
                 .method_count = 10,
@@ -3971,8 +3971,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const seat = struct {
-            pub const interface: common.Interface = .{
+        const seat = struct {
+            const interface: common.Interface = .{
                 .name = "wl_seat",
                 .version = 9,
                 .method_count = 4,
@@ -4022,7 +4022,7 @@ pub const common = struct {
                     },
                 },
             };
-            pub const Capability = packed struct(u32) {
+            const Capability = packed struct(u32) {
                 pointer: bool = false,
                 keyboard: bool = false,
                 touch: bool = false,
@@ -4062,13 +4062,13 @@ pub const common = struct {
                     _,
                 };
             };
-            pub const Error = enum(c_int) {
+            const Error = enum(c_int) {
                 missing_capability = 0,
                 _,
             };
         };
-        pub const pointer = struct {
-            pub const interface: common.Interface = .{
+        const pointer = struct {
+            const interface: common.Interface = .{
                 .name = "wl_pointer",
                 .version = 9,
                 .method_count = 2,
@@ -4183,34 +4183,34 @@ pub const common = struct {
                     },
                 },
             };
-            pub const Error = enum(c_int) {
+            const Error = enum(c_int) {
                 role = 0,
                 _,
             };
-            pub const ButtonState = enum(c_int) {
+            const ButtonState = enum(c_int) {
                 released = 0,
                 pressed = 1,
                 _,
             };
-            pub const Axis = enum(c_int) {
+            const Axis = enum(c_int) {
                 vertical_scroll = 0,
                 horizontal_scroll = 1,
                 _,
             };
-            pub const AxisSource = enum(c_int) {
+            const AxisSource = enum(c_int) {
                 wheel = 0,
                 finger = 1,
                 continuous = 2,
                 _,
             };
-            pub const AxisRelativeDirection = enum(c_int) {
+            const AxisRelativeDirection = enum(c_int) {
                 identical = 0,
                 inverted = 1,
                 _,
             };
         };
-        pub const keyboard = struct {
-            pub const interface: common.Interface = .{
+        const keyboard = struct {
+            const interface: common.Interface = .{
                 .name = "wl_keyboard",
                 .version = 9,
                 .method_count = 1,
@@ -4280,19 +4280,19 @@ pub const common = struct {
                     },
                 },
             };
-            pub const KeymapFormat = enum(c_int) {
+            const KeymapFormat = enum(c_int) {
                 no_keymap = 0,
                 xkb_v1 = 1,
                 _,
             };
-            pub const KeyState = enum(c_int) {
+            const KeyState = enum(c_int) {
                 released = 0,
                 pressed = 1,
                 _,
             };
         };
-        pub const touch = struct {
-            pub const interface: common.Interface = .{
+        const touch = struct {
+            const interface: common.Interface = .{
                 .name = "wl_touch",
                 .version = 9,
                 .method_count = 1,
@@ -4366,8 +4366,8 @@ pub const common = struct {
                 },
             };
         };
-        pub const output = struct {
-            pub const interface: common.Interface = .{
+        const output = struct {
+            const interface: common.Interface = .{
                 .name = "wl_output",
                 .version = 4,
                 .method_count = 1,
@@ -4432,7 +4432,7 @@ pub const common = struct {
                     },
                 },
             };
-            pub const Subpixel = enum(c_int) {
+            const Subpixel = enum(c_int) {
                 unknown = 0,
                 none = 1,
                 horizontal_rgb = 2,
@@ -4441,7 +4441,7 @@ pub const common = struct {
                 vertical_bgr = 5,
                 _,
             };
-            pub const Transform = enum(c_int) {
+            const Transform = enum(c_int) {
                 normal = 0,
                 @"90" = 1,
                 @"180" = 2,
@@ -4452,7 +4452,7 @@ pub const common = struct {
                 flipped_270 = 7,
                 _,
             };
-            pub const Mode = packed struct(u32) {
+            const Mode = packed struct(u32) {
                 current: bool = false,
                 preferred: bool = false,
                 _padding2: bool = false,
@@ -4492,8 +4492,8 @@ pub const common = struct {
                 };
             };
         };
-        pub const subcompositor = struct {
-            pub const interface: common.Interface = .{
+        const subcompositor = struct {
+            const interface: common.Interface = .{
                 .name = "wl_subcompositor",
                 .version = 1,
                 .method_count = 2,
@@ -4517,8 +4517,8 @@ pub const common = struct {
                 .events = null,
             };
         };
-        pub const subsurface = struct {
-            pub const interface: common.Interface = .{
+        const subsurface = struct {
+            const interface: common.Interface = .{
                 .name = "wl_subsurface",
                 .version = 1,
                 .method_count = 6,

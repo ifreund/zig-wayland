@@ -135,7 +135,7 @@ fn scan(
     try writer.writeAll(
         \\};
         \\
-        \\pub const common = struct {
+        \\const common = struct {
     );
 
     {
@@ -143,7 +143,7 @@ fn scan(
 
         var iter = scanner.common.iterator();
         while (iter.next()) |entry| {
-            try writer.print("pub const {s} = struct {{", .{entry.key_ptr.*});
+            try writer.print("const {s} = struct {{", .{entry.key_ptr.*});
             try writer.writeAll(entry.value_ptr.items);
             try writer.writeAll("};");
         }
@@ -757,10 +757,10 @@ const Interface = struct {
     }
 
     fn emitCommon(interface: Interface, target_version: ?u32, writer: anytype) !void {
-        try writer.print("pub const {} = struct {{", .{fmtId(trimPrefix(interface.name))});
+        try writer.print("const {} = struct {{", .{fmtId(trimPrefix(interface.name))});
 
         try writer.print(
-            \\pub const interface: common.Interface = .{{
+            \\const interface: common.Interface = .{{
             \\    .name = "{[name]s}",
             \\    .version = {[version]d},
             \\    .method_count = {[requests_len]d},
@@ -1234,7 +1234,7 @@ const Enum = struct {
     }
 
     fn emit(e: Enum, target_version: u32, writer: anytype) !void {
-        try writer.print("pub const {}", .{titleCase(e.name)});
+        try writer.print("const {}", .{titleCase(e.name)});
 
         if (e.bitfield) {
             try writer.writeAll(" = packed struct(u32) {");

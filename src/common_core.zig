@@ -1,12 +1,12 @@
-pub const Object = opaque {};
+const Object = opaque {};
 
-pub const Message = extern struct {
+const Message = extern struct {
     name: [*:0]const u8,
     signature: [*:0]const u8,
     types: ?[*]const ?*const Interface,
 };
 
-pub const Interface = extern struct {
+const Interface = extern struct {
     name: [*:0]const u8,
     version: c_int,
     method_count: c_int,
@@ -15,7 +15,7 @@ pub const Interface = extern struct {
     events: ?[*]const Message,
 };
 
-pub const list = struct {
+const list = struct {
     pub const Link = extern struct {
         prev: ?*Link,
         next: ?*Link,
@@ -210,7 +210,7 @@ pub const list = struct {
     }
 };
 
-pub const Array = extern struct {
+const Array = extern struct {
     size: usize,
     alloc: usize,
     data: ?*anyopaque,
@@ -233,7 +233,7 @@ pub const Array = extern struct {
 };
 
 /// A 24.8 signed fixed-point number.
-pub const Fixed = enum(i32) {
+const Fixed = enum(i32) {
     _,
 
     pub fn toInt(f: Fixed) i24 {
@@ -253,7 +253,7 @@ pub const Fixed = enum(i32) {
     }
 };
 
-pub const Argument = extern union {
+const Argument = extern union {
     i: i32,
     u: u32,
     f: Fixed,
@@ -264,11 +264,11 @@ pub const Argument = extern union {
     h: i32,
 };
 
-pub fn Dispatcher(comptime Obj: type, comptime Data: type) type {
+fn Dispatcher(comptime Obj: type, comptime Data: type) type {
     const client_side = @hasDecl(Obj, "Event");
     const Payload = if (client_side) Obj.Event else Obj.Request;
     return struct {
-        pub fn dispatcher(
+        fn dispatcher(
             implementation: ?*const anyopaque,
             object: if (client_side) *client.wl.Proxy else *server.wl.Resource,
             opcode: u32,
