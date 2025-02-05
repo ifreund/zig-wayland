@@ -4,6 +4,10 @@ const fs = std.fs;
 const mem = std.mem;
 
 pub fn build(b: *Build) void {
+    const enable_tests = b.option(bool, "enable-tests", "allow running tests") orelse false;
+
+    if (!enable_tests) return;
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
