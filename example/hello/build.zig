@@ -1,7 +1,7 @@
 const std = @import("std");
 const Build = std.Build;
 
-const Scanner = @import("zig-wayland").Scanner;
+const Scanner = @import("zig_wayland").Scanner;
 
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});

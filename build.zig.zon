@@ -1,5 +1,5 @@
 .{
-    .name = "zig-wayland",
+    .name = .zig_wayland,
     .version = "0.3.0-dev",
     .minimum_zig_version = "0.14.0",
     .paths = .{
@@ -9,4 +9,5 @@
         "LICENSE",
     },
     .dependencies = .{},
+    .fingerprint = 0x791d230661f3bdaf,
 }
