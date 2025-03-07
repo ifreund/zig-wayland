@@ -16,7 +16,7 @@ A `Scanner` interface is provided which you may integrate with your `build.zig`:
 const std = @import("std");
 const Build = std.Build;
 
-const Scanner = @import("zig-wayland").Scanner;
+const Scanner = @import("wayland").Scanner;
 
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});

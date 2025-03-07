@@ -1,7 +1,7 @@
 const std = @import("std");
 const Build = std.Build;
 
-const Scanner = @import("zig_wayland").Scanner;
+const Scanner = @import("wayland").Scanner;
 
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -21,7 +21,7 @@ pub fn build(b: *Build) !void {
     scanner.generate("xdg_wm_base", 1);
 
     const exe = b.addExecutable(.{
-        .name = "hello-zig-wayland",
+        .name = "hello",
         .root_source_file = b.path("hello.zig"),
         .target = target,
         .optimize = optimize,

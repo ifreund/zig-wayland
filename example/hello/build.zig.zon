@@ -1,11 +1,11 @@
 .{
-    .name = .hello_zig_wayland,
+    .name = .hello_wayland,
     .version = "0.0.0",
     .paths = .{""},
     .dependencies = .{
-        .zig_wayland = .{
+        .wayland = .{
             .path = "../..",
         },
     },
-    .fingerprint = 0xcb1713437d52ec86,
+    .fingerprint = 0xe25da197dad60a60,
 }
