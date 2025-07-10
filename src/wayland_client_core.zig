@@ -58,7 +58,7 @@ pub const Proxy = opaque {
         opcode: u32,
         message: *const Message,
         args: [*]Argument,
-    ) callconv(.C) c_int;
+    ) callconv(.c) c_int;
     extern fn wl_proxy_add_dispatcher(
         proxy: *Proxy,
         dispatcher: *const DispatcherFn,

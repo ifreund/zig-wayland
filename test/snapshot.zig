@@ -4,7 +4,7 @@ const build_options = @import("build_options");
 test "snapshot" {
     const expected = @embedFile("snapshot_expected.zig");
 
-    const actual_file = try std.fs.openFileAbsolute(build_options.snapshot_actual, .{});
+    const actual_file = try std.fs.cwd().openFile(build_options.snapshot_actual, .{});
     defer actual_file.close();
 
     const actual = try actual_file.readToEndAlloc(std.testing.allocator, 4 * 1024 * 1024 * 1024);

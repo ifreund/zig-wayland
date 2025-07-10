@@ -249,12 +249,12 @@ pub const Attribute = struct {
     char_buffer: [4]u8 = undefined,
 
     pub fn dupeValue(attr: Attribute, allocator: mem.Allocator) error{OutOfMemory}![]u8 {
-        var list = std.ArrayList(u8).init(allocator);
-        errdefer list.deinit();
+        var list: std.ArrayList(u8) = .empty;
+        errdefer list.deinit(allocator);
         var attr_copy = attr;
         while (attr_copy.next()) |fragment|
-            try list.appendSlice(fragment);
-        return list.toOwnedSlice();
+            try list.appendSlice(allocator, fragment);
+        return list.toOwnedSlice(allocator);
     }
 
     pub fn valueStartsWith(attr: Attribute, prefix: []const u8) bool {

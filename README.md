@@ -1,6 +1,6 @@
 # zig-wayland
 
-Zig 0.14 bindings and protocol scanner for libwayland.
+Zig 0.15 bindings and protocol scanner for libwayland.
 
 The main repository is on [codeberg](https://codeberg.org/ifreund/zig-wayland),
 which is where the issue tracker may be found and where contributions are accepted.
@@ -43,9 +43,11 @@ pub fn build(b: *Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "foobar",
-        .root_source_file = .{ .path = "foobar.zig" },
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("foobar.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     exe.root_module.addImport("wayland", wayland);

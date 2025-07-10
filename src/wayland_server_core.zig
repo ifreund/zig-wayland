@@ -79,7 +79,7 @@ pub const Server = opaque {
 
     extern fn wl_display_set_global_filter(
         _server: *Server,
-        filter: *const fn (_client: *const Client, global: *const Global, data: ?*anyopaque) callconv(.C) bool,
+        filter: *const fn (_client: *const Client, global: *const Global, data: ?*anyopaque) callconv(.c) bool,
         data: ?*anyopaque,
     ) void;
     pub inline fn setGlobalFilter(
@@ -91,7 +91,7 @@ pub const Server = opaque {
         wl_display_set_global_filter(
             _server,
             struct {
-                fn _wrapper(_client: *const Client, _global: *const Global, _data: ?*anyopaque) callconv(.C) bool {
+                fn _wrapper(_client: *const Client, _global: *const Global, _data: ?*anyopaque) callconv(.c) bool {
                     return filter(_client, _global, @ptrCast(@alignCast(_data)));
                 }
             }._wrapper,
@@ -114,7 +114,7 @@ pub const Server = opaque {
 
     extern fn wl_display_add_protocol_logger(
         _server: *Server,
-        func: *const fn (data: ?*anyopaque, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
+        func: *const fn (data: ?*anyopaque, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.c) void,
         data: ?*anyopaque,
     ) void;
     pub inline fn addProtocolLogger(
@@ -126,7 +126,7 @@ pub const Server = opaque {
         wl_display_add_protocol_logger(
             _server,
             struct {
-                fn _wrapper(_data: ?*anyopaque, _direction: ProtocolLogger.Type, _message: *const ProtocolLogger.LogMessage) callconv(.C) void {
+                fn _wrapper(_data: ?*anyopaque, _direction: ProtocolLogger.Type, _message: *const ProtocolLogger.LogMessage) callconv(.c) void {
                     func(@ptrCast(@alignCast(_data)), _direction, _message);
                 }
             }._wrapper,
@@ -185,7 +185,7 @@ pub const Client = opaque {
     const IteratorResult = enum(c_int) { stop, cont };
     extern fn wl_client_for_each_resource(
         _client: *Client,
-        iterator: *const fn (resource: *Resource, data: ?*anyopaque) callconv(.C) IteratorResult,
+        iterator: *const fn (resource: *Resource, data: ?*anyopaque) callconv(.c) IteratorResult,
         data: ?*anyopaque,
     ) void;
     pub inline fn forEachResource(
@@ -197,7 +197,7 @@ pub const Client = opaque {
         wl_client_for_each_resource(
             _client,
             struct {
-                fn _wrapper(_resource: *Resource, _data: ?*anyopaque) callconv(.C) IteratorResult {
+                fn _wrapper(_resource: *Resource, _data: ?*anyopaque) callconv(.c) IteratorResult {
                     return iterator(_resource, @ptrCast(@alignCast(_data)));
                 }
             }._wrapper,
@@ -218,7 +218,7 @@ pub const Global = opaque {
         interface: *const Interface,
         version: c_int,
         data: ?*anyopaque,
-        bind: *const fn (_client: *Client, data: ?*anyopaque, version: u32, id: u32) callconv(.C) void,
+        bind: *const fn (_client: *Client, data: ?*anyopaque, version: u32, id: u32) callconv(.c) void,
     ) ?*Global;
     pub inline fn create(
         _server: *Server,
@@ -234,7 +234,7 @@ pub const Global = opaque {
             @as(c_int, @intCast(version)),
             data,
             struct {
-                fn _wrapper(_client: *Client, _data: ?*anyopaque, _version: u32, _id: u32) callconv(.C) void {
+                fn _wrapper(_client: *Client, _data: ?*anyopaque, _version: u32, _id: u32) callconv(.c) void {
                     bind(_client, @ptrCast(@alignCast(_data)), _version, _id);
                 }
             }._wrapper,
@@ -286,8 +286,8 @@ pub const Resource = opaque {
         opcode: u32,
         message: *const Message,
         args: [*]Argument,
-    ) callconv(.C) c_int;
-    pub const DestroyFn = fn (resource: *Resource) callconv(.C) void;
+    ) callconv(.c) c_int;
+    pub const DestroyFn = fn (resource: *Resource) callconv(.c) void;
     extern fn wl_resource_set_dispatcher(
         resource: *Resource,
         dispatcher: ?*const DispatcherFn,
@@ -373,7 +373,7 @@ pub fn Listener(comptime T: type) type {
             fn (listener: *Self, data: T) void;
 
         link: list.Link,
-        notify: *const fn (listener: *Self, data: ?*anyopaque) callconv(.C) void,
+        notify: *const fn (listener: *Self, data: ?*anyopaque) callconv(.c) void,
 
         pub fn init(comptime notify: NotifyFn) Self {
             var self: Self = undefined;
@@ -384,13 +384,13 @@ pub fn Listener(comptime T: type) type {
         pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
             self.notify = if (T == void)
                 struct {
-                    fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.C) void {
+                    fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.c) void {
                         @call(.always_inline, notify, .{listener});
                     }
                 }.wrapper
             else
                 struct {
-                    fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.C) void {
+                    fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.c) void {
                         @call(.always_inline, notify, .{ listener, @as(T, @ptrFromInt(@intFromPtr(data))) });
                     }
                 }.wrapper;
@@ -480,7 +480,7 @@ pub const EventLoop = opaque {
         loop: *EventLoop,
         fd: c_int,
         mask: u32,
-        func: *const fn (fd: c_int, mask: u32, data: ?*anyopaque) callconv(.C) c_int,
+        func: *const fn (fd: c_int, mask: u32, data: ?*anyopaque) callconv(.c) c_int,
         data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addFd(
@@ -496,7 +496,7 @@ pub const EventLoop = opaque {
             fd,
             mask,
             struct {
-                fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.C) c_int {
+                fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.c) c_int {
                     return func(_fd, @bitCast(_mask), @ptrCast(@alignCast(_data)));
                 }
             }._wrapper,
@@ -506,7 +506,7 @@ pub const EventLoop = opaque {
 
     extern fn wl_event_loop_add_timer(
         loop: *EventLoop,
-        func: *const fn (data: ?*anyopaque) callconv(.C) c_int,
+        func: *const fn (data: ?*anyopaque) callconv(.c) c_int,
         data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addTimer(
@@ -518,7 +518,7 @@ pub const EventLoop = opaque {
         return wl_event_loop_add_timer(
             loop,
             struct {
-                fn _wrapper(_data: ?*anyopaque) callconv(.C) c_int {
+                fn _wrapper(_data: ?*anyopaque) callconv(.c) c_int {
                     return func(@ptrCast(@alignCast(_data)));
                 }
             }._wrapper,
@@ -529,7 +529,7 @@ pub const EventLoop = opaque {
     extern fn wl_event_loop_add_signal(
         loop: *EventLoop,
         signal_number: c_int,
-        func: *const fn (c_int, ?*anyopaque) callconv(.C) c_int,
+        func: *const fn (c_int, ?*anyopaque) callconv(.c) c_int,
         data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addSignal(
@@ -543,7 +543,7 @@ pub const EventLoop = opaque {
             loop,
             signal_number,
             struct {
-                fn _wrapper(_signal_number: c_int, _data: ?*anyopaque) callconv(.C) c_int {
+                fn _wrapper(_signal_number: c_int, _data: ?*anyopaque) callconv(.c) c_int {
                     return func(_signal_number, @ptrCast(@alignCast(_data)));
                 }
             }._wrapper,
@@ -553,7 +553,7 @@ pub const EventLoop = opaque {
 
     extern fn wl_event_loop_add_idle(
         loop: *EventLoop,
-        func: *const fn (data: ?*anyopaque) callconv(.C) void,
+        func: *const fn (data: ?*anyopaque) callconv(.c) void,
         data: ?*anyopaque,
     ) ?*EventSource;
     pub inline fn addIdle(
@@ -565,7 +565,7 @@ pub const EventLoop = opaque {
         return wl_event_loop_add_idle(
             loop,
             struct {
-                fn _wrapper(_data: ?*anyopaque) callconv(.C) void {
+                fn _wrapper(_data: ?*anyopaque) callconv(.c) void {
                     return func(@ptrCast(@alignCast(_data)));
                 }
             }._wrapper,

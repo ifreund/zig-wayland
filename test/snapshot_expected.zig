@@ -66,7 +66,7 @@ pub const client = struct {
                 opcode: u32,
                 message: *const Message,
                 args: [*]Argument,
-            ) callconv(.C) c_int;
+            ) callconv(.c) c_int;
             extern fn wl_proxy_add_dispatcher(
                 proxy: *Proxy,
                 dispatcher: *const DispatcherFn,
@@ -339,8 +339,10 @@ pub const client = struct {
                 const version_to_construct = @min(T.generated_version, _version);
                 const _proxy: *client.wl.Proxy = @ptrCast(_registry);
                 var _args = [_]common.Argument{
-                    .{ .u = _name },                .{ .s = T.interface.name },
-                    .{ .u = version_to_construct }, .{ .o = null },
+                    .{ .u = _name },
+                    .{ .s = T.interface.name },
+                    .{ .u = version_to_construct },
+                    .{ .o = null },
                 };
                 return @ptrCast(try _proxy.marshalConstructorVersioned(0, &_args, T.interface, version_to_construct));
             }
@@ -684,7 +686,12 @@ pub const client = struct {
             pub fn createBuffer(_shm_pool: *ShmPool, _offset: i32, _width: i32, _height: i32, _stride: i32, _format: common.wl.shm.Format) !*client.wl.Buffer {
                 const _proxy: *client.wl.Proxy = @ptrCast(_shm_pool);
                 var _args = [_]common.Argument{
-                    .{ .o = null }, .{ .i = _offset }, .{ .i = _width }, .{ .i = _height }, .{ .i = _stride }, .{ .u = switch (@typeInfo(common.wl.shm.Format)) {
+                    .{ .o = null },
+                    .{ .i = _offset },
+                    .{ .i = _width },
+                    .{ .i = _height },
+                    .{ .i = _stride },
+                    .{ .u = switch (@typeInfo(common.wl.shm.Format)) {
                         .@"enum" => @as(u32, @intCast(@intFromEnum(_format))),
                         .@"struct" => @bitCast(_format),
                         else => unreachable,
@@ -1146,7 +1153,7 @@ pub const server = struct {
 
             extern fn wl_display_set_global_filter(
                 _server: *Server,
-                filter: *const fn (_client: *const Client, global: *const Global, data: ?*anyopaque) callconv(.C) bool,
+                filter: *const fn (_client: *const Client, global: *const Global, data: ?*anyopaque) callconv(.c) bool,
                 data: ?*anyopaque,
             ) void;
             pub inline fn setGlobalFilter(
@@ -1158,7 +1165,7 @@ pub const server = struct {
                 wl_display_set_global_filter(
                     _server,
                     struct {
-                        fn _wrapper(_client: *const Client, _global: *const Global, _data: ?*anyopaque) callconv(.C) bool {
+                        fn _wrapper(_client: *const Client, _global: *const Global, _data: ?*anyopaque) callconv(.c) bool {
                             return filter(_client, _global, @ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
@@ -1181,7 +1188,7 @@ pub const server = struct {
 
             extern fn wl_display_add_protocol_logger(
                 _server: *Server,
-                func: *const fn (data: ?*anyopaque, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.C) void,
+                func: *const fn (data: ?*anyopaque, direction: ProtocolLogger.Type, message: *const ProtocolLogger.LogMessage) callconv(.c) void,
                 data: ?*anyopaque,
             ) void;
             pub inline fn addProtocolLogger(
@@ -1193,7 +1200,7 @@ pub const server = struct {
                 wl_display_add_protocol_logger(
                     _server,
                     struct {
-                        fn _wrapper(_data: ?*anyopaque, _direction: ProtocolLogger.Type, _message: *const ProtocolLogger.LogMessage) callconv(.C) void {
+                        fn _wrapper(_data: ?*anyopaque, _direction: ProtocolLogger.Type, _message: *const ProtocolLogger.LogMessage) callconv(.c) void {
                             func(@ptrCast(@alignCast(_data)), _direction, _message);
                         }
                     }._wrapper,
@@ -1252,7 +1259,7 @@ pub const server = struct {
             const IteratorResult = enum(c_int) { stop, cont };
             extern fn wl_client_for_each_resource(
                 _client: *Client,
-                iterator: *const fn (resource: *Resource, data: ?*anyopaque) callconv(.C) IteratorResult,
+                iterator: *const fn (resource: *Resource, data: ?*anyopaque) callconv(.c) IteratorResult,
                 data: ?*anyopaque,
             ) void;
             pub inline fn forEachResource(
@@ -1264,7 +1271,7 @@ pub const server = struct {
                 wl_client_for_each_resource(
                     _client,
                     struct {
-                        fn _wrapper(_resource: *Resource, _data: ?*anyopaque) callconv(.C) IteratorResult {
+                        fn _wrapper(_resource: *Resource, _data: ?*anyopaque) callconv(.c) IteratorResult {
                             return iterator(_resource, @ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
@@ -1285,7 +1292,7 @@ pub const server = struct {
                 interface: *const Interface,
                 version: c_int,
                 data: ?*anyopaque,
-                bind: *const fn (_client: *Client, data: ?*anyopaque, version: u32, id: u32) callconv(.C) void,
+                bind: *const fn (_client: *Client, data: ?*anyopaque, version: u32, id: u32) callconv(.c) void,
             ) ?*Global;
             pub inline fn create(
                 _server: *Server,
@@ -1301,7 +1308,7 @@ pub const server = struct {
                     @as(c_int, @intCast(version)),
                     data,
                     struct {
-                        fn _wrapper(_client: *Client, _data: ?*anyopaque, _version: u32, _id: u32) callconv(.C) void {
+                        fn _wrapper(_client: *Client, _data: ?*anyopaque, _version: u32, _id: u32) callconv(.c) void {
                             bind(_client, @ptrCast(@alignCast(_data)), _version, _id);
                         }
                     }._wrapper,
@@ -1353,8 +1360,8 @@ pub const server = struct {
                 opcode: u32,
                 message: *const Message,
                 args: [*]Argument,
-            ) callconv(.C) c_int;
-            pub const DestroyFn = fn (resource: *Resource) callconv(.C) void;
+            ) callconv(.c) c_int;
+            pub const DestroyFn = fn (resource: *Resource) callconv(.c) void;
             extern fn wl_resource_set_dispatcher(
                 resource: *Resource,
                 dispatcher: ?*const DispatcherFn,
@@ -1440,7 +1447,7 @@ pub const server = struct {
                     fn (listener: *Self, data: T) void;
 
                 link: list.Link,
-                notify: *const fn (listener: *Self, data: ?*anyopaque) callconv(.C) void,
+                notify: *const fn (listener: *Self, data: ?*anyopaque) callconv(.c) void,
 
                 pub fn init(comptime notify: NotifyFn) Self {
                     var self: Self = undefined;
@@ -1451,13 +1458,13 @@ pub const server = struct {
                 pub fn setNotify(self: *Self, comptime notify: NotifyFn) void {
                     self.notify = if (T == void)
                         struct {
-                            fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.C) void {
+                            fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.c) void {
                                 @call(.always_inline, notify, .{listener});
                             }
                         }.wrapper
                     else
                         struct {
-                            fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.C) void {
+                            fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.c) void {
                                 @call(.always_inline, notify, .{ listener, @as(T, @ptrFromInt(@intFromPtr(data))) });
                             }
                         }.wrapper;
@@ -1547,7 +1554,7 @@ pub const server = struct {
                 loop: *EventLoop,
                 fd: c_int,
                 mask: u32,
-                func: *const fn (fd: c_int, mask: u32, data: ?*anyopaque) callconv(.C) c_int,
+                func: *const fn (fd: c_int, mask: u32, data: ?*anyopaque) callconv(.c) c_int,
                 data: ?*anyopaque,
             ) ?*EventSource;
             pub inline fn addFd(
@@ -1563,7 +1570,7 @@ pub const server = struct {
                     fd,
                     mask,
                     struct {
-                        fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.C) c_int {
+                        fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.c) c_int {
                             return func(_fd, @bitCast(_mask), @ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
@@ -1573,7 +1580,7 @@ pub const server = struct {
 
             extern fn wl_event_loop_add_timer(
                 loop: *EventLoop,
-                func: *const fn (data: ?*anyopaque) callconv(.C) c_int,
+                func: *const fn (data: ?*anyopaque) callconv(.c) c_int,
                 data: ?*anyopaque,
             ) ?*EventSource;
             pub inline fn addTimer(
@@ -1585,7 +1592,7 @@ pub const server = struct {
                 return wl_event_loop_add_timer(
                     loop,
                     struct {
-                        fn _wrapper(_data: ?*anyopaque) callconv(.C) c_int {
+                        fn _wrapper(_data: ?*anyopaque) callconv(.c) c_int {
                             return func(@ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
@@ -1596,7 +1603,7 @@ pub const server = struct {
             extern fn wl_event_loop_add_signal(
                 loop: *EventLoop,
                 signal_number: c_int,
-                func: *const fn (c_int, ?*anyopaque) callconv(.C) c_int,
+                func: *const fn (c_int, ?*anyopaque) callconv(.c) c_int,
                 data: ?*anyopaque,
             ) ?*EventSource;
             pub inline fn addSignal(
@@ -1610,7 +1617,7 @@ pub const server = struct {
                     loop,
                     signal_number,
                     struct {
-                        fn _wrapper(_signal_number: c_int, _data: ?*anyopaque) callconv(.C) c_int {
+                        fn _wrapper(_signal_number: c_int, _data: ?*anyopaque) callconv(.c) c_int {
                             return func(_signal_number, @ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
@@ -1620,7 +1627,7 @@ pub const server = struct {
 
             extern fn wl_event_loop_add_idle(
                 loop: *EventLoop,
-                func: *const fn (data: ?*anyopaque) callconv(.C) void,
+                func: *const fn (data: ?*anyopaque) callconv(.c) void,
                 data: ?*anyopaque,
             ) ?*EventSource;
             pub inline fn addIdle(
@@ -1632,7 +1639,7 @@ pub const server = struct {
                 return wl_event_loop_add_idle(
                     loop,
                     struct {
-                        fn _wrapper(_data: ?*anyopaque) callconv(.C) void {
+                        fn _wrapper(_data: ?*anyopaque) callconv(.c) void {
                             return func(@ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
@@ -1783,7 +1790,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Display, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -1860,7 +1867,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Registry, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -1928,7 +1935,7 @@ pub const server = struct {
                     null,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Callback, @ptrCast(__resource)),
                                 @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
@@ -1992,7 +1999,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Buffer, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2057,7 +2064,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Compositor, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2154,7 +2161,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Surface, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2236,7 +2243,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Region, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2301,7 +2308,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Shm, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2379,7 +2386,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*ShmPool, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2449,7 +2456,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Seat, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2537,7 +2544,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Pointer, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2576,7 +2583,10 @@ pub const server = struct {
             pub fn sendButton(_pointer: *Pointer, _serial: u32, _time: u32, _button: u32, _state: ButtonState) void {
                 const _resource: *server.wl.Resource = @ptrCast(_pointer);
                 var _args = [_]common.Argument{
-                    .{ .u = _serial }, .{ .u = _time }, .{ .u = _button }, .{ .u = switch (@typeInfo(ButtonState)) {
+                    .{ .u = _serial },
+                    .{ .u = _time },
+                    .{ .u = _button },
+                    .{ .u = switch (@typeInfo(ButtonState)) {
                         .@"enum" => @as(u32, @intCast(@intFromEnum(_state))),
                         .@"struct" => @bitCast(_state),
                         else => unreachable,
@@ -2615,7 +2625,8 @@ pub const server = struct {
             pub fn sendAxisStop(_pointer: *Pointer, _time: u32, _axis: Axis) void {
                 const _resource: *server.wl.Resource = @ptrCast(_pointer);
                 var _args = [_]common.Argument{
-                    .{ .u = _time }, .{ .u = switch (@typeInfo(Axis)) {
+                    .{ .u = _time },
+                    .{ .u = switch (@typeInfo(Axis)) {
                         .@"enum" => @as(u32, @intCast(@intFromEnum(_axis))),
                         .@"struct" => @bitCast(_axis),
                         else => unreachable,
@@ -2684,7 +2695,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Keyboard, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2726,7 +2737,10 @@ pub const server = struct {
             pub fn sendKey(_keyboard: *Keyboard, _serial: u32, _time: u32, _key: u32, _state: KeyState) void {
                 const _resource: *server.wl.Resource = @ptrCast(_keyboard);
                 var _args = [_]common.Argument{
-                    .{ .u = _serial }, .{ .u = _time }, .{ .u = _key }, .{ .u = switch (@typeInfo(KeyState)) {
+                    .{ .u = _serial },
+                    .{ .u = _time },
+                    .{ .u = _key },
+                    .{ .u = switch (@typeInfo(KeyState)) {
                         .@"enum" => @as(u32, @intCast(@intFromEnum(_state))),
                         .@"struct" => @bitCast(_state),
                         else => unreachable,
@@ -2800,7 +2814,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Touch, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2898,7 +2912,7 @@ pub const server = struct {
                     handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
-                        fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
+                        fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Output, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
@@ -2910,13 +2924,17 @@ pub const server = struct {
             pub fn sendGeometry(_output: *Output, _x: i32, _y: i32, _physical_width: i32, _physical_height: i32, _subpixel: Subpixel, _make: [*:0]const u8, _model: [*:0]const u8, _transform: Transform) void {
                 const _resource: *server.wl.Resource = @ptrCast(_output);
                 var _args = [_]common.Argument{
-                    .{ .i = _x },    .{ .i = _y },     .{ .i = _physical_width }, .{ .i = _physical_height },
+                    .{ .i = _x },
+                    .{ .i = _y },
+                    .{ .i = _physical_width },
+                    .{ .i = _physical_height },
                     .{ .i = switch (@typeInfo(Subpixel)) {
                         .@"enum" => @as(i32, @intCast(@intFromEnum(_subpixel))),
                         .@"struct" => @bitCast(_subpixel),
                         else => unreachable,
                     } },
-                    .{ .s = _make }, .{ .s = _model },
+                    .{ .s = _make },
+                    .{ .s = _model },
                     .{ .i = switch (@typeInfo(Transform)) {
                         .@"enum" => @as(i32, @intCast(@intFromEnum(_transform))),
                         .@"struct" => @bitCast(_transform),
@@ -2933,7 +2951,8 @@ pub const server = struct {
                         .@"struct" => @bitCast(_flags),
                         else => unreachable,
                     } },
-                    .{ .i = _width }, .{ .i = _height },
+                    .{ .i = _width },
+                    .{ .i = _height },
                     .{ .i = _refresh },
                 };
                 _resource.postEvent(1, &_args);
@@ -3244,7 +3263,7 @@ const common = struct {
                 opcode: u32,
                 _: *const Message,
                 args: [*]Argument,
-            ) callconv(.C) c_int {
+            ) callconv(.c) c_int {
                 inline for (@typeInfo(Payload).@"union".fields, 0..) |payload_field, payload_num| {
                     if (payload_num == opcode) {
                         var payload_data: payload_field.type = undefined;

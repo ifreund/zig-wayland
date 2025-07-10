@@ -2,6 +2,8 @@ const std = @import("std");
 const assert = std.debug.assert;
 const posix = std.posix;
 const fs = std.fs;
+const fmt = std.fmt;
+const io = std.io;
 const mem = std.mem;
 const fmtId = std.zig.fmtId;
 
@@ -26,11 +28,11 @@ pub const Target = struct {
 pub fn main() !void {
     defer assert(general_purpose_allocator.deinit() == .ok);
 
-    var protocols = std.ArrayList([]const u8).init(gpa);
-    defer protocols.deinit();
+    var protocols: std.ArrayList([]const u8) = .empty;
+    defer protocols.deinit(gpa);
 
-    var targets = std.ArrayList(Target).init(gpa);
-    defer targets.deinit();
+    var targets: std.ArrayList(Target) = .empty;
+    defer targets.deinit(gpa);
 
     var out_path_opt: ?[]const u8 = null;
 
@@ -39,13 +41,13 @@ pub fn main() !void {
     while (args.next()) |arg| {
         if (mem.eql(u8, arg, "-i")) {
             const protocol_path = args.next() orelse return error.MissingArg;
-            try protocols.append(protocol_path);
+            try protocols.append(gpa, protocol_path);
         } else if (mem.eql(u8, arg, "-g")) {
             const name = args.next() orelse return error.MissingArg;
             const version = args.next() orelse return error.MissingArg;
-            try targets.append(.{
+            try targets.append(gpa, .{
                 .name = name,
-                .version = try std.fmt.parseInt(u32, version, 10),
+                .version = try fmt.parseInt(u32, version, 10),
             });
         } else if (mem.eql(u8, arg, "-o")) {
             out_path_opt = args.next() orelse return error.MissingArg;
@@ -54,10 +56,9 @@ pub fn main() !void {
 
     const out_path = out_path_opt orelse return error.MissingArg;
 
-    var buffer = std.ArrayList(u8).init(gpa);
-    defer buffer.deinit();
+    var buffer: io.Writer.Allocating = .init(gpa);
 
-    try scan(buffer.writer(), protocols.items, targets.items);
+    try scan(&buffer.writer, protocols.items, targets.items);
 
     const generated = try buffer.toOwnedSliceSentinel(0);
     defer gpa.free(generated);
@@ -65,17 +66,19 @@ pub fn main() !void {
     var tree = try std.zig.Ast.parse(gpa, generated, .zig);
     defer tree.deinit(gpa);
 
-    const formatted = try tree.render(gpa);
-    defer gpa.free(formatted);
+    const out_file = try std.fs.createFileAbsolute(out_path, .{});
+    defer out_file.close();
 
-    const out = try std.fs.createFileAbsolute(out_path, .{});
-    defer out.close();
+    var out_buf: [4096]u8 = undefined;
+    var out_writer = out_file.writer(&out_buf);
 
-    try out.writeAll(formatted);
+    try tree.render(gpa, &out_writer.interface, .{});
+
+    try out_writer.interface.flush();
 }
 
 fn scan(
-    writer: anytype,
+    writer: *io.Writer,
     protocols: []const []const u8,
     targets: []const Target,
 ) !void {
@@ -109,7 +112,7 @@ fn scan(
             if (mem.eql(u8, entry.key_ptr.*, "wl")) {
                 try writer.writeAll(@embedFile("wayland_client_core.zig"));
             }
-            try writer.writeAll(entry.value_ptr.items);
+            try writer.writeAll(entry.value_ptr.written());
             try writer.writeAll("};");
         }
     }
@@ -127,7 +130,7 @@ fn scan(
             if (mem.eql(u8, entry.key_ptr.*, "wl")) {
                 try writer.writeAll(@embedFile("wayland_server_core.zig"));
             }
-            try writer.writeAll(entry.value_ptr.items);
+            try writer.writeAll(entry.value_ptr.written());
             try writer.writeAll("};");
         }
     }
@@ -144,7 +147,7 @@ fn scan(
         var iter = scanner.common.iterator();
         while (iter.next()) |entry| {
             try writer.print("const {s} = struct {{", .{entry.key_ptr.*});
-            try writer.writeAll(entry.value_ptr.items);
+            try writer.writeAll(entry.value_ptr.written());
             try writer.writeAll("};");
         }
     }
@@ -158,7 +161,7 @@ const Side = enum {
 
 const Scanner = struct {
     /// Map from namespace to source code content of the namespace.
-    const Map = std.StringArrayHashMap(std.ArrayListUnmanaged(u8));
+    const Map = std.StringArrayHashMap(io.Writer.Allocating);
     client: Map = Map.init(gpa),
     server: Map = Map.init(gpa),
     common: Map = Map.init(gpa),
@@ -185,7 +188,7 @@ const Scanner = struct {
     fn deinit_map(map: *Map) void {
         for (map.keys()) |namespace| gpa.free(namespace);
         for (map.values()) |*list| {
-            list.deinit(gpa);
+            list.deinit();
         }
         map.deinit();
     }
@@ -203,27 +206,27 @@ const Scanner = struct {
         };
 
         {
-            const gop = try scanner.client.getOrPutValue(protocol.namespace, .{});
+            const gop = try scanner.client.getOrPutValue(protocol.namespace, .init(gpa));
             if (!gop.found_existing) {
                 gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             }
-            try protocol.emit(.client, scanner.remaining_targets.items, gop.value_ptr.writer(gpa));
+            try protocol.emit(.client, scanner.remaining_targets.items, &gop.value_ptr.writer);
         }
 
         {
-            const gop = try scanner.server.getOrPutValue(protocol.namespace, .{});
+            const gop = try scanner.server.getOrPutValue(protocol.namespace, .init(gpa));
             if (!gop.found_existing) {
                 gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             }
-            try protocol.emit(.server, scanner.remaining_targets.items, gop.value_ptr.writer(gpa));
+            try protocol.emit(.server, scanner.remaining_targets.items, &gop.value_ptr.writer);
         }
 
         {
-            const gop = try scanner.common.getOrPutValue(protocol.namespace, .{});
+            const gop = try scanner.common.getOrPutValue(protocol.namespace, .init(gpa));
             if (!gop.found_existing) {
                 gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             }
-            try protocol.emitCommon(scanner.remaining_targets.items, gop.value_ptr.writer(gpa));
+            try protocol.emitCommon(scanner.remaining_targets.items, &gop.value_ptr.writer);
         }
 
         {
@@ -272,8 +275,8 @@ const Protocol = struct {
         var name: ?[]const u8 = null;
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
-        var version_locked_interfaces = std.ArrayList(Interface).init(gpa);
-        defer version_locked_interfaces.deinit();
+        var version_locked_interfaces: std.ArrayList(Interface) = .empty;
+        defer version_locked_interfaces.deinit(gpa);
         var interfaces = std.StringArrayHashMap(Interface).init(gpa);
         defer interfaces.deinit();
 
@@ -305,7 +308,7 @@ const Protocol = struct {
                 } else if (mem.eql(u8, tag, "interface")) {
                     const interface = try Interface.parse(arena, parser);
                     if (Interface.version_locked(interface.name)) {
-                        try version_locked_interfaces.append(interface);
+                        try version_locked_interfaces.append(gpa, interface);
                     } else {
                         const gop = try interfaces.getOrPut(interface.name);
                         if (gop.found_existing) return error.DuplicateInterfaceName;
@@ -367,8 +370,8 @@ const Protocol = struct {
             }
         }
 
-        var globals = std.ArrayList(Global).init(gpa);
-        defer globals.deinit();
+        var globals: std.ArrayList(Global) = .empty;
+        defer globals.deinit(gpa);
 
         for (interfaces.values()) |interface| {
             if (!non_globals.contains(interface.name)) {
@@ -377,7 +380,7 @@ const Protocol = struct {
 
                 try find_children(interface, interfaces, &children);
 
-                try globals.append(.{
+                try globals.append(gpa, .{
                     .interface = interface,
                     .children = try arena.dupe(Interface, children.values()),
                 });
@@ -413,7 +416,7 @@ const Protocol = struct {
         }
     }
 
-    fn emit(protocol: Protocol, side: Side, targets: []const Target, writer: anytype) !void {
+    fn emit(protocol: Protocol, side: Side, targets: []const Target, writer: *io.Writer) !void {
         for (protocol.version_locked_interfaces) |interface| {
             assert(interface.version == 1);
             try interface.emit(side, 1, protocol.namespace, writer);
@@ -438,7 +441,7 @@ const Protocol = struct {
         }
     }
 
-    fn emitCommon(protocol: Protocol, targets: []const Target, writer: anytype) !void {
+    fn emitCommon(protocol: Protocol, targets: []const Target, writer: *io.Writer) !void {
         for (protocol.version_locked_interfaces) |interface| {
             assert(interface.version == 1);
             try interface.emitCommon(1, writer);
@@ -490,22 +493,22 @@ const Interface = struct {
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Interface {
         var name: ?[]const u8 = null;
         var version: ?u32 = null;
-        var requests = std.ArrayList(Message).init(gpa);
-        defer requests.deinit();
-        var events = std.ArrayList(Message).init(gpa);
-        defer events.deinit();
-        var enums = std.ArrayList(Enum).init(gpa);
-        defer enums.deinit();
+        var requests: std.ArrayList(Message) = .empty;
+        defer requests.deinit(gpa);
+        var events: std.ArrayList(Message) = .empty;
+        defer events.deinit(gpa);
+        var enums: std.ArrayList(Enum) = .empty;
+        defer enums.deinit(gpa);
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 // TODO: parse description
                 if (mem.eql(u8, tag, "request"))
-                    try requests.append(try Message.parse(arena, parser))
+                    try requests.append(gpa, try Message.parse(arena, parser))
                 else if (mem.eql(u8, tag, "event"))
-                    try events.append(try Message.parse(arena, parser))
+                    try events.append(gpa, try Message.parse(arena, parser))
                 else if (mem.eql(u8, tag, "enum"))
-                    try enums.append(try Enum.parse(arena, parser));
+                    try enums.append(gpa, try Enum.parse(arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
@@ -513,7 +516,7 @@ const Interface = struct {
                     name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "version")) {
                     if (version != null) return error.DuplicateVersion;
-                    version = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
+                    version = try fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 }
             },
             .close_tag => |tag| if (mem.eql(u8, tag, "interface")) {
@@ -530,11 +533,11 @@ const Interface = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emit(interface: Interface, side: Side, target_version: u32, namespace: []const u8, writer: anytype) !void {
+    fn emit(interface: Interface, side: Side, target_version: u32, namespace: []const u8, writer: *io.Writer) !void {
         try writer.print(
-            \\pub const {[type]} = opaque {{
+            \\pub const {[type]f} = opaque {{
             \\ pub const generated_version = {[version]};
-            \\ pub const interface = &common.{[namespace]}.{[interface]}.interface;
+            \\ pub const interface = &common.{[namespace]f}.{[interface]f}.interface;
         , .{
             .type = titleCaseTrim(interface.name),
             .version = @min(interface.version, target_version),
@@ -544,7 +547,7 @@ const Interface = struct {
 
         for (interface.enums) |e| {
             if (e.since <= target_version) {
-                try writer.print("pub const {[type]} = common.{[namespace]}.{[interface]}.{[type]};\n", .{
+                try writer.print("pub const {[type]f} = common.{[namespace]f}.{[interface]f}.{[type]f};\n", .{
                     .type = titleCase(e.name),
                     .namespace = fmtId(namespace),
                     .interface = fmtId(trimPrefix(interface.name)),
@@ -559,8 +562,8 @@ const Interface = struct {
                 .{ .name = "getUserData", .return_type = "?*anyopaque" },
             }) |func| {
                 try writer.print(
-                    \\pub fn {[function]s}(_{[interface]}: *{[type]}) {[return_type]s} {{
-                    \\    return @as(*client.wl.Proxy, @ptrCast(_{[interface]})).{[function]s}();
+                    \\pub fn {[function]s}(_{[interface]f}: *{[type]f}) {[return_type]s} {{
+                    \\    return @as(*client.wl.Proxy, @ptrCast(_{[interface]f})).{[function]s}();
                     \\}}
                 , .{
                     .function = func.name,
@@ -571,8 +574,8 @@ const Interface = struct {
             }
 
             try writer.print(
-                \\pub fn setQueue(_{[interface]}: *{[type]}, _queue: *client.wl.EventQueue) void {{
-                \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
+                \\pub fn setQueue(_{[interface]f}: *{[type]f}, _queue: *client.wl.EventQueue) void {{
+                \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]f});
                 \\    _proxy.setQueue(_queue);
                 \\}}
             , .{
@@ -594,14 +597,14 @@ const Interface = struct {
                 try writer.writeAll("};\n");
                 try writer.print(
                     \\pub inline fn setListener(
-                    \\    _{[interface]}: *{[type]},
+                    \\    _{[interface]f}: *{[type]f},
                     \\    comptime T: type,
-                    \\    _listener: *const fn ({[interface]}: *{[type]}, event: Event, data: T) void,
+                    \\    _listener: *const fn ({[interface]f}: *{[type]f}, event: Event, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
+                    \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]f});
                     \\    const _mut_data: ?*anyopaque = @ptrFromInt(@intFromPtr(_data));
-                    \\    _proxy.addDispatcher(common.Dispatcher({[type]}, T).dispatcher, _listener, _mut_data);
+                    \\    _proxy.addDispatcher(common.Dispatcher({[type]f}, T).dispatcher, _listener, _mut_data);
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
@@ -621,8 +624,8 @@ const Interface = struct {
                 try writer.writeAll(@embedFile("client_display_functions.zig"));
             } else if (!has_destroy) {
                 try writer.print(
-                    \\pub fn destroy(_{[interface]}: *{[type]}) void {{
-                    \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]});
+                    \\pub fn destroy(_{[interface]f}: *{[type]f}) void {{
+                    \\    const _proxy: *client.wl.Proxy = @ptrCast(_{[interface]f});
                     \\    _proxy.destroy();
                     \\}}
                 , .{
@@ -632,11 +635,11 @@ const Interface = struct {
             }
         } else {
             try writer.print(
-                \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{(tc)} {{
-                \\    return @ptrCast(try server.wl.Resource.create(_client, {[type]}, _version, _id));
-                \\}}pub fn destroy(_{[interface]}: *{[type]}) void {{
-                \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]})).destroy();
-                \\}}pub fn fromLink(_link: *server.wl.list.Link) *{[type]} {{
+                \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{[type]f} {{
+                \\    return @ptrCast(try server.wl.Resource.create(_client, {[type]f}, _version, _id));
+                \\}}pub fn destroy(_{[interface]f}: *{[type]f}) void {{
+                \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]f})).destroy();
+                \\}}pub fn fromLink(_link: *server.wl.list.Link) *{[type]f} {{
                 \\    return @ptrCast(server.wl.Resource.fromLink(_link));
                 \\}}
             , .{
@@ -653,8 +656,8 @@ const Interface = struct {
                 .{ .name = "getUserData", .return_type = "?*anyopaque" },
             }) |func|
                 try writer.print(
-                    \\pub fn {[function]s}(_{[interface]}: *{[type]}) {[return_type]s} {{
-                    \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]})).{[function]s}();
+                    \\pub fn {[function]s}(_{[interface]f}: *{[type]f}) {[return_type]s} {{
+                    \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]f})).{[function]s}();
                     \\}}
                 , .{
                     .function = func.name,
@@ -668,8 +671,8 @@ const Interface = struct {
             } else false;
             if (has_error) {
                 try writer.print(
-                    \\pub fn postError(_{[interface]}: *{[type]}, _err: Error, _message: [*:0]const u8) void {{
-                    \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]})).postError(@intCast(@intFromEnum(_err)), _message);
+                    \\pub fn postError(_{[interface]f}: *{[type]f}, _err: Error, _message: [*:0]const u8) void {{
+                    \\    return @as(*server.wl.Resource, @ptrCast(_{[interface]f})).postError(@intCast(@intFromEnum(_err)), _message);
                     \\}}
                 , .{
                     .interface = fmtId(trimPrefix(interface.name)),
@@ -692,21 +695,21 @@ const Interface = struct {
                 @setEvalBranchQuota(2500);
                 try writer.print(
                     \\pub inline fn setHandler(
-                    \\    _{[interface]}: *{[type]},
+                    \\    _{[interface]f}: *{[type]f},
                     \\    comptime T: type,
-                    \\    handle_request: *const fn (_{[interface]}: *{[type]}, request: Request, data: T) void,
-                    \\    comptime handle_destroy: ?fn (_{[interface]}: *{[type]}, data: T) void,
+                    \\    handle_request: *const fn (_{[interface]f}: *{[type]f}, request: Request, data: T) void,
+                    \\    comptime handle_destroy: ?fn (_{[interface]f}: *{[type]f}, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _resource: *server.wl.Resource = @ptrCast(_{[interface]});
+                    \\    const _resource: *server.wl.Resource = @ptrCast(_{[interface]f});
                     \\    _resource.setDispatcher(
-                    \\        common.Dispatcher({[type]}, T).dispatcher,
+                    \\        common.Dispatcher({[type]f}, T).dispatcher,
                     \\        handle_request,
                     \\        @ptrFromInt(@intFromPtr(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
-                    \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
+                    \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {{
                     \\                @call(.always_inline, _handler, .{{
-                    \\                    @as(*{[type]}, @ptrCast(__resource)),
+                    \\                    @as(*{[type]f}, @ptrCast(__resource)),
                     \\                    @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
                     \\                }});
                     \\            }}
@@ -720,20 +723,20 @@ const Interface = struct {
             } else {
                 try writer.print(
                     \\pub inline fn setHandler(
-                    \\    _{[interface]}: *{[type]},
+                    \\    _{[interface]f}: *{[type]f},
                     \\    comptime T: type,
-                    \\    comptime handle_destroy: ?fn (_{[interface]}: *{[type]}, data: T) void,
+                    \\    comptime handle_destroy: ?fn (_{[interface]f}: *{[type]f}, data: T) void,
                     \\    _data: T,
                     \\) void {{
-                    \\    const _resource: *server.wl.Resource = @ptrCast(_{[interface]});
+                    \\    const _resource: *server.wl.Resource = @ptrCast(_{[interface]f});
                     \\    _resource.setDispatcher(
                     \\        null,
                     \\        null,
                     \\        @ptrFromInt(@intFromPtr(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
-                    \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {{
+                    \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {{
                     \\                @call(.always_inline, _handler, .{{
-                    \\                    @as(*{[type]}, @ptrCast(__resource)),
+                    \\                    @as(*{[type]f}, @ptrCast(__resource)),
                     \\                    @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
                     \\                }});
                     \\            }}
@@ -756,8 +759,8 @@ const Interface = struct {
         try writer.writeAll("};\n");
     }
 
-    fn emitCommon(interface: Interface, target_version: ?u32, writer: anytype) !void {
-        try writer.print("const {} = struct {{", .{fmtId(trimPrefix(interface.name))});
+    fn emitCommon(interface: Interface, target_version: ?u32, writer: *io.Writer) !void {
+        try writer.print("const {f} = struct {{", .{fmtId(trimPrefix(interface.name))});
 
         try writer.print(
             \\const interface: common.Interface = .{{
@@ -816,15 +819,15 @@ const Message = struct {
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Message {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
-        var args = std.ArrayList(Arg).init(gpa);
-        defer args.deinit();
+        var args: std.ArrayList(Arg) = .empty;
+        defer args.deinit(gpa);
         var destructor = false;
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 // TODO: parse description
                 if (mem.eql(u8, tag, "arg"))
-                    try args.append(try Arg.parse(arena, parser));
+                    try args.append(gpa, try Arg.parse(arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
@@ -832,7 +835,7 @@ const Message = struct {
                     name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "since")) {
                     if (since != null) return error.DuplicateSince;
-                    since = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
+                    since = try fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 } else if (mem.eql(u8, attr.name, "type")) {
                     if (attr.valueEql("destructor")) {
                         destructor = true;
@@ -859,8 +862,8 @@ const Message = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emitField(message: Message, side: Side, writer: anytype) !void {
-        try writer.print("{}", .{fmtId(message.name)});
+    fn emitField(message: Message, side: Side, writer: *io.Writer) !void {
+        try writer.print("{f}", .{fmtId(message.name)});
         if (message.args.len == 0) {
             try writer.writeAll(": void,");
             return;
@@ -868,13 +871,13 @@ const Message = struct {
         try writer.writeAll(": struct {");
         for (message.args) |arg| {
             if (side == .server and arg.kind == .new_id and arg.kind.new_id == null) {
-                try writer.print("interface_name: [*:0]const u8, version: u32,{}: u32", .{fmtId(arg.name)});
+                try writer.print("interface_name: [*:0]const u8, version: u32,{f}: u32", .{fmtId(arg.name)});
             } else if (side == .client and arg.kind == .new_id) {
-                try writer.print("{}: *", .{fmtId(arg.name)});
+                try writer.print("{f}: *", .{fmtId(arg.name)});
                 try printAbsolute(.client, writer, arg.kind.new_id.?);
                 assert(!arg.allow_null);
             } else {
-                try writer.print("{}:", .{fmtId(arg.name)});
+                try writer.print("{f}:", .{fmtId(arg.name)});
                 // See notes on NULL in doc comment for wl_message in wayland-util.h
                 if (side == .client and arg.kind == .object and !arg.allow_null)
                     try writer.writeByte('?');
@@ -885,18 +888,18 @@ const Message = struct {
         try writer.writeAll("},\n");
     }
 
-    fn emitFn(message: Message, side: Side, writer: anytype, interface: Interface, opcode: usize) !void {
+    fn emitFn(message: Message, side: Side, writer: *io.Writer, interface: Interface, opcode: usize) !void {
         try writer.writeAll("pub fn ");
         if (side == .server) {
             if (message.kind == .destructor) {
-                try writer.print("destroySend{}", .{titleCase(message.name)});
+                try writer.print("destroySend{f}", .{titleCase(message.name)});
             } else {
-                try writer.print("send{}", .{titleCase(message.name)});
+                try writer.print("send{f}", .{titleCase(message.name)});
             }
         } else {
-            try writer.print("{}", .{camelCase(message.name)});
+            try writer.print("{f}", .{camelCase(message.name)});
         }
-        try writer.print("(_{}: *{}", .{
+        try writer.print("(_{f}: *{f}", .{
             fmtId(trimPrefix(interface.name)),
             titleCaseTrim(interface.name),
         });
@@ -935,7 +938,7 @@ const Message = struct {
             }
             try writer.writeAll("const _proxy: *client.wl.Proxy = @ptrCast(_");
         }
-        try writer.print("{});", .{fmtId(trimPrefix(interface.name))});
+        try writer.print("{f});", .{fmtId(trimPrefix(interface.name))});
         if (message.args.len > 0) {
             try writer.writeAll("var _args = [_]common.Argument{");
             for (message.args) |arg| {
@@ -959,27 +962,25 @@ const Message = struct {
                             const c_type = if (arg.kind == .uint) "u32" else "i32";
                             try writer.print(
                                 \\ )) {{
-                                \\    .@"enum" => @as({[ct]s}, @intCast(@intFromEnum(_{[an]}))),
-                                \\    .@"struct" => @bitCast(_{[an]}),
+                                \\    .@"enum" => @as({[ct]s}, @intCast(@intFromEnum(_{[an]f}))),
+                                \\    .@"struct" => @bitCast(_{[an]f}),
                                 \\    else => unreachable,
                                 \\ }}
                             , .{ .ct = c_type, .an = fmtId(arg.name) });
                         } else {
                             try writer.print("_{s}", .{arg.name});
                         }
-                        try writer.writeAll("},");
+                        try writer.writeAll("},\n");
                     },
                     .object, .new_id => |new_iface| {
                         if (arg.kind == .object or side == .server) {
-                            try writer.print(".{{ .o = @ptrCast(_{s}) }},", .{arg.name});
+                            try writer.print(".{{ .o = @ptrCast(_{s}) }},\n", .{arg.name});
                         } else {
                             if (new_iface == null) {
-                                try writer.writeAll(
-                                    \\.{ .s = T.interface.name },
-                                    \\.{ .u = version_to_construct },
-                                );
+                                try writer.writeAll(".{ .s = T.interface.name },\n");
+                                try writer.writeAll(".{ .u = version_to_construct },\n");
                             }
-                            try writer.writeAll(".{ .o = null },");
+                            try writer.writeAll(".{ .o = null },\n");
                         }
                     },
                 }
@@ -1012,7 +1013,7 @@ const Message = struct {
         try writer.writeAll("}\n");
     }
 
-    fn emitCommon(message: Message, writer: anytype) !void {
+    fn emitCommon(message: Message, writer: *io.Writer) !void {
         try writer.print(
             \\.{{ .name = "{s}", .signature = "
         , .{message.name});
@@ -1123,7 +1124,7 @@ const Arg = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emitSignature(arg: Arg, writer: anytype) !void {
+    fn emitSignature(arg: Arg, writer: *io.Writer) !void {
         switch (arg.kind) {
             .int => try writer.writeByte('i'),
             .uint => try writer.writeByte('u'),
@@ -1145,20 +1146,20 @@ const Arg = struct {
         }
     }
 
-    fn emitType(arg: Arg, side: Side, writer: anytype) !void {
+    fn emitType(arg: Arg, side: Side, writer: *io.Writer) !void {
         switch (arg.kind) {
             .int, .uint => {
                 if (arg.enum_name) |name| {
                     if (mem.indexOfScalar(u8, name, '.')) |dot_index| {
                         // Turn a reference like wl_shm.format into common.wl.shm.Format
                         const us_index = mem.indexOfScalar(u8, name, '_') orelse 0;
-                        try writer.print("common.{s}.{s}{}", .{
+                        try writer.print("common.{s}.{s}{f}", .{
                             name[0..us_index],
                             name[us_index + 1 .. dot_index + 1],
                             titleCase(name[dot_index + 1 ..]),
                         });
                     } else {
-                        try writer.print("{}", .{titleCase(name)});
+                        try writer.print("{f}", .{titleCase(name)});
                     }
                 } else if (arg.kind == .int) {
                     try writer.writeAll("i32");
@@ -1197,15 +1198,15 @@ const Enum = struct {
     fn parse(arena: mem.Allocator, parser: *xml.Parser) !Enum {
         var name: ?[]const u8 = null;
         var since: ?u32 = null;
-        var entries = std.ArrayList(Entry).init(gpa);
-        defer entries.deinit();
+        var entries: std.ArrayList(Entry) = .empty;
+        defer entries.deinit(gpa);
         var bitfield: ?bool = null;
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
                 // TODO: parse description
                 if (mem.eql(u8, tag, "entry"))
-                    try entries.append(try Entry.parse(arena, parser));
+                    try entries.append(gpa, try Entry.parse(arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
@@ -1213,7 +1214,7 @@ const Enum = struct {
                     name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "since")) {
                     if (since != null) return error.DuplicateSince;
-                    since = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
+                    since = try fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 } else if (mem.eql(u8, attr.name, "bitfield")) {
                     if (bitfield != null) return error.DuplicateBitfield;
                     if (!attr.valueEql("true") and !attr.valueEql("false")) return error.InvalidBoolValue;
@@ -1233,8 +1234,8 @@ const Enum = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emit(e: Enum, target_version: u32, writer: anytype) !void {
-        try writer.print("const {}", .{titleCase(e.name)});
+    fn emit(e: Enum, target_version: u32, writer: *io.Writer) !void {
+        try writer.print("const {f}", .{titleCase(e.name)});
 
         if (e.bitfield) {
             try writer.writeAll(" = packed struct(u32) {");
@@ -1262,7 +1263,7 @@ const Enum = struct {
         try writer.writeAll(" = enum(c_int) {");
         for (e.entries) |entry| {
             if (entry.since <= target_version) {
-                try writer.print("{}= {s},", .{ fmtId(entry.name), entry.value });
+                try writer.print("{f}= {s},", .{ fmtId(entry.name), entry.value });
             }
         }
         // Always generate non-exhaustive enums to ensure forward compatability.
@@ -1291,7 +1292,7 @@ const Entry = struct {
                     name = try attr.dupeValue(arena);
                 } else if (mem.eql(u8, attr.name, "since")) {
                     if (since != null) return error.DuplicateSince;
-                    since = try std.fmt.parseInt(u32, try attr.dupeValue(arena), 10);
+                    since = try fmt.parseInt(u32, try attr.dupeValue(arena), 10);
                 } else if (mem.eql(u8, attr.name, "value")) {
                     if (value != null) return error.DuplicateName;
                     value = try attr.dupeValue(arena);
@@ -1311,9 +1312,9 @@ const Entry = struct {
 
     // Return numeric value of enum entry. Can be base 10 and hexadecimal notation.
     fn intValue(e: Entry) u32 {
-        return std.fmt.parseInt(u32, e.value, 10) catch blk: {
+        return fmt.parseInt(u32, e.value, 10) catch blk: {
             const index = mem.indexOfScalar(u8, e.value, 'x').?;
-            break :blk std.fmt.parseInt(u32, e.value[index + 1 ..], 16) catch @panic("Can't parse enum entry.");
+            break :blk fmt.parseInt(u32, e.value[index + 1 ..], 16) catch @panic("Can't parse enum entry.");
         };
     }
 };
@@ -1330,12 +1331,7 @@ const Case = enum { title, camel };
 
 fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
     return struct {
-        pub fn f(
-            bytes: []const u8,
-            comptime _: []const u8,
-            _: std.fmt.FormatOptions,
-            writer: anytype,
-        ) !void {
+        pub fn f(bytes: []const u8, writer: *io.Writer) io.Writer.Error!void {
             if (case == .camel and std.zig.Token.getKeyword(bytes) != null) {
                 try writer.print("@\"{s}\"", .{bytes});
                 return;
@@ -1354,31 +1350,31 @@ fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
     };
 }
 
-fn titleCase(bytes: []const u8) std.fmt.Formatter(formatCaseImpl(.title, false).f) {
+fn titleCase(bytes: []const u8) fmt.Alt([]const u8, formatCaseImpl(.title, false).f) {
     return .{ .data = bytes };
 }
 
-fn titleCaseTrim(bytes: []const u8) std.fmt.Formatter(formatCaseImpl(.title, true).f) {
+fn titleCaseTrim(bytes: []const u8) fmt.Alt([]const u8, formatCaseImpl(.title, true).f) {
     return .{ .data = bytes };
 }
 
-fn camelCase(bytes: []const u8) std.fmt.Formatter(formatCaseImpl(.camel, false).f) {
+fn camelCase(bytes: []const u8) fmt.Alt([]const u8, formatCaseImpl(.camel, false).f) {
     return .{ .data = bytes };
 }
 
-fn camelCaseTrim(bytes: []const u8) std.fmt.Formatter(formatCaseImpl(.camel, true).f) {
+fn camelCaseTrim(bytes: []const u8) fmt.Alt([]const u8, formatCaseImpl(.camel, true).f) {
     return .{ .data = bytes };
 }
 
-fn printAbsolute(side: Side, writer: anytype, interface: []const u8) !void {
-    try writer.print("{s}.{s}.{}", .{
+fn printAbsolute(side: Side, writer: *io.Writer, interface: []const u8) !void {
+    try writer.print("{s}.{s}.{f}", .{
         @tagName(side),
         prefix(interface) orelse return error.MissingPrefix,
         titleCaseTrim(interface),
     });
 }
 
-inline fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
-    log.err(fmt, args);
+inline fn fatal(comptime msg: []const u8, args: anytype) noreturn {
+    log.err(msg, args);
     posix.exit(1);
 }

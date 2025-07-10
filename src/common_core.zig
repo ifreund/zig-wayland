@@ -274,7 +274,7 @@ fn Dispatcher(comptime Obj: type, comptime Data: type) type {
             opcode: u32,
             _: *const Message,
             args: [*]Argument,
-        ) callconv(.C) c_int {
+        ) callconv(.c) c_int {
             inline for (@typeInfo(Payload).@"union".fields, 0..) |payload_field, payload_num| {
                 if (payload_num == opcode) {
                     var payload_data: payload_field.type = undefined;
