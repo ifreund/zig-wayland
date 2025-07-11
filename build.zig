@@ -11,14 +11,18 @@ pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const scanner = Scanner.create(b, .{});
+    const scanner = Scanner.create(b, .{
+        // Use an unchanging vendored wayland.xml for the tests
+        // to make the snapshot test reliable.
+        .wayland_xml = b.path("test/wayland.xml"),
+    });
 
     const wayland = b.createModule(.{ .root_source_file = scanner.result });
 
-    scanner.generate("wl_compositor", 1);
+    scanner.generate("wl_compositor", 5);
     scanner.generate("wl_shm", 1);
-    scanner.generate("wl_seat", 2);
-    scanner.generate("wl_output", 1);
+    scanner.generate("wl_seat", 5);
+    scanner.generate("wl_output", 4);
 
     inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(.{

@@ -421,7 +421,7 @@ pub const client = struct {
             }
         };
         pub const Compositor = opaque {
-            pub const generated_version = 1;
+            pub const generated_version = 5;
             pub const interface = &common.wl.compositor.interface;
             pub fn getId(_compositor: *Compositor) u32 {
                 return @as(*client.wl.Proxy, @ptrCast(_compositor)).getId();
@@ -456,7 +456,7 @@ pub const client = struct {
             }
         };
         pub const Surface = opaque {
-            pub const generated_version = 1;
+            pub const generated_version = 5;
             pub const interface = &common.wl.surface.interface;
             pub const Error = common.wl.surface.Error;
             pub fn getId(_surface: *Surface) u32 {
@@ -538,6 +538,42 @@ pub const client = struct {
             pub fn commit(_surface: *Surface) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_surface);
                 _proxy.marshal(6, null);
+            }
+            pub fn setBufferTransform(_surface: *Surface, _transform: common.wl.output.Transform) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_surface);
+                var _args = [_]common.Argument{
+                    .{ .i = switch (@typeInfo(common.wl.output.Transform)) {
+                        .@"enum" => @as(i32, @intCast(@intFromEnum(_transform))),
+                        .@"struct" => @bitCast(_transform),
+                        else => unreachable,
+                    } },
+                };
+                _proxy.marshal(7, &_args);
+            }
+            pub fn setBufferScale(_surface: *Surface, _scale: i32) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_surface);
+                var _args = [_]common.Argument{
+                    .{ .i = _scale },
+                };
+                _proxy.marshal(8, &_args);
+            }
+            pub fn damageBuffer(_surface: *Surface, _x: i32, _y: i32, _width: i32, _height: i32) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_surface);
+                var _args = [_]common.Argument{
+                    .{ .i = _x },
+                    .{ .i = _y },
+                    .{ .i = _width },
+                    .{ .i = _height },
+                };
+                _proxy.marshal(9, &_args);
+            }
+            pub fn offset(_surface: *Surface, _x: i32, _y: i32) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_surface);
+                var _args = [_]common.Argument{
+                    .{ .i = _x },
+                    .{ .i = _y },
+                };
+                _proxy.marshal(10, &_args);
             }
         };
         pub const Region = opaque {
@@ -670,7 +706,7 @@ pub const client = struct {
             }
         };
         pub const Seat = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.seat.interface;
             pub const Capability = common.wl.seat.Capability;
             pub const Error = common.wl.seat.Error;
@@ -726,13 +762,18 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(2, &_args, client.wl.Touch.interface));
             }
+            pub fn release(_seat: *Seat) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_seat);
+                _proxy.marshal(3, null);
+                _proxy.destroy();
+            }
             pub fn destroy(_seat: *Seat) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_seat);
                 _proxy.destroy();
             }
         };
         pub const Pointer = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.pointer.interface;
             pub const Error = common.wl.pointer.Error;
             pub const ButtonState = common.wl.pointer.ButtonState;
@@ -779,6 +820,18 @@ pub const client = struct {
                     axis: Axis,
                     value: common.Fixed,
                 },
+                frame: void,
+                axis_source: struct {
+                    axis_source: AxisSource,
+                },
+                axis_stop: struct {
+                    time: u32,
+                    axis: Axis,
+                },
+                axis_discrete: struct {
+                    axis: Axis,
+                    discrete: i32,
+                },
             };
             pub inline fn setListener(
                 _pointer: *Pointer,
@@ -800,13 +853,18 @@ pub const client = struct {
                 };
                 _proxy.marshal(0, &_args);
             }
+            pub fn release(_pointer: *Pointer) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_pointer);
+                _proxy.marshal(1, null);
+                _proxy.destroy();
+            }
             pub fn destroy(_pointer: *Pointer) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_pointer);
                 _proxy.destroy();
             }
         };
         pub const Keyboard = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.keyboard.interface;
             pub const KeymapFormat = common.wl.keyboard.KeymapFormat;
             pub const KeyState = common.wl.keyboard.KeyState;
@@ -851,6 +909,10 @@ pub const client = struct {
                     mods_locked: u32,
                     group: u32,
                 },
+                repeat_info: struct {
+                    rate: i32,
+                    delay: i32,
+                },
             };
             pub inline fn setListener(
                 _keyboard: *Keyboard,
@@ -862,13 +924,18 @@ pub const client = struct {
                 const _mut_data: ?*anyopaque = @ptrFromInt(@intFromPtr(_data));
                 _proxy.addDispatcher(common.Dispatcher(Keyboard, T).dispatcher, _listener, _mut_data);
             }
+            pub fn release(_keyboard: *Keyboard) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_keyboard);
+                _proxy.marshal(0, null);
+                _proxy.destroy();
+            }
             pub fn destroy(_keyboard: *Keyboard) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_keyboard);
                 _proxy.destroy();
             }
         };
         pub const Touch = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.touch.interface;
             pub fn getId(_touch: *Touch) u32 {
                 return @as(*client.wl.Proxy, @ptrCast(_touch)).getId();
@@ -916,13 +983,18 @@ pub const client = struct {
                 const _mut_data: ?*anyopaque = @ptrFromInt(@intFromPtr(_data));
                 _proxy.addDispatcher(common.Dispatcher(Touch, T).dispatcher, _listener, _mut_data);
             }
+            pub fn release(_touch: *Touch) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_touch);
+                _proxy.marshal(0, null);
+                _proxy.destroy();
+            }
             pub fn destroy(_touch: *Touch) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_touch);
                 _proxy.destroy();
             }
         };
         pub const Output = opaque {
-            pub const generated_version = 1;
+            pub const generated_version = 4;
             pub const interface = &common.wl.output.interface;
             pub const Subpixel = common.wl.output.Subpixel;
             pub const Transform = common.wl.output.Transform;
@@ -957,6 +1029,16 @@ pub const client = struct {
                     height: i32,
                     refresh: i32,
                 },
+                done: void,
+                scale: struct {
+                    factor: i32,
+                },
+                name: struct {
+                    name: [*:0]const u8,
+                },
+                description: struct {
+                    description: [*:0]const u8,
+                },
             };
             pub inline fn setListener(
                 _output: *Output,
@@ -967,6 +1049,11 @@ pub const client = struct {
                 const _proxy: *client.wl.Proxy = @ptrCast(_output);
                 const _mut_data: ?*anyopaque = @ptrFromInt(@intFromPtr(_data));
                 _proxy.addDispatcher(common.Dispatcher(Output, T).dispatcher, _listener, _mut_data);
+            }
+            pub fn release(_output: *Output) void {
+                const _proxy: *client.wl.Proxy = @ptrCast(_output);
+                _proxy.marshal(0, null);
+                _proxy.destroy();
             }
             pub fn destroy(_output: *Output) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_output);
@@ -1911,7 +1998,7 @@ pub const server = struct {
             }
         };
         pub const Compositor = opaque {
-            pub const generated_version = 1;
+            pub const generated_version = 5;
             pub const interface = &common.wl.compositor.interface;
             pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*Compositor {
                 return @ptrCast(try server.wl.Resource.create(_client, Compositor, _version, _id));
@@ -1972,7 +2059,7 @@ pub const server = struct {
             }
         };
         pub const Surface = opaque {
-            pub const generated_version = 1;
+            pub const generated_version = 5;
             pub const interface = &common.wl.surface.interface;
             pub const Error = common.wl.surface.Error;
             pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*Surface {
@@ -2028,6 +2115,22 @@ pub const server = struct {
                     region: ?*server.wl.Region,
                 },
                 commit: void,
+                set_buffer_transform: struct {
+                    transform: common.wl.output.Transform,
+                },
+                set_buffer_scale: struct {
+                    scale: i32,
+                },
+                damage_buffer: struct {
+                    x: i32,
+                    y: i32,
+                    width: i32,
+                    height: i32,
+                },
+                offset: struct {
+                    x: i32,
+                    y: i32,
+                },
             };
             pub inline fn setHandler(
                 _surface: *Surface,
@@ -2278,7 +2381,7 @@ pub const server = struct {
             }
         };
         pub const Seat = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.seat.interface;
             pub const Capability = common.wl.seat.Capability;
             pub const Error = common.wl.seat.Error;
@@ -2322,6 +2425,7 @@ pub const server = struct {
                 get_touch: struct {
                     id: u32,
                 },
+                release: void,
             };
             pub inline fn setHandler(
                 _seat: *Seat,
@@ -2365,7 +2469,7 @@ pub const server = struct {
             }
         };
         pub const Pointer = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.pointer.interface;
             pub const Error = common.wl.pointer.Error;
             pub const ButtonState = common.wl.pointer.ButtonState;
@@ -2409,6 +2513,7 @@ pub const server = struct {
                     hotspot_x: i32,
                     hotspot_y: i32,
                 },
+                release: void,
             };
             pub inline fn setHandler(
                 _pointer: *Pointer,
@@ -2483,9 +2588,47 @@ pub const server = struct {
                 };
                 _resource.postEvent(4, &_args);
             }
+            pub fn sendFrame(_pointer: *Pointer) void {
+                const _resource: *server.wl.Resource = @ptrCast(_pointer);
+                _resource.postEvent(5, null);
+            }
+            pub fn sendAxisSource(_pointer: *Pointer, _axis_source: AxisSource) void {
+                const _resource: *server.wl.Resource = @ptrCast(_pointer);
+                var _args = [_]common.Argument{
+                    .{ .u = switch (@typeInfo(AxisSource)) {
+                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis_source))),
+                        .@"struct" => @bitCast(_axis_source),
+                        else => unreachable,
+                    } },
+                };
+                _resource.postEvent(6, &_args);
+            }
+            pub fn sendAxisStop(_pointer: *Pointer, _time: u32, _axis: Axis) void {
+                const _resource: *server.wl.Resource = @ptrCast(_pointer);
+                var _args = [_]common.Argument{
+                    .{ .u = _time }, .{ .u = switch (@typeInfo(Axis)) {
+                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis))),
+                        .@"struct" => @bitCast(_axis),
+                        else => unreachable,
+                    } },
+                };
+                _resource.postEvent(7, &_args);
+            }
+            pub fn sendAxisDiscrete(_pointer: *Pointer, _axis: Axis, _discrete: i32) void {
+                const _resource: *server.wl.Resource = @ptrCast(_pointer);
+                var _args = [_]common.Argument{
+                    .{ .u = switch (@typeInfo(Axis)) {
+                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis))),
+                        .@"struct" => @bitCast(_axis),
+                        else => unreachable,
+                    } },
+                    .{ .i = _discrete },
+                };
+                _resource.postEvent(8, &_args);
+            }
         };
         pub const Keyboard = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.keyboard.interface;
             pub const KeymapFormat = common.wl.keyboard.KeymapFormat;
             pub const KeyState = common.wl.keyboard.KeyState;
@@ -2516,22 +2659,26 @@ pub const server = struct {
             pub fn getUserData(_keyboard: *Keyboard) ?*anyopaque {
                 return @as(*server.wl.Resource, @ptrCast(_keyboard)).getUserData();
             }
+            pub const Request = union(enum) {
+                release: void,
+            };
             pub inline fn setHandler(
                 _keyboard: *Keyboard,
                 comptime T: type,
+                handle_request: *const fn (_keyboard: *Keyboard, request: Request, data: T) void,
                 comptime handle_destroy: ?fn (_keyboard: *Keyboard, data: T) void,
                 _data: T,
             ) void {
                 const _resource: *server.wl.Resource = @ptrCast(_keyboard);
                 _resource.setDispatcher(
-                    null,
-                    null,
+                    common.Dispatcher(Keyboard, T).dispatcher,
+                    handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Keyboard, @ptrCast(__resource)),
-                                @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
+                                @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
                             });
                         }
                     }._wrapper else null,
@@ -2589,9 +2736,17 @@ pub const server = struct {
                 };
                 _resource.postEvent(4, &_args);
             }
+            pub fn sendRepeatInfo(_keyboard: *Keyboard, _rate: i32, _delay: i32) void {
+                const _resource: *server.wl.Resource = @ptrCast(_keyboard);
+                var _args = [_]common.Argument{
+                    .{ .i = _rate },
+                    .{ .i = _delay },
+                };
+                _resource.postEvent(5, &_args);
+            }
         };
         pub const Touch = opaque {
-            pub const generated_version = 2;
+            pub const generated_version = 5;
             pub const interface = &common.wl.touch.interface;
             pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*Touch {
                 return @ptrCast(try server.wl.Resource.create(_client, Touch, _version, _id));
@@ -2620,22 +2775,26 @@ pub const server = struct {
             pub fn getUserData(_touch: *Touch) ?*anyopaque {
                 return @as(*server.wl.Resource, @ptrCast(_touch)).getUserData();
             }
+            pub const Request = union(enum) {
+                release: void,
+            };
             pub inline fn setHandler(
                 _touch: *Touch,
                 comptime T: type,
+                handle_request: *const fn (_touch: *Touch, request: Request, data: T) void,
                 comptime handle_destroy: ?fn (_touch: *Touch, data: T) void,
                 _data: T,
             ) void {
                 const _resource: *server.wl.Resource = @ptrCast(_touch);
                 _resource.setDispatcher(
-                    null,
-                    null,
+                    common.Dispatcher(Touch, T).dispatcher,
+                    handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Touch, @ptrCast(__resource)),
-                                @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
+                                @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
                             });
                         }
                     }._wrapper else null,
@@ -2682,7 +2841,7 @@ pub const server = struct {
             }
         };
         pub const Output = opaque {
-            pub const generated_version = 1;
+            pub const generated_version = 4;
             pub const interface = &common.wl.output.interface;
             pub const Subpixel = common.wl.output.Subpixel;
             pub const Transform = common.wl.output.Transform;
@@ -2714,22 +2873,26 @@ pub const server = struct {
             pub fn getUserData(_output: *Output) ?*anyopaque {
                 return @as(*server.wl.Resource, @ptrCast(_output)).getUserData();
             }
+            pub const Request = union(enum) {
+                release: void,
+            };
             pub inline fn setHandler(
                 _output: *Output,
                 comptime T: type,
+                handle_request: *const fn (_output: *Output, request: Request, data: T) void,
                 comptime handle_destroy: ?fn (_output: *Output, data: T) void,
                 _data: T,
             ) void {
                 const _resource: *server.wl.Resource = @ptrCast(_output);
                 _resource.setDispatcher(
-                    null,
-                    null,
+                    common.Dispatcher(Output, T).dispatcher,
+                    handle_request,
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.C) void {
                             @call(.always_inline, _handler, .{
                                 @as(*Output, @ptrCast(__resource)),
-                                @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
+                                @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
                             });
                         }
                     }._wrapper else null,
@@ -2765,6 +2928,31 @@ pub const server = struct {
                     .{ .i = _refresh },
                 };
                 _resource.postEvent(1, &_args);
+            }
+            pub fn sendDone(_output: *Output) void {
+                const _resource: *server.wl.Resource = @ptrCast(_output);
+                _resource.postEvent(2, null);
+            }
+            pub fn sendScale(_output: *Output, _factor: i32) void {
+                const _resource: *server.wl.Resource = @ptrCast(_output);
+                var _args = [_]common.Argument{
+                    .{ .i = _factor },
+                };
+                _resource.postEvent(3, &_args);
+            }
+            pub fn sendName(_output: *Output, _name: [*:0]const u8) void {
+                const _resource: *server.wl.Resource = @ptrCast(_output);
+                var _args = [_]common.Argument{
+                    .{ .s = _name },
+                };
+                _resource.postEvent(4, &_args);
+            }
+            pub fn sendDescription(_output: *Output, _description: [*:0]const u8) void {
+                const _resource: *server.wl.Resource = @ptrCast(_output);
+                var _args = [_]common.Argument{
+                    .{ .s = _description },
+                };
+                _resource.postEvent(5, &_args);
             }
         };
     };
@@ -3974,7 +4162,7 @@ const common = struct {
         const seat = struct {
             const interface: common.Interface = .{
                 .name = "wl_seat",
-                .version = 9,
+                .version = 10,
                 .method_count = 4,
                 .methods = &.{
                     .{
@@ -4070,7 +4258,7 @@ const common = struct {
         const pointer = struct {
             const interface: common.Interface = .{
                 .name = "wl_pointer",
-                .version = 9,
+                .version = 10,
                 .method_count = 2,
                 .methods = &.{
                     .{
@@ -4212,7 +4400,7 @@ const common = struct {
         const keyboard = struct {
             const interface: common.Interface = .{
                 .name = "wl_keyboard",
-                .version = 9,
+                .version = 10,
                 .method_count = 1,
                 .methods = &.{
                     .{
@@ -4294,7 +4482,7 @@ const common = struct {
         const touch = struct {
             const interface: common.Interface = .{
                 .name = "wl_touch",
-                .version = 9,
+                .version = 10,
                 .method_count = 1,
                 .methods = &.{
                     .{
@@ -4559,6 +4747,29 @@ const common = struct {
                         .name = "set_desync",
                         .signature = "",
                         .types = null,
+                    },
+                },
+                .event_count = 0,
+                .events = null,
+            };
+        };
+        const fixes = struct {
+            const interface: common.Interface = .{
+                .name = "wl_fixes",
+                .version = 1,
+                .method_count = 2,
+                .methods = &.{
+                    .{
+                        .name = "destroy",
+                        .signature = "",
+                        .types = null,
+                    },
+                    .{
+                        .name = "destroy_registry",
+                        .signature = "o",
+                        .types = &.{
+                            &common.wl.registry.interface,
+                        },
                     },
                 },
                 .event_count = 0,
