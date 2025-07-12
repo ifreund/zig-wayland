@@ -1525,6 +1525,15 @@ pub const server = struct {
             };
         }
 
+        pub const EventMask = packed struct(u32) {
+            readable: bool = false,
+            writable: bool = false,
+            hangup: bool = false,
+            @"error": bool = false,
+
+            _: u28 = 0,
+        };
+
         pub const EventLoop = opaque {
             extern fn wl_event_loop_create() ?*EventLoop;
             pub fn create() !*EventLoop {
@@ -1545,8 +1554,8 @@ pub const server = struct {
                 loop: *EventLoop,
                 comptime T: type,
                 fd: c_int,
-                mask: u32,
-                comptime func: fn (fd: c_int, mask: u32, data: T) c_int,
+                mask: EventMask,
+                comptime func: fn (fd: c_int, mask: EventMask, data: T) c_int,
                 data: T,
             ) error{AddFdFailed}!*EventSource {
                 return wl_event_loop_add_fd(
@@ -1555,7 +1564,7 @@ pub const server = struct {
                     mask,
                     struct {
                         fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.C) c_int {
-                            return func(_fd, _mask, @ptrCast(@alignCast(_data)));
+                            return func(_fd, @bitCast(_mask), @ptrCast(@alignCast(_data)));
                         }
                     }._wrapper,
                     data,
@@ -1664,8 +1673,8 @@ pub const server = struct {
             pub const check = wl_event_source_check;
 
             extern fn wl_event_source_fd_update(source: *EventSource, mask: u32) c_int;
-            pub fn fdUpdate(source: *EventSource, mask: u32) !void {
-                const rc = wl_event_source_fd_update(source, mask);
+            pub fn fdUpdate(source: *EventSource, mask: EventMask) !void {
+                const rc = wl_event_source_fd_update(source, @bitCast(mask));
                 switch (posix.errno(rc)) {
                     .SUCCESS => return,
                     // TODO
