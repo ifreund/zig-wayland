@@ -480,11 +480,16 @@ const Interface = struct {
     // These interfaces are special in that their version may never be increased.
     // That is, they are pinned to version 1 forever. They also may break the
     // normally required tree object creation hierarchy.
+    //
+    // TODO we should automatically add objects that have multiple independent
+    // constructors to this list. Protocol extensions may add version locked
+    // interfaces, for example ext_image_capture_source_v1.
     const version_locked_interfaces = std.StaticStringMap(void).initComptime(.{
         .{"wl_display"},
         .{"wl_registry"},
         .{"wl_callback"},
         .{"wl_buffer"},
+        .{"ext_image_capture_source_v1"},
     });
     fn version_locked(interface_name: []const u8) bool {
         return version_locked_interfaces.has(interface_name);
