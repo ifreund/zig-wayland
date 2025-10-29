@@ -247,29 +247,25 @@ const Scanner = struct {
     }
 };
 
-fn parseText(arena: mem.Allocator, parser: *xml.Parser, closing_tag: []const u8) !?[]const u8 {
-    // TODO: Parse the summary attribute, and return some kind of Description object.
-
+// TODO Parse the summary attribute, and return some kind of Description object.
+fn parseDescription(arena: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
     var description: std.ArrayList(u8) = .empty;
 
     while (parser.next()) |ev| switch (ev) {
         .attribute => continue,
-        .character_data => |data| {
-            try description.appendSlice(arena, data);
-        },
-        .close_tag => |tag| {
-            if (mem.eql(u8, tag, closing_tag))
-                break;
+        .character_data => |data| try description.appendSlice(arena, data),
+        .close_tag => |tag| if (mem.eql(u8, tag, "description")) {
+            // A description may have only a summary attribute and no body.
+            // Since we don't parse summaries yet, return null.
+            if (description.items.len == 0) {
+                return null;
+            }
+            return try description.toOwnedSlice(arena);
         },
         else => return error.BadDescription,
-    } else return error.UnexpectedEndOfFile;
+    };
 
-    // Some descriptions only have the summary attribute, then end immediately.
-    // Since we don't parse summaries yet, let's return a null description.
-    if (description.items.len == 0)
-        return null;
-
-    return try description.toOwnedSlice(arena);
+    return error.UnexpectedEndOfFile;
 }
 
 /// All data in this struct is immutable after creation in parse().
@@ -318,7 +314,7 @@ const Protocol = struct {
                 } else if (mem.eql(u8, tag, "description")) {
                     if (toplevel_description != null)
                         return error.DuplicateToplevelDescription;
-                    toplevel_description = try parseText(arena, parser, "description");
+                    toplevel_description = try parseDescription(arena, parser);
                 } else if (mem.eql(u8, tag, "interface")) {
                     const interface = try Interface.parse(arena, parser);
                     if (Interface.version_locked(interface.name)) {
@@ -525,7 +521,7 @@ const Interface = struct {
             .open_tag => |tag| {
                 if (mem.eql(u8, tag, "description")) {
                     if (description != null) return error.DuplicateDescription;
-                    description = try parseText(arena, parser, "description");
+                    description = try parseDescription(arena, parser);
                 } else if (mem.eql(u8, tag, "request"))
                     try requests.append(gpa, try Message.parse(arena, parser))
                 else if (mem.eql(u8, tag, "event"))
@@ -861,7 +857,7 @@ const Message = struct {
             .open_tag => |tag| {
                 if (mem.eql(u8, tag, "description")) {
                     if (description != null) return error.DuplicateDescription;
-                    description = try parseText(arena, parser, "description");
+                    description = try parseDescription(arena, parser);
                 } else if (mem.eql(u8, tag, "arg"))
                     try args.append(gpa, try Arg.parse(arena, parser));
             },
@@ -1261,7 +1257,7 @@ const Enum = struct {
             .open_tag => |tag| {
                 if (mem.eql(u8, tag, "description")) {
                     if (description != null) return error.DuplicateDescription;
-                    description = try parseText(arena, parser, "description");
+                    description = try parseDescription(arena, parser);
                 } else if (mem.eql(u8, tag, "entry"))
                     try entries.append(gpa, try Entry.parse(arena, parser));
             },
