@@ -102,14 +102,15 @@ pub const Scanner = struct {
     };
 
     pub fn create(b: *Build, options: Options) *Scanner {
+        const pkg_config_exe_path = b.graph.env_map.get("PKG_CONFIG") orelse "pkg-config";
         const wayland_xml: Build.LazyPath = options.wayland_xml orelse blk: {
-            const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-scanner" });
+            const pc_output = b.run(&.{ pkg_config_exe_path, "--variable=pkgdatadir", "wayland-scanner" });
             break :blk .{
                 .cwd_relative = b.pathJoin(&.{ mem.trim(u8, pc_output, &std.ascii.whitespace), "wayland.xml" }),
             };
         };
         const wayland_protocols: Build.LazyPath = options.wayland_protocols orelse blk: {
-            const pc_output = b.run(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" });
+            const pc_output = b.run(&.{ pkg_config_exe_path, "--variable=pkgdatadir", "wayland-protocols" });
             break :blk .{
                 .cwd_relative = mem.trim(u8, pc_output, &std.ascii.whitespace),
             };
