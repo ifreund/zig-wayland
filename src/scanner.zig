@@ -1016,11 +1016,11 @@ const Message = struct {
                             const c_type = if (arg.kind == .uint) "u32" else "i32";
                             try writer.print(
                                 \\ )) {{
-                                \\    .@"enum" => @as({[ct]s}, @intCast(@intFromEnum(_{[an]f}))),
-                                \\    .@"struct" => @bitCast(_{[an]f}),
+                                \\    .@"enum" => @as({[ct]s}, @intCast(@intFromEnum(_{[an]s}))),
+                                \\    .@"struct" => @bitCast(_{[an]s}),
                                 \\    else => unreachable,
                                 \\ }}
-                            , .{ .ct = c_type, .an = fmtId(arg.name) });
+                            , .{ .ct = c_type, .an = arg.name });
                         } else {
                             try writer.print("_{s}", .{arg.name});
                         }
