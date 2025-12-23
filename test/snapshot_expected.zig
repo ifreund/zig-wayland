@@ -2649,7 +2649,7 @@ pub const server = struct {
                 return wl_event_loop_add_fd(
                     loop,
                     fd,
-                    mask,
+                    @bitCast(mask),
                     struct {
                         fn _wrapper(_fd: c_int, _mask: u32, _data: ?*anyopaque) callconv(.c) c_int {
                             return func(_fd, @bitCast(_mask), @ptrCast(@alignCast(_data)));
