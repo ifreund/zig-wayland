@@ -66,6 +66,11 @@ pub fn main() !void {
     var tree = try std.zig.Ast.parse(gpa, generated, .zig);
     defer tree.deinit(gpa);
 
+    if (tree.errors.len != 0) {
+        try std.zig.printAstErrorsToStderr(gpa, tree, "generated", .auto);
+        return error.ParseError;
+    }
+
     const out_file = try std.fs.createFileAbsolute(out_path, .{});
     defer out_file.close();
 
