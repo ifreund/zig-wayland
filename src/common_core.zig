@@ -136,31 +136,9 @@ const list = struct {
                 return head.link.next == &head.link;
             }
 
-            /// Removal of elements during iteration is illegal
-            pub fn Iterator(comptime direction: Direction) type {
-                return struct {
-                    head: *Link,
-                    current: *Link,
-
-                    pub fn next(it: *@This()) ?*T {
-                        it.current = switch (direction) {
-                            .forward => it.current.next.?,
-                            .reverse => it.current.prev.?,
-                        };
-                        if (it.current == it.head) return null;
-                        return elemFromLink(it.current);
-                    }
-                };
-            }
-
-            /// Removal of elements during iteration is illegal
-            pub fn iterator(head: *Self, comptime direction: Direction) Iterator(direction) {
-                return .{ .head = &head.link, .current = &head.link };
-            }
-
             /// Removal of the current element during iteration is permitted.
             /// Removal of other elements is illegal.
-            pub fn SafeIterator(comptime direction: Direction) type {
+            pub fn Iterator(comptime direction: Direction) type {
                 return struct {
                     head: *Link,
                     current: *Link,
@@ -180,7 +158,7 @@ const list = struct {
 
             /// Removal of the current element during iteration is permitted.
             /// Removal of other elements is illegal.
-            pub fn safeIterator(head: *Self, comptime direction: Direction) SafeIterator(direction) {
+            pub fn iterator(head: *Self, comptime direction: Direction) Iterator(direction) {
                 return .{
                     .head = &head.link,
                     .current = &head.link,
@@ -190,6 +168,9 @@ const list = struct {
                     },
                 };
             }
+
+            pub const safeIterator = iterator;
+            pub const SafeIterator = Iterator;
 
             fn linkFromElem(elem: *T) *Link {
                 if (link_field) |f| {
