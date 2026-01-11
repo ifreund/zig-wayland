@@ -273,6 +273,28 @@ fn parseDescription(arena: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
     return error.UnexpectedEndOfFile;
 }
 
+fn emitVersion(object: anytype, writer: *io.Writer) io.Writer.Error!void {
+    const T = @TypeOf(object);
+    if (!@hasField(T, "name") or !@hasField(T, "since")) {
+        @compileError("Cannot generate '_since_version' constant for the type: `" ++ @typeName(T) ++ "'. Missing `name' or `since' field");
+    }
+
+    switch (std.zig.isValidId(object.name)) {
+        inline else => |valid| {
+            const format = comptime if (valid)
+                \\pub const {[identifier]s}_since_version = {[since]d};
+            else
+                \\pub const @"{[identifier]s}_since_version" = {[since]d};
+            ;
+
+            try writer.print(format ++ "\n", .{
+                .identifier = object.name,
+                .since = object.since,
+            });
+        },
+    }
+}
+
 /// All data in this struct is immutable after creation in parse().
 const Protocol = struct {
     const Global = struct {
@@ -623,6 +645,14 @@ const Interface = struct {
             if (has_event) {
                 try writer.writeAll("pub const Event = union(enum) {");
                 for (interface.events) |event| {
+                    if (event.since > target_version)
+                        continue;
+
+                    try emitVersion(event, writer);
+                }
+                try writer.writeByte('\n');
+
+                for (interface.events) |event| {
                     if (event.since <= target_version) {
                         try event.emitField(.client, writer);
                     }
@@ -650,6 +680,7 @@ const Interface = struct {
                 if (request.since <= target_version) {
                     if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
                     try request.emitFn(side, writer, interface, opcode);
+                    try emitVersion(request, writer);
                 }
             }
 
@@ -666,6 +697,7 @@ const Interface = struct {
                     .type = titleCaseTrim(interface.name),
                 });
             }
+            // side == .server
         } else {
             try writer.print(
                 \\pub fn create(_client: *server.wl.Client, _version: u32, _id: u32) !*{[type]f} {{
@@ -719,6 +751,14 @@ const Interface = struct {
 
             if (has_request) {
                 try writer.writeAll("pub const Request = union(enum) {");
+
+                for (interface.requests) |request| {
+                    if (request.since > target_version)
+                        continue;
+
+                    try emitVersion(request, writer);
+                }
+
                 for (interface.requests) |request| {
                     if (request.since <= target_version) {
                         try request.emitField(.server, writer);
@@ -785,6 +825,7 @@ const Interface = struct {
             for (interface.events, 0..) |event, opcode| {
                 if (event.since <= target_version) {
                     try event.emitFn(side, writer, interface, opcode);
+                    try emitVersion(event, writer);
                 }
             }
         }
@@ -1306,6 +1347,14 @@ const Enum = struct {
 
         if (e.bitfield) {
             try writer.writeAll(" = packed struct(u32) {");
+
+            for (e.entries) |entry| {
+                if (entry.since > target_version) continue;
+                try emitVersion(entry, writer);
+            }
+
+            try writer.writeByte('\n');
+
             for (0..32) |i| {
                 for (e.entries) |entry| {
                     if (entry.since > target_version) continue;
@@ -1328,6 +1377,12 @@ const Enum = struct {
         }
 
         try writer.writeAll(" = enum(c_int) {");
+        for (e.entries) |entry| {
+            if (entry.since > target_version) continue;
+            try emitVersion(entry, writer);
+        }
+        try writer.writeByte('\n');
+
         for (e.entries) |entry| {
             if (entry.since <= target_version) {
                 try writer.print("{f}= {s},", .{ fmtId(entry.name), entry.value });

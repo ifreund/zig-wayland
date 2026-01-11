@@ -180,6 +180,9 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const error_since_version = 1;
+                pub const delete_id_since_version = 1;
+
                 /// The error event is sent out when a fatal (non-recoverable)
                 /// error has occurred.  The object_id argument is the object
                 /// where the error occurred, most often in response to a request
@@ -230,6 +233,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Callback.interface));
             }
+            pub const sync_since_version = 1;
 
             /// This request creates a registry object that allows the client
             /// to list and bind the global objects available from the
@@ -247,6 +251,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(1, &_args, client.wl.Registry.interface));
             }
+            pub const get_registry_since_version = 1;
             extern fn wl_display_connect(name: ?[*:0]const u8) ?*Display;
             pub inline fn connect(name: ?[*:0]const u8) error{ConnectFailed}!*Display {
                 return wl_display_connect(name) orelse return error.ConnectFailed;
@@ -374,6 +379,9 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const global_since_version = 1;
+                pub const global_remove_since_version = 1;
+
                 /// Notify the client of global objects.
                 ///
                 /// The event notifies the client that a global object with
@@ -422,6 +430,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructorVersioned(0, &_args, T.interface, version_to_construct));
             }
+            pub const bind_since_version = 1;
             pub fn destroy(_registry: *Registry) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_registry);
                 _proxy.destroy();
@@ -450,6 +459,8 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const done_since_version = 1;
+
                 /// Notify the client when the related request is done.
                 done: struct {
                     callback_data: u32,
@@ -503,6 +514,8 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const release_since_version = 1;
+
                 /// Sent when this wl_buffer is no longer used by the compositor.
                 ///
                 /// For more information on when release events may or may not be sent,
@@ -538,6 +551,7 @@ pub const client = struct {
                 _proxy.marshal(0, null);
                 _proxy.destroy();
             }
+            pub const destroy_since_version = 1;
         };
 
         /// A compositor.  This object is a singleton global.  The
@@ -567,6 +581,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Surface.interface));
             }
+            pub const create_surface_since_version = 1;
 
             /// Ask the compositor to create a new region.
             pub fn createRegion(_compositor: *Compositor) !*client.wl.Region {
@@ -576,6 +591,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(1, &_args, client.wl.Region.interface));
             }
+            pub const create_region_since_version = 1;
             pub fn destroy(_compositor: *Compositor) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_compositor);
                 _proxy.destroy();
@@ -642,6 +658,9 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const enter_since_version = 1;
+                pub const leave_since_version = 1;
+
                 /// This is emitted whenever a surface's creation, movement, or resizing
                 /// results in some part of it being within the scanout region of an
                 /// output.
@@ -680,6 +699,7 @@ pub const client = struct {
                 _proxy.marshal(0, null);
                 _proxy.destroy();
             }
+            pub const destroy_since_version = 1;
 
             /// Set a buffer as the content of this surface.
             ///
@@ -755,6 +775,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(1, &_args);
             }
+            pub const attach_since_version = 1;
 
             /// This request is used to describe the regions where the pending
             /// buffer is different from the current surface contents, and where
@@ -787,6 +808,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(2, &_args);
             }
+            pub const damage_since_version = 1;
 
             /// Request a notification when it is a good time to start drawing a new
             /// frame, by creating a frame callback. This is useful for throttling
@@ -827,6 +849,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(3, &_args, client.wl.Callback.interface));
             }
+            pub const frame_since_version = 1;
 
             /// This request sets the region of the surface that contains
             /// opaque content.
@@ -859,6 +882,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(4, &_args);
             }
+            pub const set_opaque_region_since_version = 1;
 
             /// This request sets the region of the surface that can receive
             /// pointer and touch events.
@@ -889,6 +913,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(5, &_args);
             }
+            pub const set_input_region_since_version = 1;
 
             /// Surface state (input, opaque, and damage regions, attached buffers,
             /// etc.) is double-buffered. Protocol requests modify the pending state,
@@ -913,6 +938,7 @@ pub const client = struct {
                 const _proxy: *client.wl.Proxy = @ptrCast(_surface);
                 _proxy.marshal(6, null);
             }
+            pub const commit_since_version = 1;
 
             /// This request sets the transformation that the client has already applied
             /// to the content of the buffer. The accepted values for the transform
@@ -956,6 +982,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(7, &_args);
             }
+            pub const set_buffer_transform_since_version = 2;
 
             /// This request sets an optional scaling factor on how the compositor
             /// interprets the contents of the buffer attached to the window.
@@ -987,6 +1014,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(8, &_args);
             }
+            pub const set_buffer_scale_since_version = 3;
 
             /// This request is used to describe the regions where the pending
             /// buffer is different from the current surface contents, and where
@@ -1030,6 +1058,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(9, &_args);
             }
+            pub const damage_buffer_since_version = 4;
 
             /// The x and y arguments specify the location of the new pending
             /// buffer's upper left corner, relative to the current buffer's upper
@@ -1054,6 +1083,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(10, &_args);
             }
+            pub const offset_since_version = 5;
         };
 
         /// A region object describes an area.
@@ -1082,6 +1112,7 @@ pub const client = struct {
                 _proxy.marshal(0, null);
                 _proxy.destroy();
             }
+            pub const destroy_since_version = 1;
 
             /// Add the specified rectangle to the region.
             pub fn add(_region: *Region, _x: i32, _y: i32, _width: i32, _height: i32) void {
@@ -1094,6 +1125,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(1, &_args);
             }
+            pub const add_since_version = 1;
 
             /// Subtract the specified rectangle from the region.
             pub fn subtract(_region: *Region, _x: i32, _y: i32, _width: i32, _height: i32) void {
@@ -1106,6 +1138,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(2, &_args);
             }
+            pub const subtract_since_version = 1;
         };
 
         /// A singleton global object that provides support for shared
@@ -1136,6 +1169,8 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const format_since_version = 1;
+
                 /// Informs the client about a valid pixel format that
                 /// can be used for buffers. Known formats include
                 /// argb8888 and xrgb8888.
@@ -1167,6 +1202,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.ShmPool.interface));
             }
+            pub const create_pool_since_version = 1;
             pub fn destroy(_shm: *Shm) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_shm);
                 _proxy.destroy();
@@ -1223,6 +1259,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Buffer.interface));
             }
+            pub const create_buffer_since_version = 1;
 
             /// Destroy the shared memory pool.
             ///
@@ -1234,6 +1271,7 @@ pub const client = struct {
                 _proxy.marshal(1, null);
                 _proxy.destroy();
             }
+            pub const destroy_since_version = 1;
 
             /// This request will cause the server to remap the backing memory
             /// for the pool from the file descriptor passed when the pool was
@@ -1252,6 +1290,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(2, &_args);
             }
+            pub const resize_since_version = 1;
         };
 
         /// A seat is a group of keyboards, pointer and touch devices. This
@@ -1277,6 +1316,9 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const capabilities_since_version = 1;
+                pub const name_since_version = 2;
+
                 /// This is sent on binding to the seat global or whenever a seat gains
                 /// or loses the pointer, keyboard or touch capabilities.
                 /// The argument is a capability enum containing the complete set of
@@ -1351,6 +1393,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Pointer.interface));
             }
+            pub const get_pointer_since_version = 1;
 
             /// The ID provided will be initialized to the wl_keyboard interface
             /// for this seat.
@@ -1367,6 +1410,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(1, &_args, client.wl.Keyboard.interface));
             }
+            pub const get_keyboard_since_version = 1;
 
             /// The ID provided will be initialized to the wl_touch interface
             /// for this seat.
@@ -1383,6 +1427,7 @@ pub const client = struct {
                 };
                 return @ptrCast(try _proxy.marshalConstructor(2, &_args, client.wl.Touch.interface));
             }
+            pub const get_touch_since_version = 1;
 
             /// Using this request a client can tell the server that it is not going to
             /// use the seat object anymore.
@@ -1391,6 +1436,7 @@ pub const client = struct {
                 _proxy.marshal(3, null);
                 _proxy.destroy();
             }
+            pub const release_since_version = 5;
             pub fn destroy(_seat: *Seat) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_seat);
                 _proxy.destroy();
@@ -1427,6 +1473,16 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const enter_since_version = 1;
+                pub const leave_since_version = 1;
+                pub const motion_since_version = 1;
+                pub const button_since_version = 1;
+                pub const axis_since_version = 1;
+                pub const frame_since_version = 5;
+                pub const axis_source_since_version = 5;
+                pub const axis_stop_since_version = 5;
+                pub const axis_discrete_since_version = 5;
+
                 /// Notification that this seat's pointer is focused on a certain
                 /// surface.
                 ///
@@ -1673,6 +1729,7 @@ pub const client = struct {
                 };
                 _proxy.marshal(0, &_args);
             }
+            pub const set_cursor_since_version = 1;
 
             /// Using this request a client can tell the server that it is not going to
             /// use the pointer object anymore.
@@ -1684,6 +1741,7 @@ pub const client = struct {
                 _proxy.marshal(1, null);
                 _proxy.destroy();
             }
+            pub const release_since_version = 3;
             pub fn destroy(_pointer: *Pointer) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_pointer);
                 _proxy.destroy();
@@ -1721,6 +1779,13 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const keymap_since_version = 1;
+                pub const enter_since_version = 1;
+                pub const leave_since_version = 1;
+                pub const key_since_version = 1;
+                pub const modifiers_since_version = 1;
+                pub const repeat_info_since_version = 4;
+
                 /// This event provides a file descriptor to the client which can be
                 /// memory-mapped in read-only mode to provide a keyboard mapping
                 /// description.
@@ -1850,6 +1915,7 @@ pub const client = struct {
                 _proxy.marshal(0, null);
                 _proxy.destroy();
             }
+            pub const release_since_version = 3;
             pub fn destroy(_keyboard: *Keyboard) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_keyboard);
                 _proxy.destroy();
@@ -1881,6 +1947,12 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const down_since_version = 1;
+                pub const up_since_version = 1;
+                pub const motion_since_version = 1;
+                pub const frame_since_version = 1;
+                pub const cancel_since_version = 1;
+
                 /// A new touch point has appeared on the surface. This touch point is
                 /// assigned a unique ID. Future events from this touch point reference
                 /// this ID. The ID ceases to be valid after a touch up event and may be
@@ -1945,6 +2017,7 @@ pub const client = struct {
                 _proxy.marshal(0, null);
                 _proxy.destroy();
             }
+            pub const release_since_version = 3;
             pub fn destroy(_touch: *Touch) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_touch);
                 _proxy.destroy();
@@ -1977,6 +2050,13 @@ pub const client = struct {
                 _proxy.setQueue(_queue);
             }
             pub const Event = union(enum) {
+                pub const geometry_since_version = 1;
+                pub const mode_since_version = 1;
+                pub const done_since_version = 2;
+                pub const scale_since_version = 2;
+                pub const name_since_version = 4;
+                pub const description_since_version = 4;
+
                 /// The geometry event describes geometric properties of the output.
                 /// The event is sent when binding to the output object and whenever
                 /// any of the properties change.
@@ -2143,6 +2223,7 @@ pub const client = struct {
                 _proxy.marshal(0, null);
                 _proxy.destroy();
             }
+            pub const release_since_version = 3;
             pub fn destroy(_output: *Output) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_output);
                 _proxy.destroy();
@@ -2854,6 +2935,9 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_display)).postError(@intCast(@intFromEnum(_err)), _message);
             }
             pub const Request = union(enum) {
+                pub const sync_since_version = 1;
+                pub const get_registry_since_version = 1;
+
                 /// The sync request asks the server to emit the 'done' event
                 /// on the returned wl_callback object.  Since requests are
                 /// handled in-order and events are delivered in-order, this can
@@ -2920,6 +3004,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const error_since_version = 1;
 
             /// This event is used internally by the object ID management
             /// logic. When a client deletes an object that it had created,
@@ -2933,6 +3018,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const delete_id_since_version = 1;
         };
 
         /// The singleton global registry object.  The server has a number of
@@ -2986,6 +3072,8 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_registry)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const bind_since_version = 1;
+
                 /// Binds a new, client-created object to the server using the
                 /// specified name as the identifier.
                 bind: struct {
@@ -3031,6 +3119,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const global_since_version = 1;
 
             /// Notify the client of removed global objects.
             ///
@@ -3049,6 +3138,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const global_remove_since_version = 1;
         };
 
         /// Clients can handle the 'done' event to get notified when
@@ -3116,6 +3206,7 @@ pub const server = struct {
                 _resource.postEvent(0, &_args);
                 _resource.destroy();
             }
+            pub const done_since_version = 1;
         };
 
         /// A buffer provides the content for a wl_surface. Buffers are
@@ -3164,6 +3255,8 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_buffer)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const destroy_since_version = 1;
+
                 /// Destroy a buffer. If and how you need to release the backing
                 /// storage is defined by the buffer factory interface.
                 ///
@@ -3210,6 +3303,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_buffer);
                 _resource.postEvent(0, null);
             }
+            pub const release_since_version = 1;
         };
 
         /// A compositor.  This object is a singleton global.  The
@@ -3246,6 +3340,9 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_compositor)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const create_surface_since_version = 1;
+                pub const create_region_since_version = 1;
+
                 /// Ask the compositor to create a new surface.
                 create_surface: struct {
                     id: u32,
@@ -3357,6 +3454,18 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_surface)).postError(@intCast(@intFromEnum(_err)), _message);
             }
             pub const Request = union(enum) {
+                pub const destroy_since_version = 1;
+                pub const attach_since_version = 1;
+                pub const damage_since_version = 1;
+                pub const frame_since_version = 1;
+                pub const set_opaque_region_since_version = 1;
+                pub const set_input_region_since_version = 1;
+                pub const commit_since_version = 1;
+                pub const set_buffer_transform_since_version = 2;
+                pub const set_buffer_scale_since_version = 3;
+                pub const damage_buffer_since_version = 4;
+                pub const offset_since_version = 5;
+
                 /// Deletes the surface and invalidates its object ID.
                 destroy: void,
                 /// Set a buffer as the content of this surface.
@@ -3723,6 +3832,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const enter_since_version = 1;
 
             /// This is emitted whenever a surface's creation, movement, or resizing
             /// results in it no longer having any part of it within the scanout region
@@ -3740,6 +3850,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const leave_since_version = 1;
         };
 
         /// A region object describes an area.
@@ -3777,6 +3888,10 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_region)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const destroy_since_version = 1;
+                pub const add_since_version = 1;
+                pub const subtract_since_version = 1;
+
                 /// Destroy the region.  This will invalidate the object ID.
                 destroy: void,
                 /// Add the specified rectangle to the region.
@@ -3864,6 +3979,8 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_shm)).postError(@intCast(@intFromEnum(_err)), _message);
             }
             pub const Request = union(enum) {
+                pub const create_pool_since_version = 1;
+
                 /// Create a new wl_shm_pool object.
                 ///
                 /// The pool can be used to create shared memory based buffer
@@ -3911,6 +4028,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const format_since_version = 1;
         };
 
         /// The wl_shm_pool object encapsulates a piece of memory shared
@@ -3951,6 +4069,10 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_shm_pool)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const create_buffer_since_version = 1;
+                pub const destroy_since_version = 1;
+                pub const resize_since_version = 1;
+
                 /// Create a wl_buffer object from the pool.
                 ///
                 /// The buffer is created offset bytes into the pool and has
@@ -4055,6 +4177,11 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_seat)).postError(@intCast(@intFromEnum(_err)), _message);
             }
             pub const Request = union(enum) {
+                pub const get_pointer_since_version = 1;
+                pub const get_keyboard_since_version = 1;
+                pub const get_touch_since_version = 1;
+                pub const release_since_version = 5;
+
                 /// The ID provided will be initialized to the wl_pointer interface
                 /// for this seat.
                 ///
@@ -4153,6 +4280,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const capabilities_since_version = 1;
 
             /// In a multi-seat configuration the seat name can be used by clients to
             /// help identify which physical devices the seat represents.
@@ -4177,6 +4305,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const name_since_version = 2;
         };
 
         /// The wl_pointer interface represents one or more input devices,
@@ -4226,6 +4355,9 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_pointer)).postError(@intCast(@intFromEnum(_err)), _message);
             }
             pub const Request = union(enum) {
+                pub const set_cursor_since_version = 1;
+                pub const release_since_version = 3;
+
                 /// Set the pointer surface, i.e., the surface that contains the
                 /// pointer image (cursor). This request gives the surface the role
                 /// of a cursor. If the surface already has another role, it raises
@@ -4311,6 +4443,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const enter_since_version = 1;
 
             /// Notification that this seat's pointer is no longer focused on
             /// a certain surface.
@@ -4325,6 +4458,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const leave_since_version = 1;
 
             /// Notification of pointer location change. The arguments
             /// surface_x and surface_y are the location relative to the
@@ -4338,6 +4472,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(2, &_args);
             }
+            pub const motion_since_version = 1;
 
             /// Mouse button click and release notifications.
             ///
@@ -4367,6 +4502,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(3, &_args);
             }
+            pub const button_since_version = 1;
 
             /// Scroll and other axis notifications.
             ///
@@ -4397,6 +4533,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(4, &_args);
             }
+            pub const axis_since_version = 1;
 
             /// Indicates the end of a set of events that logically belong together.
             /// A client is expected to accumulate the data in all events within the
@@ -4436,6 +4573,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_pointer);
                 _resource.postEvent(5, null);
             }
+            pub const frame_since_version = 5;
 
             /// Source information for scroll and other axes.
             ///
@@ -4473,6 +4611,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(6, &_args);
             }
+            pub const axis_source_since_version = 5;
 
             /// Stop notification for scroll and other axes.
             ///
@@ -4500,6 +4639,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(7, &_args);
             }
+            pub const axis_stop_since_version = 5;
 
             /// Discrete step information for scroll and other axes.
             ///
@@ -4543,6 +4683,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(8, &_args);
             }
+            pub const axis_discrete_since_version = 5;
         };
 
         /// The wl_keyboard interface represents one or more keyboards
@@ -4590,6 +4731,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_keyboard)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const release_since_version = 3;
                 release: void,
             };
             pub inline fn setHandler(
@@ -4633,6 +4775,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const keymap_since_version = 1;
 
             /// Notification that this seat's keyboard focus is on a certain
             /// surface.
@@ -4656,6 +4799,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const enter_since_version = 1;
 
             /// Notification that this seat's keyboard focus is no longer on
             /// a certain surface.
@@ -4675,6 +4819,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(2, &_args);
             }
+            pub const leave_since_version = 1;
 
             /// A key was pressed or released.
             /// The time argument is a timestamp with millisecond
@@ -4713,6 +4858,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(3, &_args);
             }
+            pub const key_since_version = 1;
 
             /// Notifies clients that the modifier and/or group state has
             /// changed, and it should update its local state.
@@ -4738,6 +4884,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(4, &_args);
             }
+            pub const modifiers_since_version = 1;
 
             /// Informs the client about the keyboard's repeat rate and delay.
             ///
@@ -4759,6 +4906,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(5, &_args);
             }
+            pub const repeat_info_since_version = 4;
         };
 
         /// The wl_touch interface represents a touchscreen
@@ -4800,6 +4948,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_touch)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const release_since_version = 3;
                 release: void,
             };
             pub inline fn setHandler(
@@ -4840,6 +4989,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const down_since_version = 1;
 
             /// The touch point has disappeared. No further events will be sent for
             /// this touch point and the touch point's ID is released and may be
@@ -4853,6 +5003,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const up_since_version = 1;
 
             /// A touch point has changed coordinates.
             pub fn sendMotion(_touch: *Touch, _time: u32, _id: i32, _x: common.Fixed, _y: common.Fixed) void {
@@ -4865,6 +5016,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(2, &_args);
             }
+            pub const motion_since_version = 1;
 
             /// Indicates the end of a set of events that logically belong together.
             /// A client is expected to accumulate the data in all events within the
@@ -4878,6 +5030,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_touch);
                 _resource.postEvent(3, null);
             }
+            pub const frame_since_version = 1;
 
             /// Sent if the compositor decides the touch stream is a global
             /// gesture. No further events are sent to the clients from that
@@ -4891,6 +5044,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_touch);
                 _resource.postEvent(4, null);
             }
+            pub const cancel_since_version = 1;
         };
 
         /// An output describes part of the compositor geometry.  The
@@ -4933,6 +5087,8 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_output)).getUserData();
             }
             pub const Request = union(enum) {
+                pub const release_since_version = 3;
+
                 /// Using this request a client can tell the server that it is not going to
                 /// use the output object anymore.
                 release: void,
@@ -5001,6 +5157,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(0, &_args);
             }
+            pub const geometry_since_version = 1;
 
             /// The mode event describes an available mode for the output.
             ///
@@ -5049,6 +5206,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(1, &_args);
             }
+            pub const mode_since_version = 1;
 
             /// This event is sent after all other properties have been
             /// sent after binding to the output object and after any
@@ -5059,6 +5217,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_output);
                 _resource.postEvent(2, null);
             }
+            pub const done_since_version = 2;
 
             /// This event contains scaling geometry information
             /// that is not in the geometry event. It may be sent after
@@ -5085,6 +5244,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(3, &_args);
             }
+            pub const scale_since_version = 2;
 
             /// Many compositors will assign user-friendly names to their outputs, show
             /// them to the user, allow the user to refer to an output, etc. The client
@@ -5121,6 +5281,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(4, &_args);
             }
+            pub const name_since_version = 4;
 
             /// Many compositors can produce human-readable descriptions of their
             /// outputs. The client may wish to know this description as well, e.g. for
@@ -5143,6 +5304,7 @@ pub const server = struct {
                 };
                 _resource.postEvent(5, &_args);
             }
+            pub const description_since_version = 4;
         };
     };
 };
@@ -5482,6 +5644,11 @@ const common = struct {
             /// These errors are global and can be emitted in response to any
             /// server request.
             const Error = enum(c_int) {
+                pub const invalid_object_since_version = 1;
+                pub const invalid_method_since_version = 1;
+                pub const no_memory_since_version = 1;
+                pub const implementation_since_version = 1;
+
                 invalid_object = 0,
                 invalid_method = 1,
                 no_memory = 2,
@@ -5715,6 +5882,12 @@ const common = struct {
             };
             /// These errors can be emitted in response to wl_surface requests.
             const Error = enum(c_int) {
+                pub const invalid_scale_since_version = 1;
+                pub const invalid_transform_since_version = 1;
+                pub const invalid_size_since_version = 1;
+                pub const invalid_offset_since_version = 1;
+                pub const defunct_role_object_since_version = 1;
+
                 invalid_scale = 0,
                 invalid_transform = 1,
                 invalid_size = 2,
@@ -5793,6 +5966,10 @@ const common = struct {
             };
             /// These errors can be emitted in response to wl_shm requests.
             const Error = enum(c_int) {
+                pub const invalid_format_since_version = 1;
+                pub const invalid_stride_since_version = 1;
+                pub const invalid_fd_since_version = 1;
+
                 invalid_format = 0,
                 invalid_stride = 1,
                 invalid_fd = 2,
@@ -5812,6 +5989,130 @@ const common = struct {
             /// For all wl_shm formats and unless specified in another protocol
             /// extension, pre-multiplied alpha is used for pixel values.
             const Format = enum(c_int) {
+                pub const argb8888_since_version = 1;
+                pub const xrgb8888_since_version = 1;
+                pub const c8_since_version = 1;
+                pub const rgb332_since_version = 1;
+                pub const bgr233_since_version = 1;
+                pub const xrgb4444_since_version = 1;
+                pub const xbgr4444_since_version = 1;
+                pub const rgbx4444_since_version = 1;
+                pub const bgrx4444_since_version = 1;
+                pub const argb4444_since_version = 1;
+                pub const abgr4444_since_version = 1;
+                pub const rgba4444_since_version = 1;
+                pub const bgra4444_since_version = 1;
+                pub const xrgb1555_since_version = 1;
+                pub const xbgr1555_since_version = 1;
+                pub const rgbx5551_since_version = 1;
+                pub const bgrx5551_since_version = 1;
+                pub const argb1555_since_version = 1;
+                pub const abgr1555_since_version = 1;
+                pub const rgba5551_since_version = 1;
+                pub const bgra5551_since_version = 1;
+                pub const rgb565_since_version = 1;
+                pub const bgr565_since_version = 1;
+                pub const rgb888_since_version = 1;
+                pub const bgr888_since_version = 1;
+                pub const xbgr8888_since_version = 1;
+                pub const rgbx8888_since_version = 1;
+                pub const bgrx8888_since_version = 1;
+                pub const abgr8888_since_version = 1;
+                pub const rgba8888_since_version = 1;
+                pub const bgra8888_since_version = 1;
+                pub const xrgb2101010_since_version = 1;
+                pub const xbgr2101010_since_version = 1;
+                pub const rgbx1010102_since_version = 1;
+                pub const bgrx1010102_since_version = 1;
+                pub const argb2101010_since_version = 1;
+                pub const abgr2101010_since_version = 1;
+                pub const rgba1010102_since_version = 1;
+                pub const bgra1010102_since_version = 1;
+                pub const yuyv_since_version = 1;
+                pub const yvyu_since_version = 1;
+                pub const uyvy_since_version = 1;
+                pub const vyuy_since_version = 1;
+                pub const ayuv_since_version = 1;
+                pub const nv12_since_version = 1;
+                pub const nv21_since_version = 1;
+                pub const nv16_since_version = 1;
+                pub const nv61_since_version = 1;
+                pub const yuv410_since_version = 1;
+                pub const yvu410_since_version = 1;
+                pub const yuv411_since_version = 1;
+                pub const yvu411_since_version = 1;
+                pub const yuv420_since_version = 1;
+                pub const yvu420_since_version = 1;
+                pub const yuv422_since_version = 1;
+                pub const yvu422_since_version = 1;
+                pub const yuv444_since_version = 1;
+                pub const yvu444_since_version = 1;
+                pub const r8_since_version = 1;
+                pub const r16_since_version = 1;
+                pub const rg88_since_version = 1;
+                pub const gr88_since_version = 1;
+                pub const rg1616_since_version = 1;
+                pub const gr1616_since_version = 1;
+                pub const xrgb16161616f_since_version = 1;
+                pub const xbgr16161616f_since_version = 1;
+                pub const argb16161616f_since_version = 1;
+                pub const abgr16161616f_since_version = 1;
+                pub const xyuv8888_since_version = 1;
+                pub const vuy888_since_version = 1;
+                pub const vuy101010_since_version = 1;
+                pub const y210_since_version = 1;
+                pub const y212_since_version = 1;
+                pub const y216_since_version = 1;
+                pub const y410_since_version = 1;
+                pub const y412_since_version = 1;
+                pub const y416_since_version = 1;
+                pub const xvyu2101010_since_version = 1;
+                pub const xvyu12_16161616_since_version = 1;
+                pub const xvyu16161616_since_version = 1;
+                pub const y0l0_since_version = 1;
+                pub const x0l0_since_version = 1;
+                pub const y0l2_since_version = 1;
+                pub const x0l2_since_version = 1;
+                pub const yuv420_8bit_since_version = 1;
+                pub const yuv420_10bit_since_version = 1;
+                pub const xrgb8888_a8_since_version = 1;
+                pub const xbgr8888_a8_since_version = 1;
+                pub const rgbx8888_a8_since_version = 1;
+                pub const bgrx8888_a8_since_version = 1;
+                pub const rgb888_a8_since_version = 1;
+                pub const bgr888_a8_since_version = 1;
+                pub const rgb565_a8_since_version = 1;
+                pub const bgr565_a8_since_version = 1;
+                pub const nv24_since_version = 1;
+                pub const nv42_since_version = 1;
+                pub const p210_since_version = 1;
+                pub const p010_since_version = 1;
+                pub const p012_since_version = 1;
+                pub const p016_since_version = 1;
+                pub const axbxgxrx106106106106_since_version = 1;
+                pub const nv15_since_version = 1;
+                pub const q410_since_version = 1;
+                pub const q401_since_version = 1;
+                pub const xrgb16161616_since_version = 1;
+                pub const xbgr16161616_since_version = 1;
+                pub const argb16161616_since_version = 1;
+                pub const abgr16161616_since_version = 1;
+                pub const c1_since_version = 1;
+                pub const c2_since_version = 1;
+                pub const c4_since_version = 1;
+                pub const d1_since_version = 1;
+                pub const d2_since_version = 1;
+                pub const d4_since_version = 1;
+                pub const d8_since_version = 1;
+                pub const r1_since_version = 1;
+                pub const r2_since_version = 1;
+                pub const r4_since_version = 1;
+                pub const r10_since_version = 1;
+                pub const r12_since_version = 1;
+                pub const avuy8888_since_version = 1;
+                pub const xvuy8888_since_version = 1;
+                pub const p030_since_version = 1;
+
                 argb8888 = 0,
                 xrgb8888 = 1,
                 c8 = 0x20203843,
@@ -6400,6 +6701,10 @@ const common = struct {
             /// This is a bitmask of capabilities this seat has; if a member is
             /// set, then it is present on the seat.
             const Capability = packed struct(u32) {
+                pub const pointer_since_version = 1;
+                pub const keyboard_since_version = 1;
+                pub const touch_since_version = 1;
+
                 pointer: bool = false,
                 keyboard: bool = false,
                 touch: bool = false,
@@ -6433,6 +6738,10 @@ const common = struct {
                 _padding30: bool = false,
                 _padding31: bool = false,
                 pub const Enum = enum(c_int) {
+                    pub const pointer_since_version = 1;
+                    pub const keyboard_since_version = 1;
+                    pub const touch_since_version = 1;
+
                     pointer = 1,
                     keyboard = 2,
                     touch = 4,
@@ -6442,6 +6751,8 @@ const common = struct {
 
             /// These errors can be emitted in response to wl_seat requests.
             const Error = enum(c_int) {
+                pub const missing_capability_since_version = 1;
+
                 missing_capability = 0,
                 _,
             };
@@ -6563,6 +6874,8 @@ const common = struct {
                 },
             };
             const Error = enum(c_int) {
+                pub const role_since_version = 1;
+
                 role = 0,
                 _,
             };
@@ -6570,6 +6883,9 @@ const common = struct {
             /// Describes the physical state of a button that produced the button
             /// event.
             const ButtonState = enum(c_int) {
+                pub const released_since_version = 1;
+                pub const pressed_since_version = 1;
+
                 released = 0,
                 pressed = 1,
                 _,
@@ -6577,6 +6893,9 @@ const common = struct {
 
             /// Describes the axis types of scroll events.
             const Axis = enum(c_int) {
+                pub const vertical_scroll_since_version = 1;
+                pub const horizontal_scroll_since_version = 1;
+
                 vertical_scroll = 0,
                 horizontal_scroll = 1,
                 _,
@@ -6599,6 +6918,10 @@ const common = struct {
             /// wheel but the scroll event is not caused by a rotation but a
             /// (usually sideways) tilt of the wheel.
             const AxisSource = enum(c_int) {
+                pub const wheel_since_version = 1;
+                pub const finger_since_version = 1;
+                pub const continuous_since_version = 1;
+
                 wheel = 0,
                 finger = 1,
                 continuous = 2,
@@ -6608,6 +6931,9 @@ const common = struct {
             /// This specifies the direction of the physical motion that caused a
             /// wl_pointer.axis event, relative to the wl_pointer.axis direction.
             const AxisRelativeDirection = enum(c_int) {
+                pub const identical_since_version = 1;
+                pub const inverted_since_version = 1;
+
                 identical = 0,
                 inverted = 1,
                 _,
@@ -6687,6 +7013,9 @@ const common = struct {
             /// This specifies the format of the keymap provided to the
             /// client with the wl_keyboard.keymap event.
             const KeymapFormat = enum(c_int) {
+                pub const no_keymap_since_version = 1;
+                pub const xkb_v1_since_version = 1;
+
                 no_keymap = 0,
                 xkb_v1 = 1,
                 _,
@@ -6702,6 +7031,9 @@ const common = struct {
             /// state and before entering the released state. This event may be
             /// generated multiple times while the key is down.
             const KeyState = enum(c_int) {
+                pub const released_since_version = 1;
+                pub const pressed_since_version = 1;
+
                 released = 0,
                 pressed = 1,
                 _,
@@ -6851,6 +7183,13 @@ const common = struct {
             /// This enumeration describes how the physical
             /// pixels on an output are laid out.
             const Subpixel = enum(c_int) {
+                pub const unknown_since_version = 1;
+                pub const none_since_version = 1;
+                pub const horizontal_rgb_since_version = 1;
+                pub const horizontal_bgr_since_version = 1;
+                pub const vertical_rgb_since_version = 1;
+                pub const vertical_bgr_since_version = 1;
+
                 unknown = 0,
                 none = 1,
                 horizontal_rgb = 2,
@@ -6871,6 +7210,15 @@ const common = struct {
             /// compositor will still be able to scan out directly from client
             /// surfaces.
             const Transform = enum(c_int) {
+                pub const normal_since_version = 1;
+                pub const @"90_since_version" = 1;
+                pub const @"180_since_version" = 1;
+                pub const @"270_since_version" = 1;
+                pub const flipped_since_version = 1;
+                pub const flipped_90_since_version = 1;
+                pub const flipped_180_since_version = 1;
+                pub const flipped_270_since_version = 1;
+
                 normal = 0,
                 @"90" = 1,
                 @"180" = 2,
@@ -6885,6 +7233,9 @@ const common = struct {
             /// These flags describe properties of an output mode.
             /// They are used in the flags bitfield of the mode event.
             const Mode = packed struct(u32) {
+                pub const current_since_version = 1;
+                pub const preferred_since_version = 1;
+
                 current: bool = false,
                 preferred: bool = false,
                 _padding2: bool = false,
@@ -6918,6 +7269,9 @@ const common = struct {
                 _padding30: bool = false,
                 _padding31: bool = false,
                 pub const Enum = enum(c_int) {
+                    pub const current_since_version = 1;
+                    pub const preferred_since_version = 1;
+
                     current = 0x1,
                     preferred = 0x2,
                     _,
