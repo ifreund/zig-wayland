@@ -5332,7 +5332,7 @@ const common = struct {
 
                 fn elemFromLink(link: *Link) *T {
                     if (link_field) |f| {
-                        return @fieldParentPtr(@tagName(f), link);
+                        return @alignCast(@fieldParentPtr(@tagName(f), link));
                     } else {
                         return T.fromLink(link);
                     }
