@@ -273,26 +273,8 @@ fn parseDescription(arena: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
     return error.UnexpectedEndOfFile;
 }
 
-fn emitVersion(object: anytype, writer: *io.Writer) io.Writer.Error!void {
-    const T = @TypeOf(object);
-    if (!@hasField(T, "name") or !@hasField(T, "since")) {
-        @compileError("Cannot generate '_since_version' constant for the type: `" ++ @typeName(T) ++ "'. Missing `name' or `since' field");
-    }
-
-    switch (std.zig.isValidId(object.name)) {
-        inline else => |valid| {
-            const format = comptime if (valid)
-                \\pub const {[identifier]s}_since_version = {[since]d};
-            else
-                \\pub const @"{[identifier]s}_since_version" = {[since]d};
-            ;
-
-            try writer.print(format ++ "\n", .{
-                .identifier = object.name,
-                .since = object.since,
-            });
-        },
-    }
+fn emitVersion(name: []const u8, since: u32, writer: *io.Writer) !void {
+    try writer.print("pub const @\"{s}_since_version\" = {d};\n", .{ name, since });
 }
 
 /// All data in this struct is immutable after creation in parse().
@@ -648,7 +630,7 @@ const Interface = struct {
                     if (event.since > target_version)
                         continue;
 
-                    try emitVersion(event, writer);
+                    try emitVersion(event.name, event.since, writer);
                 }
                 try writer.writeByte('\n');
 
@@ -680,7 +662,7 @@ const Interface = struct {
                 if (request.since <= target_version) {
                     if (mem.eql(u8, request.name, "destroy")) has_destroy = true;
                     try request.emitFn(side, writer, interface, opcode);
-                    try emitVersion(request, writer);
+                    try emitVersion(request.name, request.since, writer);
                 }
             }
 
@@ -756,7 +738,7 @@ const Interface = struct {
                     if (request.since > target_version)
                         continue;
 
-                    try emitVersion(request, writer);
+                    try emitVersion(request.name, request.since, writer);
                 }
 
                 for (interface.requests) |request| {
@@ -825,7 +807,7 @@ const Interface = struct {
             for (interface.events, 0..) |event, opcode| {
                 if (event.since <= target_version) {
                     try event.emitFn(side, writer, interface, opcode);
-                    try emitVersion(event, writer);
+                    try emitVersion(event.name, event.since, writer);
                 }
             }
         }
@@ -1350,7 +1332,7 @@ const Enum = struct {
 
             for (e.entries) |entry| {
                 if (entry.since > target_version) continue;
-                try emitVersion(entry, writer);
+                try emitVersion(entry.name, entry.since, writer);
             }
 
             try writer.writeByte('\n');
@@ -1379,7 +1361,7 @@ const Enum = struct {
         try writer.writeAll(" = enum(c_int) {");
         for (e.entries) |entry| {
             if (entry.since > target_version) continue;
-            try emitVersion(entry, writer);
+            try emitVersion(entry.name, entry.since, writer);
         }
         try writer.writeByte('\n');
 
