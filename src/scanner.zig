@@ -627,10 +627,9 @@ const Interface = struct {
             if (has_event) {
                 try writer.writeAll("pub const Event = union(enum) {");
                 for (interface.events) |event| {
-                    if (event.since > target_version)
-                        continue;
-
-                    try emitVersion(event.name, event.since, writer);
+                    if (event.since <= target_version) {
+                        try emitVersion(event.name, event.since, writer);
+                    }
                 }
                 try writer.writeByte('\n');
 
@@ -735,10 +734,9 @@ const Interface = struct {
                 try writer.writeAll("pub const Request = union(enum) {");
 
                 for (interface.requests) |request| {
-                    if (request.since > target_version)
-                        continue;
-
-                    try emitVersion(request.name, request.since, writer);
+                    if (request.since <= target_version) {
+                        try emitVersion(request.name, request.since, writer);
+                    }
                 }
 
                 for (interface.requests) |request| {
@@ -1331,8 +1329,9 @@ const Enum = struct {
             try writer.writeAll(" = packed struct(u32) {");
 
             for (e.entries) |entry| {
-                if (entry.since > target_version) continue;
-                try emitVersion(entry.name, entry.since, writer);
+                if (entry.since <= target_version) {
+                    try emitVersion(entry.name, entry.since, writer);
+                }
             }
 
             try writer.writeByte('\n');
@@ -1360,8 +1359,9 @@ const Enum = struct {
 
         try writer.writeAll(" = enum(c_int) {");
         for (e.entries) |entry| {
-            if (entry.since > target_version) continue;
-            try emitVersion(entry.name, entry.since, writer);
+            if (entry.since <= target_version) {
+                try emitVersion(entry.name, entry.since, writer);
+            }
         }
         try writer.writeByte('\n');
 
