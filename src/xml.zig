@@ -62,23 +62,19 @@ pub const Parser = struct {
                 },
                 ':', 'A'...'Z', '_', 'a'...'z' => {
                     const angle = mem.indexOfScalar(u8, p.document, '>') orelse return null;
-                    if (mem.indexOfScalar(u8, p.document[0..angle], ' ')) |space| {
-                        const ev = Event{ .open_tag = p.document[1..space] };
-                        p.current_tag = ev.open_tag;
-                        p.document = p.document[space..];
-                        p.mode = .attrs;
-                        return ev;
+                    var tag_end: usize = 1;
+                    while (tag_end < angle) {
+                        const c = p.document[tag_end];
+                        if (isNameChar(c)) {
+                            tag_end += 1;
+                        } else {
+                            break;
+                        }
                     }
-                    if (mem.indexOfScalar(u8, p.document[0..angle], '/')) |slash| {
-                        const ev = Event{ .open_tag = p.document[1..slash] };
-                        p.current_tag = ev.open_tag;
-                        p.document = p.document[slash..];
-                        p.mode = .attrs;
-                        return ev;
-                    }
-                    const ev = Event{ .open_tag = p.document[1..angle] };
+
+                    const ev = Event{ .open_tag = p.document[1..tag_end] };
                     p.current_tag = ev.open_tag;
-                    p.document = p.document[angle..];
+                    p.document = p.document[tag_end..];
                     p.mode = .attrs;
                     return ev;
                 },
