@@ -2609,13 +2609,13 @@ pub const server = struct {
                     self.notify = if (T == void)
                         struct {
                             fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.c) void {
-                                @call(.always_inline, notify, .{listener});
+                                notify(listener);
                             }
                         }.wrapper
                     else
                         struct {
                             fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.c) void {
-                                @call(.always_inline, notify, .{ listener, @as(T, @ptrFromInt(@intFromPtr(data))) });
+                                notify(listener, @ptrFromInt(@intFromPtr(data)));
                             }
                         }.wrapper;
                 }
@@ -2955,10 +2955,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Display, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3072,10 +3072,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Registry, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3164,10 +3164,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Callback, @ptrCast(__resource)),
                                 @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3252,10 +3252,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Buffer, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3342,10 +3342,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Compositor, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3787,10 +3787,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Surface, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3899,10 +3899,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Region, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -3981,10 +3981,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Shm, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -4102,10 +4102,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*ShmPool, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -4211,10 +4211,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Seat, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -4394,10 +4394,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Pointer, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -4723,10 +4723,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Keyboard, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -4940,10 +4940,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Touch, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );
@@ -5082,10 +5082,10 @@ pub const server = struct {
                     @ptrFromInt(@intFromPtr(_data)),
                     if (handle_destroy) |_handler| struct {
                         fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {
-                            @call(.always_inline, _handler, .{
+                            _handler(
                                 @as(*Output, @ptrCast(__resource)),
                                 @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                            });
+                            );
                         }
                     }._wrapper else null,
                 );

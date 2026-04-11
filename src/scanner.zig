@@ -776,10 +776,10 @@ const Interface = struct {
                     \\        @ptrFromInt(@intFromPtr(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {{
-                    \\                @call(.always_inline, _handler, .{{
+                    \\                _handler(
                     \\                    @as(*{[type]f}, @ptrCast(__resource)),
                     \\                    @as(T, @ptrCast(@alignCast(__resource.getUserData()))),
-                    \\                }});
+                    \\                );
                     \\            }}
                     \\        }}._wrapper else null,
                     \\    );
@@ -803,10 +803,10 @@ const Interface = struct {
                     \\        @ptrFromInt(@intFromPtr(_data)),
                     \\        if (handle_destroy) |_handler| struct {{
                     \\            fn _wrapper(__resource: *server.wl.Resource) callconv(.c) void {{
-                    \\                @call(.always_inline, _handler, .{{
+                    \\                _handler(
                     \\                    @as(*{[type]f}, @ptrCast(__resource)),
                     \\                    @as(?*anyopaque, @ptrFromInt(@intFromPtr(__resource.getUserData()))),
-                    \\                }});
+                    \\                );
                     \\            }}
                     \\        }}._wrapper else null,
                     \\    );

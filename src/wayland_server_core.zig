@@ -390,13 +390,13 @@ pub fn Listener(comptime T: type) type {
             self.notify = if (T == void)
                 struct {
                     fn wrapper(listener: *Self, _: ?*anyopaque) callconv(.c) void {
-                        @call(.always_inline, notify, .{listener});
+                        notify(listener);
                     }
                 }.wrapper
             else
                 struct {
                     fn wrapper(listener: *Self, data: ?*anyopaque) callconv(.c) void {
-                        @call(.always_inline, notify, .{ listener, @as(T, @ptrFromInt(@intFromPtr(data))) });
+                        notify(listener, @ptrFromInt(@intFromPtr(data)));
                     }
                 }.wrapper;
         }
