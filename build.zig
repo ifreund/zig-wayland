@@ -35,12 +35,12 @@ pub fn build(b: *Build) void {
                 .root_source_file = b.path("example/" ++ example ++ ".zig"),
                 .target = target,
                 .optimize = optimize,
+                .link_libc = true,
             }),
         });
 
         exe.root_module.addImport("wayland", wayland);
-        exe.linkLibC();
-        exe.linkSystemLibrary("wayland-client");
+        exe.root_module.linkSystemLibrary("wayland-client", .{});
 
         b.installArtifact(exe);
     }
@@ -52,15 +52,15 @@ pub fn build(b: *Build) void {
                 .root_source_file = b.path("test/ref_all.zig"),
                 .target = target,
                 .optimize = optimize,
+                .link_libc = true,
             }),
         });
 
         ref_all.root_module.addImport("wayland", wayland);
-        ref_all.linkLibC();
-        ref_all.linkSystemLibrary("wayland-client");
-        ref_all.linkSystemLibrary("wayland-server");
-        ref_all.linkSystemLibrary("wayland-egl");
-        ref_all.linkSystemLibrary("wayland-cursor");
+        ref_all.root_module.linkSystemLibrary("wayland-client", .{});
+        ref_all.root_module.linkSystemLibrary("wayland-server", .{});
+        ref_all.root_module.linkSystemLibrary("wayland-egl", .{});
+        ref_all.root_module.linkSystemLibrary("wayland-cursor", .{});
 
         const run_ref_all = b.addRunArtifact(ref_all);
         test_step.dependOn(&run_ref_all.step);
@@ -108,7 +108,7 @@ pub const Scanner = struct {
     };
 
     pub fn create(b: *Build, options: Options) *Scanner {
-        const pkg_config_exe_path = b.graph.env_map.get("PKG_CONFIG") orelse "pkg-config";
+        const pkg_config_exe_path = b.graph.environ_map.get("PKG_CONFIG") orelse "pkg-config";
         const wayland_xml: Build.LazyPath = options.wayland_xml orelse blk: {
             const pc_output = b.run(&.{ pkg_config_exe_path, "--variable=pkgdatadir", "wayland-scanner" });
             break :blk .{

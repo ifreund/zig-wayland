@@ -47,11 +47,11 @@ pub fn main() anyerror!void {
         const size = stride * height;
 
         const fd = try posix.memfd_create("hello-zig-wayland", 0);
-        try posix.ftruncate(fd, size);
+        if (posix.errno(posix.system.ftruncate(fd, size)) != .SUCCESS) return error.FtruncateFailed;
         const data = try posix.mmap(
             null,
             size,
-            posix.PROT.READ | posix.PROT.WRITE,
+            .{ .READ = true, .WRITE = true },
             .{ .TYPE = .SHARED },
             fd,
             0,

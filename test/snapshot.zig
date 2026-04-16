@@ -2,12 +2,14 @@ const std = @import("std");
 const build_options = @import("build_options");
 
 test "snapshot" {
+    const io = std.testing.io;
     const expected = @embedFile("snapshot_expected.zig");
 
-    const actual_file = try std.fs.cwd().openFile(build_options.snapshot_actual, .{});
-    defer actual_file.close();
+    const actual_file = try std.Io.Dir.cwd().openFile(io, build_options.snapshot_actual, .{});
+    defer actual_file.close(io);
 
-    const actual = try actual_file.readToEndAlloc(std.testing.allocator, 4 * 1024 * 1024 * 1024);
+    var actual_reader = actual_file.reader(io, &.{});
+    const actual = try actual_reader.interface.allocRemaining(std.testing.allocator, .unlimited);
     defer std.testing.allocator.free(actual);
 
     if (!std.mem.eql(u8, expected, actual)) {

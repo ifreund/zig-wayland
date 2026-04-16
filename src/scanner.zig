@@ -1,18 +1,16 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const process = std.process;
 const posix = std.posix;
 const fs = std.fs;
 const fmt = std.fmt;
-const io = std.io;
+const Io = std.Io;
 const mem = std.mem;
 const fmtId = std.zig.fmtId;
 
 const log = std.log.scoped(.@"zig-wayland");
 
 const xml = @import("xml.zig");
-
-const gpa = general_purpose_allocator.allocator();
-var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub const Target = struct {
     /// Name of the target global interface
@@ -25,8 +23,9 @@ pub const Target = struct {
     version: u32,
 };
 
-pub fn main() !void {
-    defer assert(general_purpose_allocator.deinit() == .ok);
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const gpa = init.gpa;
 
     var protocols: std.ArrayList([]const u8) = .empty;
     defer protocols.deinit(gpa);
@@ -37,8 +36,7 @@ pub fn main() !void {
     var ffi_import: ?[]const u8 = null;
     var out_path_opt: ?[]const u8 = null;
 
-    var args = std.process.args();
-
+    var args = init.minimal.args.iterate();
     while (args.next()) |arg| {
         if (mem.eql(u8, arg, "-i")) {
             const protocol_path = args.next() orelse return error.MissingArg;
@@ -59,9 +57,9 @@ pub fn main() !void {
 
     const out_path = out_path_opt orelse return error.MissingArg;
 
-    var buffer: io.Writer.Allocating = .init(gpa);
+    var buffer: Io.Writer.Allocating = .init(gpa);
 
-    try scan(&buffer.writer, protocols.items, targets.items, ffi_import);
+    try scan(io, gpa, &buffer.writer, protocols.items, targets.items, ffi_import);
 
     const generated = try buffer.toOwnedSliceSentinel(0);
     defer gpa.free(generated);
@@ -70,15 +68,15 @@ pub fn main() !void {
     defer tree.deinit(gpa);
 
     if (tree.errors.len != 0) {
-        try std.zig.printAstErrorsToStderr(gpa, tree, "generated", .auto);
+        try std.zig.printAstErrorsToStderr(gpa, io, tree, "generated", .auto);
         return error.ParseError;
     }
 
-    const out_file = try std.fs.createFileAbsolute(out_path, .{});
-    defer out_file.close();
+    const out_file = try Io.Dir.createFileAbsolute(io, out_path, .{});
+    defer out_file.close(io);
 
     var out_buf: [4096]u8 = undefined;
-    var out_writer = out_file.writer(&out_buf);
+    var out_writer = out_file.writer(io, &out_buf);
 
     try tree.render(gpa, &out_writer.interface, .{});
 
@@ -86,12 +84,14 @@ pub fn main() !void {
 }
 
 fn scan(
-    writer: *io.Writer,
+    io: Io,
+    gpa: mem.Allocator,
+    writer: *Io.Writer,
     protocols: []const []const u8,
     targets: []const Target,
     ffi_import: ?[]const u8,
 ) !void {
-    var scanner = try Scanner.init(targets);
+    var scanner = try Scanner.init(io, gpa, targets);
     defer scanner.deinit();
 
     for (protocols) |xml_path| {
@@ -99,7 +99,7 @@ fn scan(
     }
 
     if (scanner.remaining_targets.items.len != 0) {
-        fatal("requested global interface '{s}' not found in provided protocol xml", .{
+        process.fatal("requested global interface '{s}' not found in provided protocol xml", .{
             scanner.remaining_targets.items[0].name,
         });
     }
@@ -179,15 +179,21 @@ const Side = enum {
 
 const Scanner = struct {
     /// Map from namespace to source code content of the namespace.
-    const Map = std.StringArrayHashMap(io.Writer.Allocating);
-    client: Map = Map.init(gpa),
-    server: Map = Map.init(gpa),
-    common: Map = Map.init(gpa),
+    const Map = std.array_hash_map.String(Io.Writer.Allocating);
 
-    remaining_targets: std.ArrayListUnmanaged(Target),
+    io: Io,
+    gpa: mem.Allocator,
 
-    fn init(targets: []const Target) !Scanner {
+    client: Map = .empty,
+    server: Map = .empty,
+    common: Map = .empty,
+
+    remaining_targets: std.ArrayList(Target),
+
+    fn init(io: Io, gpa: mem.Allocator, targets: []const Target) !Scanner {
         return Scanner{
+            .io = io,
+            .gpa = gpa,
             .remaining_targets = .{
                 .items = try gpa.dupe(Target, targets),
                 .capacity = targets.len,
@@ -196,35 +202,39 @@ const Scanner = struct {
     }
 
     fn deinit(scanner: *Scanner) void {
-        deinit_map(&scanner.client);
-        deinit_map(&scanner.server);
-        deinit_map(&scanner.common);
+        deinit_map(scanner.gpa, &scanner.client);
+        deinit_map(scanner.gpa, &scanner.server);
+        deinit_map(scanner.gpa, &scanner.common);
 
-        scanner.remaining_targets.deinit(gpa);
+        scanner.remaining_targets.deinit(scanner.gpa);
     }
 
-    fn deinit_map(map: *Map) void {
+    fn deinit_map(gpa: mem.Allocator, map: *Map) void {
         for (map.keys()) |namespace| gpa.free(namespace);
-        for (map.values()) |*list| {
-            list.deinit();
+        for (map.values()) |*aw| {
+            aw.deinit();
         }
-        map.deinit();
+        map.deinit(gpa);
     }
 
     fn scanProtocol(scanner: *Scanner, xml_path: []const u8) !void {
-        const xml_file = try fs.cwd().openFile(xml_path, .{});
-        defer xml_file.close();
+        const xml_file = try Io.Dir.cwd().openFile(scanner.io, xml_path, .{});
+        defer xml_file.close(scanner.io);
 
+        const gpa = scanner.gpa;
         var arena = std.heap.ArenaAllocator.init(gpa);
         defer arena.deinit();
 
-        const xml_bytes = try xml_file.readToEndAlloc(arena.allocator(), 512 * 4096);
-        const protocol = Protocol.parseXML(arena.allocator(), xml_bytes) catch |err| {
-            fatal("failed to parse {s}: {s}", .{ xml_path, @errorName(err) });
+        var xml_file_reader = xml_file.reader(scanner.io, &.{});
+        const xml_bytes = try xml_file_reader.interface.allocRemaining(gpa, .unlimited);
+        defer gpa.free(xml_bytes);
+
+        const protocol = Protocol.parseXML(gpa, arena.allocator(), xml_bytes) catch |err| {
+            process.fatal("failed to parse {s}: {s}", .{ xml_path, @errorName(err) });
         };
 
         {
-            const gop = try scanner.client.getOrPutValue(protocol.namespace, .init(gpa));
+            const gop = try scanner.client.getOrPutValue(gpa, protocol.namespace, .init(gpa));
             if (!gop.found_existing) {
                 gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             }
@@ -232,7 +242,7 @@ const Scanner = struct {
         }
 
         {
-            const gop = try scanner.server.getOrPutValue(protocol.namespace, .init(gpa));
+            const gop = try scanner.server.getOrPutValue(gpa, protocol.namespace, .init(gpa));
             if (!gop.found_existing) {
                 gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             }
@@ -240,7 +250,7 @@ const Scanner = struct {
         }
 
         {
-            const gop = try scanner.common.getOrPutValue(protocol.namespace, .init(gpa));
+            const gop = try scanner.common.getOrPutValue(gpa, protocol.namespace, .init(gpa));
             if (!gop.found_existing) {
                 gop.key_ptr.* = try gpa.dupe(u8, protocol.namespace);
             }
@@ -266,19 +276,20 @@ const Scanner = struct {
 };
 
 // TODO Parse the summary attribute, and return some kind of Description object.
-fn parseDescription(arena: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
+fn parseDescription(gpa: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
     var description: std.ArrayList(u8) = .empty;
+    defer description.deinit(gpa);
 
     while (parser.next()) |ev| switch (ev) {
         .attribute => continue,
-        .character_data => |data| try description.appendSlice(arena, data),
+        .character_data => |data| try description.appendSlice(gpa, data),
         .close_tag => |tag| if (mem.eql(u8, tag, "description")) {
             // A description may have only a summary attribute and no body.
             // Since we don't parse summaries yet, return null.
             if (description.items.len == 0) {
                 return null;
             }
-            return try description.toOwnedSlice(arena);
+            return try description.toOwnedSlice(gpa);
         },
         else => return error.BadDescription,
     };
@@ -286,7 +297,7 @@ fn parseDescription(arena: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
     return error.UnexpectedEndOfFile;
 }
 
-fn emitVersion(name: []const u8, since: u32, writer: *io.Writer) !void {
+fn emitVersion(name: []const u8, since: u32, writer: *Io.Writer) !void {
     try writer.print("pub const @\"{s}_since_version\" = {d};\n", .{ name, since });
 }
 
@@ -297,6 +308,8 @@ const Protocol = struct {
         children: []const Interface,
     };
 
+    const InterfaceMap = std.array_hash_map.String(Interface);
+
     name: []const u8,
     namespace: []const u8,
     copyright: ?[]const u8,
@@ -305,23 +318,23 @@ const Protocol = struct {
     version_locked_interfaces: []const Interface,
     globals: []const Global,
 
-    fn parseXML(arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
+    fn parseXML(gpa: mem.Allocator, arena: mem.Allocator, xml_bytes: []const u8) !Protocol {
         var parser = xml.Parser.init(xml_bytes);
         while (parser.next()) |ev| switch (ev) {
-            .open_tag => |tag| if (mem.eql(u8, tag, "protocol")) return parse(arena, &parser),
+            .open_tag => |tag| if (mem.eql(u8, tag, "protocol")) return parse(gpa, arena, &parser),
             else => {},
         };
         return error.UnexpectedEndOfFile;
     }
 
-    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Protocol {
+    fn parse(gpa: mem.Allocator, arena: mem.Allocator, parser: *xml.Parser) !Protocol {
         var name: ?[]const u8 = null;
         var copyright: ?[]const u8 = null;
         var toplevel_description: ?[]const u8 = null;
         var version_locked_interfaces: std.ArrayList(Interface) = .empty;
         defer version_locked_interfaces.deinit(gpa);
-        var interfaces = std.StringArrayHashMap(Interface).init(gpa);
-        defer interfaces.deinit();
+        var interfaces: InterfaceMap = .empty;
+        defer interfaces.deinit(gpa);
 
         while (parser.next()) |ev| switch (ev) {
             .open_tag => |tag| {
@@ -338,11 +351,11 @@ const Protocol = struct {
                         return error.DuplicateToplevelDescription;
                     toplevel_description = try parseDescription(arena, parser);
                 } else if (mem.eql(u8, tag, "interface")) {
-                    const interface = try Interface.parse(arena, parser);
+                    const interface = try Interface.parse(gpa, arena, parser);
                     if (Interface.version_locked(interface.name)) {
                         try version_locked_interfaces.append(gpa, interface);
                     } else {
-                        const gop = try interfaces.getOrPut(interface.name);
+                        const gop = try interfaces.getOrPut(gpa, interface.name);
                         if (gop.found_existing) return error.DuplicateInterfaceName;
                         gop.value_ptr.* = interface;
                     }
@@ -355,7 +368,7 @@ const Protocol = struct {
             .close_tag => |tag| if (mem.eql(u8, tag, "protocol")) {
                 if (interfaces.count() == 0) return error.NoInterfaces;
 
-                const globals = try find_globals(arena, interfaces);
+                const globals = try find_globals(gpa, arena, interfaces);
                 if (globals.len == 0) return error.NoGlobals;
 
                 const namespace = prefix(interfaces.values()[0].name) orelse return error.NoNamespace;
@@ -380,7 +393,11 @@ const Protocol = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn find_globals(arena: mem.Allocator, interfaces: std.StringArrayHashMap(Interface)) ![]const Global {
+    fn find_globals(
+        gpa: mem.Allocator,
+        arena: mem.Allocator,
+        interfaces: InterfaceMap,
+    ) ![]const Global {
         var non_globals = std.StringHashMap(void).init(gpa);
         defer non_globals.deinit();
 
@@ -407,10 +424,10 @@ const Protocol = struct {
 
         for (interfaces.values()) |interface| {
             if (!non_globals.contains(interface.name)) {
-                var children = std.StringArrayHashMap(Interface).init(gpa);
-                defer children.deinit();
+                var children: InterfaceMap = .empty;
+                defer children.deinit(gpa);
 
-                try find_children(interface, interfaces, &children);
+                try find_children(gpa, interface, interfaces, &children);
 
                 try globals.append(gpa, .{
                     .interface = interface,
@@ -423,9 +440,10 @@ const Protocol = struct {
     }
 
     fn find_children(
+        gpa: mem.Allocator,
         parent: Interface,
-        interfaces: std.StringArrayHashMap(Interface),
-        children: *std.StringArrayHashMap(Interface),
+        interfaces: InterfaceMap,
+        children: *InterfaceMap,
     ) error{ OutOfMemory, InvalidInterface }!void {
         for ([_][]const Message{ parent.requests, parent.events }) |messages| {
             for (messages) |message| {
@@ -440,15 +458,15 @@ const Protocol = struct {
                             });
                             return error.InvalidInterface;
                         };
-                        try children.put(child_name, child);
-                        try find_children(child, interfaces, children);
+                        try children.put(gpa, child_name, child);
+                        try find_children(gpa, child, interfaces, children);
                     }
                 }
             }
         }
     }
 
-    fn emit(protocol: Protocol, side: Side, targets: []const Target, writer: *io.Writer) !void {
+    fn emit(protocol: Protocol, side: Side, targets: []const Target, writer: *Io.Writer) !void {
         for (protocol.version_locked_interfaces) |interface| {
             assert(interface.version == 1);
             try interface.emit(side, 1, protocol.namespace, writer);
@@ -458,7 +476,7 @@ const Protocol = struct {
             for (protocol.globals) |global| {
                 if (mem.eql(u8, target.name, global.interface.name)) {
                     if (global.interface.version < target.version) {
-                        fatal("requested {s} version {d} but only version {d} is available in provided xml", .{
+                        process.fatal("requested {s} version {d} but only version {d} is available in provided xml", .{
                             target.name,
                             target.version,
                             global.interface.version,
@@ -473,7 +491,7 @@ const Protocol = struct {
         }
     }
 
-    fn emitCommon(protocol: Protocol, targets: []const Target, writer: *io.Writer) !void {
+    fn emitCommon(protocol: Protocol, targets: []const Target, writer: *Io.Writer) !void {
         for (protocol.version_locked_interfaces) |interface| {
             assert(interface.version == 1);
             try interface.emitCommon(1, writer);
@@ -528,7 +546,7 @@ const Interface = struct {
         return version_locked_interfaces.has(interface_name);
     }
 
-    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Interface {
+    fn parse(gpa: mem.Allocator, arena: mem.Allocator, parser: *xml.Parser) !Interface {
         var name: ?[]const u8 = null;
         var description: ?[]const u8 = null;
         var version: ?u32 = null;
@@ -545,11 +563,11 @@ const Interface = struct {
                     if (description != null) return error.DuplicateDescription;
                     description = try parseDescription(arena, parser);
                 } else if (mem.eql(u8, tag, "request"))
-                    try requests.append(gpa, try Message.parse(arena, parser))
+                    try requests.append(gpa, try Message.parse(gpa, arena, parser))
                 else if (mem.eql(u8, tag, "event"))
-                    try events.append(gpa, try Message.parse(arena, parser))
+                    try events.append(gpa, try Message.parse(gpa, arena, parser))
                 else if (mem.eql(u8, tag, "enum"))
-                    try enums.append(gpa, try Enum.parse(arena, parser));
+                    try enums.append(gpa, try Enum.parse(gpa, arena, parser));
             },
             .attribute => |attr| {
                 if (mem.eql(u8, attr.name, "name")) {
@@ -575,7 +593,7 @@ const Interface = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emit(interface: Interface, side: Side, target_version: u32, namespace: []const u8, writer: *io.Writer) !void {
+    fn emit(interface: Interface, side: Side, target_version: u32, namespace: []const u8, writer: *Io.Writer) !void {
         if (interface.description) |desc| {
             try writer.writeByte('\n');
             var iter = mem.splitScalar(u8, mem.trimEnd(u8, desc, &std.ascii.whitespace), '\n');
@@ -828,7 +846,7 @@ const Interface = struct {
         try writer.writeAll("};\n");
     }
 
-    fn emitCommon(interface: Interface, target_version: ?u32, writer: *io.Writer) !void {
+    fn emitCommon(interface: Interface, target_version: ?u32, writer: *Io.Writer) !void {
         try writer.print("const {f} = struct {{", .{fmtId(trimPrefix(interface.name))});
 
         try writer.print(
@@ -886,7 +904,7 @@ const Message = struct {
         destructor: void,
     },
 
-    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Message {
+    fn parse(gpa: mem.Allocator, arena: mem.Allocator, parser: *xml.Parser) !Message {
         var name: ?[]const u8 = null;
         var description: ?[]const u8 = null;
         var since: ?u32 = null;
@@ -936,7 +954,7 @@ const Message = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emitField(message: Message, side: Side, writer: *io.Writer) !void {
+    fn emitField(message: Message, side: Side, writer: *Io.Writer) !void {
         if (message.description) |desc| {
             try writer.writeByte('\n');
             var iter = mem.splitScalar(u8, mem.trimEnd(u8, desc, &std.ascii.whitespace), '\n');
@@ -970,7 +988,7 @@ const Message = struct {
         try writer.writeAll("},\n");
     }
 
-    fn emitFn(message: Message, side: Side, writer: *io.Writer, interface: Interface, opcode: usize) !void {
+    fn emitFn(message: Message, side: Side, writer: *Io.Writer, interface: Interface, opcode: usize) !void {
         if (message.description) |desc| {
             try writer.writeByte('\n');
             var iter = mem.splitScalar(u8, mem.trimEnd(u8, desc, &std.ascii.whitespace), '\n');
@@ -1103,7 +1121,7 @@ const Message = struct {
         try writer.writeAll("}\n");
     }
 
-    fn emitCommon(message: Message, writer: *io.Writer) !void {
+    fn emitCommon(message: Message, writer: *Io.Writer) !void {
         try writer.print(
             \\.{{ .name = "{s}", .signature = "
         , .{message.name});
@@ -1214,7 +1232,7 @@ const Arg = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emitSignature(arg: Arg, writer: *io.Writer) !void {
+    fn emitSignature(arg: Arg, writer: *Io.Writer) !void {
         switch (arg.kind) {
             .int => try writer.writeByte('i'),
             .uint => try writer.writeByte('u'),
@@ -1236,7 +1254,7 @@ const Arg = struct {
         }
     }
 
-    fn emitType(arg: Arg, side: Side, writer: *io.Writer) !void {
+    fn emitType(arg: Arg, side: Side, writer: *Io.Writer) !void {
         switch (arg.kind) {
             .int, .uint => {
                 if (arg.enum_name) |name| {
@@ -1286,7 +1304,7 @@ const Enum = struct {
     entries: []const Entry,
     bitfield: bool,
 
-    fn parse(arena: mem.Allocator, parser: *xml.Parser) !Enum {
+    fn parse(gpa: mem.Allocator, arena: mem.Allocator, parser: *xml.Parser) !Enum {
         var name: ?[]const u8 = null;
         var description: ?[]const u8 = null;
         var since: ?u32 = null;
@@ -1329,7 +1347,7 @@ const Enum = struct {
         return error.UnexpectedEndOfFile;
     }
 
-    fn emit(e: Enum, target_version: u32, writer: *io.Writer) !void {
+    fn emit(e: Enum, target_version: u32, writer: *Io.Writer) !void {
         if (e.description) |desc| {
             try writer.writeByte('\n');
             var iter = mem.splitScalar(u8, mem.trimEnd(u8, desc, &std.ascii.whitespace), '\n');
@@ -1450,7 +1468,7 @@ const Case = enum { title, camel };
 
 fn formatCaseImpl(comptime case: Case, comptime trim: bool) type {
     return struct {
-        pub fn f(bytes: []const u8, writer: *io.Writer) io.Writer.Error!void {
+        pub fn f(bytes: []const u8, writer: *Io.Writer) Io.Writer.Error!void {
             if (case == .camel and std.zig.Token.getKeyword(bytes) != null) {
                 try writer.print("@\"{s}\"", .{bytes});
                 return;
@@ -1485,15 +1503,10 @@ fn camelCaseTrim(bytes: []const u8) fmt.Alt([]const u8, formatCaseImpl(.camel, t
     return .{ .data = bytes };
 }
 
-fn printAbsolute(side: Side, writer: *io.Writer, interface: []const u8) !void {
+fn printAbsolute(side: Side, writer: *Io.Writer, interface: []const u8) !void {
     try writer.print("{s}.{s}.{f}", .{
         @tagName(side),
         prefix(interface) orelse return error.MissingPrefix,
         titleCaseTrim(interface),
     });
-}
-
-inline fn fatal(comptime msg: []const u8, args: anytype) noreturn {
-    log.err(msg, args);
-    posix.exit(1);
 }
