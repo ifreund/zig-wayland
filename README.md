@@ -47,12 +47,12 @@ pub fn build(b: *Build) !void {
             .root_source_file = b.path("foobar.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
         }),
     });
 
     exe.root_module.addImport("wayland", wayland);
-    exe.linkLibC();
-    exe.linkSystemLibrary("wayland-client");
+    exe.root_module.linkSystemLibrary("wayland-client", .{});
 
     b.installArtifact(exe);
 }
