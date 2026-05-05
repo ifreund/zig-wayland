@@ -23,10 +23,13 @@ pub fn build(b: *Build) void {
         .optimize = optimize,
     });
 
+    scanner.addCustomProtocol(b.path("test/color-management-v1.xml"));
+
     scanner.generate("wl_compositor", 5);
     scanner.generate("wl_shm", 1);
     scanner.generate("wl_seat", 5);
     scanner.generate("wl_output", 4);
+    scanner.generate("wp_color_manager_v1", 2);
 
     inline for ([_][]const u8{ "globals", "list", "listener", "seats" }) |example| {
         const exe = b.addExecutable(.{

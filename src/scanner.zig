@@ -536,6 +536,7 @@ const Interface = struct {
         .{"wl_callback"},
         .{"wl_buffer"},
         .{"ext_image_capture_source_v1"},
+        .{"wp_image_description_reference_v1"},
     });
     fn version_locked(interface_name: []const u8) bool {
         return version_locked_interfaces.has(interface_name);
