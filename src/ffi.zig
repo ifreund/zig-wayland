@@ -34,20 +34,7 @@ pub const client = struct {
     extern fn wl_proxy_get_id(proxy: *wl.Proxy) u32;
     extern fn wl_proxy_get_user_data(proxy: *wl.Proxy) ?*anyopaque;
     extern fn wl_proxy_get_version(proxy: *wl.Proxy) u32;
-    extern fn wl_proxy_marshal_array_constructor_versioned(
-        proxy: *wl.Proxy,
-        opcode: u32,
-        args: [*]Argument,
-        interface: *const Interface,
-        version: u32,
-    ) ?*wl.Proxy;
-    extern fn wl_proxy_marshal_array_constructor(
-        proxy: *wl.Proxy,
-        opcode: u32,
-        args: [*]Argument,
-        interface: *const Interface,
-    ) ?*wl.Proxy;
-    extern fn wl_proxy_marshal_array(proxy: *wl.Proxy, opcode: u32, args: ?[*]Argument) void;
+    extern fn wl_proxy_marshal_array_flags(proxy: *wl.Proxy, opcode: u32, interface: ?*const Interface, version: u32, flags: u32, args: ?[*]Argument) ?*wl.Proxy;
     extern fn wl_proxy_set_queue(proxy: *wl.Proxy, queue: *wl.EventQueue) void;
 };
 

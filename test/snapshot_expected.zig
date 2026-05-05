@@ -24,29 +24,13 @@ pub const client = struct {
                 ffi.client.wl_proxy_destroy(proxy);
             }
 
-            pub inline fn marshal(proxy: *Proxy, opcode: u32, args: ?[*]Argument) void {
-                ffi.client.wl_proxy_marshal_array(proxy, opcode, args);
-            }
+            pub const MarshalFlags = packed struct(u32) {
+                destroy: bool = false,
+                _: u31 = 0,
+            };
 
-            pub inline fn marshalConstructor(
-                proxy: *Proxy,
-                opcode: u32,
-                args: [*]Argument,
-                interface: *const Interface,
-            ) error{OutOfMemory}!*Proxy {
-                return ffi.client.wl_proxy_marshal_array_constructor(proxy, opcode, args, interface) orelse
-                    error.OutOfMemory;
-            }
-
-            pub inline fn marshalConstructorVersioned(
-                proxy: *Proxy,
-                opcode: u32,
-                args: [*]Argument,
-                interface: *const Interface,
-                version: u32,
-            ) error{OutOfMemory}!*Proxy {
-                return ffi.client.wl_proxy_marshal_array_constructor_versioned(proxy, opcode, args, interface, version) orelse
-                    error.OutOfMemory;
+            pub inline fn marshal(proxy: *wl.Proxy, opcode: u32, interface: ?*const Interface, version: u32, flags: MarshalFlags, args: ?[*]Argument) ?*Proxy {
+                return ffi.client.wl_proxy_marshal_array_flags(proxy, opcode, interface, version, @bitCast(flags), args);
             }
 
             pub const DispatcherFn = fn (
@@ -223,7 +207,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Callback.interface));
+                const _ret = _proxy.marshal(0, client.wl.Callback.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const sync_since_version = 1;
 
@@ -241,7 +226,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(1, &_args, client.wl.Registry.interface));
+                const _ret = _proxy.marshal(1, client.wl.Registry.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const get_registry_since_version = 1;
             pub inline fn connect(name: ?[*:0]const u8) error{ConnectFailed}!*Display {
@@ -411,7 +397,8 @@ pub const client = struct {
                     .{ .u = version_to_construct },
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructorVersioned(0, &_args, T.interface, version_to_construct));
+                const _ret = _proxy.marshal(0, T.interface, version_to_construct, .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const bind_since_version = 1;
             pub inline fn destroy(_registry: *Registry) void {
@@ -531,8 +518,7 @@ pub const client = struct {
             /// For possible side-effects to a surface, see wl_surface.attach.
             pub fn destroy(_buffer: *Buffer) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_buffer);
-                _proxy.marshal(0, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(0, null, 0, .{ .destroy = true }, null);
             }
             pub const destroy_since_version = 1;
         };
@@ -562,7 +548,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Surface.interface));
+                const _ret = _proxy.marshal(0, client.wl.Surface.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const create_surface_since_version = 1;
 
@@ -572,7 +559,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(1, &_args, client.wl.Region.interface));
+                const _ret = _proxy.marshal(1, client.wl.Region.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const create_region_since_version = 1;
             pub inline fn destroy(_compositor: *Compositor) void {
@@ -679,8 +667,7 @@ pub const client = struct {
             /// Deletes the surface and invalidates its object ID.
             pub fn destroy(_surface: *Surface) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_surface);
-                _proxy.marshal(0, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(0, null, 0, .{ .destroy = true }, null);
             }
             pub const destroy_since_version = 1;
 
@@ -756,7 +743,7 @@ pub const client = struct {
                     .{ .i = _x },
                     .{ .i = _y },
                 };
-                _proxy.marshal(1, &_args);
+                _ = _proxy.marshal(1, null, 0, .{}, &_args);
             }
             pub const attach_since_version = 1;
 
@@ -789,7 +776,7 @@ pub const client = struct {
                     .{ .i = _width },
                     .{ .i = _height },
                 };
-                _proxy.marshal(2, &_args);
+                _ = _proxy.marshal(2, null, 0, .{}, &_args);
             }
             pub const damage_since_version = 1;
 
@@ -830,7 +817,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(3, &_args, client.wl.Callback.interface));
+                const _ret = _proxy.marshal(3, client.wl.Callback.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const frame_since_version = 1;
 
@@ -863,7 +851,7 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = @ptrCast(_region) },
                 };
-                _proxy.marshal(4, &_args);
+                _ = _proxy.marshal(4, null, 0, .{}, &_args);
             }
             pub const set_opaque_region_since_version = 1;
 
@@ -894,7 +882,7 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = @ptrCast(_region) },
                 };
-                _proxy.marshal(5, &_args);
+                _ = _proxy.marshal(5, null, 0, .{}, &_args);
             }
             pub const set_input_region_since_version = 1;
 
@@ -919,7 +907,7 @@ pub const client = struct {
             /// Other interfaces may add further double-buffered surface state.
             pub fn commit(_surface: *Surface) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_surface);
-                _proxy.marshal(6, null);
+                _ = _proxy.marshal(6, null, 0, .{}, null);
             }
             pub const commit_since_version = 1;
 
@@ -963,7 +951,7 @@ pub const client = struct {
                         else => unreachable,
                     } },
                 };
-                _proxy.marshal(7, &_args);
+                _ = _proxy.marshal(7, null, 0, .{}, &_args);
             }
             pub const set_buffer_transform_since_version = 2;
 
@@ -995,7 +983,7 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .i = _scale },
                 };
-                _proxy.marshal(8, &_args);
+                _ = _proxy.marshal(8, null, 0, .{}, &_args);
             }
             pub const set_buffer_scale_since_version = 3;
 
@@ -1039,7 +1027,7 @@ pub const client = struct {
                     .{ .i = _width },
                     .{ .i = _height },
                 };
-                _proxy.marshal(9, &_args);
+                _ = _proxy.marshal(9, null, 0, .{}, &_args);
             }
             pub const damage_buffer_since_version = 4;
 
@@ -1064,7 +1052,7 @@ pub const client = struct {
                     .{ .i = _x },
                     .{ .i = _y },
                 };
-                _proxy.marshal(10, &_args);
+                _ = _proxy.marshal(10, null, 0, .{}, &_args);
             }
             pub const offset_since_version = 5;
         };
@@ -1092,8 +1080,7 @@ pub const client = struct {
             /// Destroy the region.  This will invalidate the object ID.
             pub fn destroy(_region: *Region) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_region);
-                _proxy.marshal(0, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(0, null, 0, .{ .destroy = true }, null);
             }
             pub const destroy_since_version = 1;
 
@@ -1106,7 +1093,7 @@ pub const client = struct {
                     .{ .i = _width },
                     .{ .i = _height },
                 };
-                _proxy.marshal(1, &_args);
+                _ = _proxy.marshal(1, null, 0, .{}, &_args);
             }
             pub const add_since_version = 1;
 
@@ -1119,7 +1106,7 @@ pub const client = struct {
                     .{ .i = _width },
                     .{ .i = _height },
                 };
-                _proxy.marshal(2, &_args);
+                _ = _proxy.marshal(2, null, 0, .{}, &_args);
             }
             pub const subtract_since_version = 1;
         };
@@ -1183,7 +1170,8 @@ pub const client = struct {
                     .{ .h = _fd },
                     .{ .i = _size },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.ShmPool.interface));
+                const _ret = _proxy.marshal(0, client.wl.ShmPool.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const create_pool_since_version = 1;
             pub inline fn destroy(_shm: *Shm) void {
@@ -1240,7 +1228,8 @@ pub const client = struct {
                         else => unreachable,
                     } },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Buffer.interface));
+                const _ret = _proxy.marshal(0, client.wl.Buffer.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const create_buffer_since_version = 1;
 
@@ -1251,8 +1240,7 @@ pub const client = struct {
             /// are gone.
             pub fn destroy(_shm_pool: *ShmPool) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_shm_pool);
-                _proxy.marshal(1, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(1, null, 0, .{ .destroy = true }, null);
             }
             pub const destroy_since_version = 1;
 
@@ -1271,7 +1259,7 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .i = _size },
                 };
-                _proxy.marshal(2, &_args);
+                _ = _proxy.marshal(2, null, 0, .{}, &_args);
             }
             pub const resize_since_version = 1;
         };
@@ -1374,7 +1362,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(0, &_args, client.wl.Pointer.interface));
+                const _ret = _proxy.marshal(0, client.wl.Pointer.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const get_pointer_since_version = 1;
 
@@ -1391,7 +1380,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(1, &_args, client.wl.Keyboard.interface));
+                const _ret = _proxy.marshal(1, client.wl.Keyboard.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const get_keyboard_since_version = 1;
 
@@ -1408,7 +1398,8 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = null },
                 };
-                return @ptrCast(try _proxy.marshalConstructor(2, &_args, client.wl.Touch.interface));
+                const _ret = _proxy.marshal(2, client.wl.Touch.interface, _proxy.getVersion(), .{}, &_args);
+                return @ptrCast(_ret orelse return error.OutOfMemory);
             }
             pub const get_touch_since_version = 1;
 
@@ -1416,8 +1407,7 @@ pub const client = struct {
             /// use the seat object anymore.
             pub fn release(_seat: *Seat) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_seat);
-                _proxy.marshal(3, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(3, null, 0, .{ .destroy = true }, null);
             }
             pub const release_since_version = 5;
             pub inline fn destroy(_seat: *Seat) void {
@@ -1710,7 +1700,7 @@ pub const client = struct {
                     .{ .i = _hotspot_x },
                     .{ .i = _hotspot_y },
                 };
-                _proxy.marshal(0, &_args);
+                _ = _proxy.marshal(0, null, 0, .{}, &_args);
             }
             pub const set_cursor_since_version = 1;
 
@@ -1721,8 +1711,7 @@ pub const client = struct {
             /// wl_pointer_destroy() after using this request.
             pub fn release(_pointer: *Pointer) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_pointer);
-                _proxy.marshal(1, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(1, null, 0, .{ .destroy = true }, null);
             }
             pub const release_since_version = 3;
             pub inline fn destroy(_pointer: *Pointer) void {
@@ -1895,8 +1884,7 @@ pub const client = struct {
             }
             pub fn release(_keyboard: *Keyboard) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_keyboard);
-                _proxy.marshal(0, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(0, null, 0, .{ .destroy = true }, null);
             }
             pub const release_since_version = 3;
             pub inline fn destroy(_keyboard: *Keyboard) void {
@@ -1997,8 +1985,7 @@ pub const client = struct {
             }
             pub fn release(_touch: *Touch) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_touch);
-                _proxy.marshal(0, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(0, null, 0, .{ .destroy = true }, null);
             }
             pub const release_since_version = 3;
             pub inline fn destroy(_touch: *Touch) void {
@@ -2203,8 +2190,7 @@ pub const client = struct {
             /// use the output object anymore.
             pub fn release(_output: *Output) void {
                 const _proxy: *client.wl.Proxy = @ptrCast(_output);
-                _proxy.marshal(0, null);
-                _proxy.destroy();
+                _ = _proxy.marshal(0, null, 0, .{ .destroy = true }, null);
             }
             pub const release_since_version = 3;
             pub inline fn destroy(_output: *Output) void {
@@ -7388,20 +7374,7 @@ const ffi = struct {
         extern fn wl_proxy_get_id(proxy: *wl.Proxy) u32;
         extern fn wl_proxy_get_user_data(proxy: *wl.Proxy) ?*anyopaque;
         extern fn wl_proxy_get_version(proxy: *wl.Proxy) u32;
-        extern fn wl_proxy_marshal_array_constructor_versioned(
-            proxy: *wl.Proxy,
-            opcode: u32,
-            args: [*]Argument,
-            interface: *const Interface,
-            version: u32,
-        ) ?*wl.Proxy;
-        extern fn wl_proxy_marshal_array_constructor(
-            proxy: *wl.Proxy,
-            opcode: u32,
-            args: [*]Argument,
-            interface: *const Interface,
-        ) ?*wl.Proxy;
-        extern fn wl_proxy_marshal_array(proxy: *wl.Proxy, opcode: u32, args: ?[*]Argument) void;
+        extern fn wl_proxy_marshal_array_flags(proxy: *wl.Proxy, opcode: u32, interface: ?*const Interface, version: u32, flags: u32, args: ?[*]Argument) ?*wl.Proxy;
         extern fn wl_proxy_set_queue(proxy: *wl.Proxy, queue: *wl.EventQueue) void;
     };
 

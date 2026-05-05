@@ -404,17 +404,13 @@ const Protocol = struct {
         for (interfaces.values()) |interface| {
             assert(!Interface.version_locked(interface.name));
             for (interface.requests) |message| {
-                if (message.kind == .constructor) {
-                    if (message.kind.constructor) |child_interface_name| {
-                        try non_globals.put(child_interface_name, {});
-                    }
+                if (message.constructor == .interface) {
+                    try non_globals.put(message.constructor.interface, {});
                 }
             }
             for (interface.events) |message| {
-                if (message.kind == .constructor) {
-                    if (message.kind.constructor) |child_interface_name| {
-                        try non_globals.put(child_interface_name, {});
-                    }
+                if (message.constructor == .interface) {
+                    try non_globals.put(message.constructor.interface, {});
                 }
             }
         }
@@ -447,20 +443,19 @@ const Protocol = struct {
     ) error{ OutOfMemory, InvalidInterface }!void {
         for ([_][]const Message{ parent.requests, parent.events }) |messages| {
             for (messages) |message| {
-                if (message.kind == .constructor) {
-                    if (message.kind.constructor) |child_name| {
-                        if (Interface.version_locked(child_name)) continue;
+                if (message.constructor == .interface) {
+                    const child_name = message.constructor.interface;
+                    if (Interface.version_locked(child_name)) continue;
 
-                        const child = interfaces.get(child_name) orelse {
-                            log.err("interface '{s}' constructed by message '{s}' not defined in the protocol and not wl_callback or wl_buffer", .{
-                                child_name,
-                                message.name,
-                            });
-                            return error.InvalidInterface;
-                        };
-                        try children.put(gpa, child_name, child);
-                        try find_children(gpa, child, interfaces, children);
-                    }
+                    const child = interfaces.get(child_name) orelse {
+                        log.err("interface '{s}' constructed by message '{s}' not defined in the protocol and not wl_callback or wl_buffer", .{
+                            child_name,
+                            message.name,
+                        });
+                        return error.InvalidInterface;
+                    };
+                    try children.put(gpa, child_name, child);
+                    try find_children(gpa, child, interfaces, children);
                 }
             }
         }
@@ -898,11 +893,15 @@ const Message = struct {
     description: ?[]const u8,
     since: u32,
     args: []const Arg,
-    kind: union(enum) {
-        normal: void,
-        constructor: ?[]const u8,
-        destructor: void,
+    constructor: union(enum) {
+        /// No new_id argument
+        none,
+        /// Interface attribute of the new_id argument
+        interface: []const u8,
+        /// Has a new_id argument without an interface attribute, e.g. wl_registry.bind
+        generic,
     },
+    destructor: bool,
 
     fn parse(gpa: mem.Allocator, arena: mem.Allocator, parser: *xml.Parser) !Message {
         var name: ?[]const u8 = null;
@@ -941,12 +940,16 @@ const Message = struct {
                     .description = description,
                     .since = since orelse 1,
                     .args = try arena.dupe(Arg, args.items),
-                    .kind = blk: {
-                        if (destructor) break :blk .destructor;
-                        for (args.items) |arg|
-                            if (arg.kind == .new_id) break :blk .{ .constructor = arg.kind.new_id };
-                        break :blk .normal;
-                    },
+                    .constructor = for (args.items) |arg| {
+                        if (arg.kind == .new_id) {
+                            if (arg.kind.new_id) |iface| {
+                                break .{ .interface = iface };
+                            } else {
+                                break .generic;
+                            }
+                        }
+                    } else .none,
+                    .destructor = destructor,
                 };
             },
             else => {},
@@ -999,7 +1002,7 @@ const Message = struct {
 
         try writer.writeAll("pub fn ");
         if (side == .server) {
-            if (message.kind == .destructor) {
+            if (message.destructor) {
                 try writer.print("destroySend{f}", .{titleCase(message.name)});
             } else {
                 try writer.print("send{f}", .{titleCase(message.name)});
@@ -1028,20 +1031,21 @@ const Message = struct {
                 try arg.emitType(side, writer);
             }
         }
-        if (side == .server or message.kind != .constructor) {
+        if (side == .server) {
             try writer.writeAll(") void {");
-        } else if (message.kind.constructor) |new_iface| {
-            try writer.writeAll(") !*");
-            try printAbsolute(side, writer, new_iface);
-            try writer.writeByte('{');
-        } else {
-            try writer.writeAll(") !*T {");
+        } else switch (message.constructor) {
+            .none => try writer.writeAll(") void {"),
+            .interface => |new_iface| {
+                try writer.writeAll(") !*");
+                try printAbsolute(side, writer, new_iface);
+                try writer.writeByte('{');
+            },
+            .generic => try writer.writeAll(") !*T {"),
         }
         if (side == .server) {
             try writer.writeAll("const _resource: *server.wl.Resource = @ptrCast(_");
         } else {
-            // wl_registry.bind for example needs special handling
-            if (message.kind == .constructor and message.kind.constructor == null) {
+            if (message.constructor == .generic) {
                 try writer.writeAll("const version_to_construct = @min(T.generated_version, _version);");
             }
             try writer.writeAll("const _proxy: *client.wl.Proxy = @ptrCast(_");
@@ -1098,24 +1102,31 @@ const Message = struct {
         const args = if (message.args.len > 0) "&_args" else "null";
         if (side == .server) {
             try writer.print("_resource.postEvent({}, {s});", .{ opcode, args });
-            if (message.kind == .destructor) try writer.writeAll("_resource.destroy();");
-        } else switch (message.kind) {
-            .normal, .destructor => {
-                try writer.print("_proxy.marshal({}, {s});", .{ opcode, args });
-                if (message.kind == .destructor) try writer.writeAll("_proxy.destroy();");
+            if (message.destructor) try writer.writeAll("_resource.destroy();");
+        } else switch (message.constructor) {
+            .none => {
+                try writer.print("_ = _proxy.marshal({}, null, 0, {s}, {s});", .{
+                    opcode,
+                    if (message.destructor) ".{ .destroy = true }" else ".{}",
+                    args,
+                });
             },
-            .constructor => |new_iface| {
-                if (new_iface) |i| {
-                    try writer.print("return @ptrCast(try _proxy.marshalConstructor({}, &_args, ", .{opcode});
-                    try printAbsolute(side, writer, i);
-                    try writer.writeAll(".interface));");
-                } else {
-                    try writer.print(
-                        \\return @ptrCast(try _proxy.marshalConstructorVersioned({[opcode]}, &_args, T.interface, version_to_construct));
-                    , .{
-                        .opcode = opcode,
-                    });
-                }
+            .interface => |i| {
+                try writer.print("const _ret = _proxy.marshal({},", .{opcode});
+                try printAbsolute(side, writer, i);
+                try writer.print(".interface, _proxy.getVersion(), {s}, {s});", .{
+                    if (message.destructor) ".{ .destroy = true }" else ".{}",
+                    args,
+                });
+                try writer.writeAll("return @ptrCast(_ret orelse return error.OutOfMemory);");
+            },
+            .generic => {
+                try writer.print("const _ret = _proxy.marshal({}, T.interface, version_to_construct, {s}, {s});", .{
+                    opcode,
+                    if (message.destructor) ".{ .destroy = true }" else ".{}",
+                    args,
+                });
+                try writer.writeAll("return @ptrCast(_ret orelse return error.OutOfMemory);");
             },
         }
         try writer.writeAll("}\n");

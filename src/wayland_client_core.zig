@@ -15,29 +15,13 @@ pub const Proxy = opaque {
         ffi.client.wl_proxy_destroy(proxy);
     }
 
-    pub inline fn marshal(proxy: *Proxy, opcode: u32, args: ?[*]Argument) void {
-        ffi.client.wl_proxy_marshal_array(proxy, opcode, args);
-    }
+    pub const MarshalFlags = packed struct(u32) {
+        destroy: bool = false,
+        _: u31 = 0,
+    };
 
-    pub inline fn marshalConstructor(
-        proxy: *Proxy,
-        opcode: u32,
-        args: [*]Argument,
-        interface: *const Interface,
-    ) error{OutOfMemory}!*Proxy {
-        return ffi.client.wl_proxy_marshal_array_constructor(proxy, opcode, args, interface) orelse
-            error.OutOfMemory;
-    }
-
-    pub inline fn marshalConstructorVersioned(
-        proxy: *Proxy,
-        opcode: u32,
-        args: [*]Argument,
-        interface: *const Interface,
-        version: u32,
-    ) error{OutOfMemory}!*Proxy {
-        return ffi.client.wl_proxy_marshal_array_constructor_versioned(proxy, opcode, args, interface, version) orelse
-            error.OutOfMemory;
+    pub inline fn marshal(proxy: *wl.Proxy, opcode: u32, interface: ?*const Interface, version: u32, flags: MarshalFlags, args: ?[*]Argument) ?*Proxy {
+        return ffi.client.wl_proxy_marshal_array_flags(proxy, opcode, interface, version, @bitCast(flags), args);
     }
 
     pub const DispatcherFn = fn (
