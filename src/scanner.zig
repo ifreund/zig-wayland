@@ -281,7 +281,7 @@ fn parseDescription(gpa: mem.Allocator, parser: *xml.Parser) !?[]const u8 {
     defer description.deinit(gpa);
 
     while (parser.next()) |ev| switch (ev) {
-        .attribute => continue,
+        .attribute, .comment => continue,
         .character_data => |data| try description.appendSlice(gpa, data),
         .close_tag => |tag| if (mem.eql(u8, tag, "description")) {
             // A description may have only a summary attribute and no body.
