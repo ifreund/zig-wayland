@@ -946,7 +946,7 @@ pub const client = struct {
                 const _proxy: *client.wl.Proxy = @ptrCast(_surface);
                 var _args = [_]common.Argument{
                     .{ .i = switch (@typeInfo(common.wl.output.Transform)) {
-                        .@"enum" => @as(i32, @intCast(@intFromEnum(_transform))),
+                        .@"enum" => @as(i32, @intCast(@backingInt(_transform))),
                         .@"struct" => @bitCast(_transform),
                         else => unreachable,
                     } },
@@ -1223,7 +1223,7 @@ pub const client = struct {
                     .{ .i = _height },
                     .{ .i = _stride },
                     .{ .u = switch (@typeInfo(common.wl.shm.Format)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_format))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_format))),
                         .@"struct" => @bitCast(_format),
                         else => unreachable,
                     } },
@@ -2981,7 +2981,7 @@ pub const client = struct {
                 var _args = [_]common.Argument{
                     .{ .o = @ptrCast(_image_description) },
                     .{ .u = switch (@typeInfo(common.wp.color_manager_v1.RenderIntent)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_render_intent))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_render_intent))),
                         .@"struct" => @bitCast(_render_intent),
                         else => unreachable,
                     } },
@@ -3366,7 +3366,7 @@ pub const client = struct {
                 const _proxy: *client.wl.Proxy = @ptrCast(_image_description_creator_params_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(common.wp.color_manager_v1.TransferFunction)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_tf))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_tf))),
                         .@"struct" => @bitCast(_tf),
                         else => unreachable,
                     } },
@@ -3416,7 +3416,7 @@ pub const client = struct {
                 const _proxy: *client.wl.Proxy = @ptrCast(_image_description_creator_params_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(common.wp.color_manager_v1.Primaries)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_primaries))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_primaries))),
                         .@"struct" => @bitCast(_primaries),
                         else => unreachable,
                     } },
@@ -3917,7 +3917,7 @@ pub const server = struct {
                 // Don't use wayland-0
                 var i: u32 = 1;
                 while (i <= 32) : (i += 1) {
-                    const name = std.fmt.bufPrintZ(buf, "wayland-{}", .{i}) catch unreachable;
+                    const name = std.fmt.bufPrintSentinel(buf, "wayland-{}", .{i}, 0) catch unreachable;
                     _server.addSocket(name.ptr) catch continue;
                     return name;
                 }
@@ -4569,7 +4569,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_display)).getUserData();
             }
             pub inline fn postError(_display: *Display, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_display)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_display)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const sync_since_version = 1;
@@ -5088,7 +5088,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_surface)).getUserData();
             }
             pub inline fn postError(_surface: *Surface, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_surface)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_surface)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const destroy_since_version = 1;
@@ -5613,7 +5613,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_shm)).getUserData();
             }
             pub inline fn postError(_shm: *Shm, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_shm)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_shm)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const create_pool_since_version = 1;
@@ -5658,7 +5658,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_shm);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Format)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_format))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_format))),
                         .@"struct" => @bitCast(_format),
                         else => unreachable,
                     } },
@@ -5811,7 +5811,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_seat)).getUserData();
             }
             pub inline fn postError(_seat: *Seat, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_seat)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_seat)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const get_pointer_since_version = 1;
@@ -5910,7 +5910,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_seat);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Capability)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_capabilities))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_capabilities))),
                         .@"struct" => @bitCast(_capabilities),
                         else => unreachable,
                     } },
@@ -5989,7 +5989,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_pointer)).getUserData();
             }
             pub inline fn postError(_pointer: *Pointer, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_pointer)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_pointer)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const set_cursor_since_version = 1;
@@ -6132,7 +6132,7 @@ pub const server = struct {
                     .{ .u = _time },
                     .{ .u = _button },
                     .{ .u = switch (@typeInfo(ButtonState)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_state))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_state))),
                         .@"struct" => @bitCast(_state),
                         else => unreachable,
                     } },
@@ -6162,7 +6162,7 @@ pub const server = struct {
                 var _args = [_]common.Argument{
                     .{ .u = _time },
                     .{ .u = switch (@typeInfo(Axis)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_axis))),
                         .@"struct" => @bitCast(_axis),
                         else => unreachable,
                     } },
@@ -6241,7 +6241,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_pointer);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(AxisSource)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis_source))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_axis_source))),
                         .@"struct" => @bitCast(_axis_source),
                         else => unreachable,
                     } },
@@ -6269,7 +6269,7 @@ pub const server = struct {
                 var _args = [_]common.Argument{
                     .{ .u = _time },
                     .{ .u = switch (@typeInfo(Axis)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_axis))),
                         .@"struct" => @bitCast(_axis),
                         else => unreachable,
                     } },
@@ -6312,7 +6312,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_pointer);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Axis)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_axis))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_axis))),
                         .@"struct" => @bitCast(_axis),
                         else => unreachable,
                     } },
@@ -6403,7 +6403,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_keyboard);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(KeymapFormat)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_format))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_format))),
                         .@"struct" => @bitCast(_format),
                         else => unreachable,
                     } },
@@ -6488,7 +6488,7 @@ pub const server = struct {
                     .{ .u = _time },
                     .{ .u = _key },
                     .{ .u = switch (@typeInfo(KeyState)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_state))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_state))),
                         .@"struct" => @bitCast(_state),
                         else => unreachable,
                     } },
@@ -6780,14 +6780,14 @@ pub const server = struct {
                     .{ .i = _physical_width },
                     .{ .i = _physical_height },
                     .{ .i = switch (@typeInfo(Subpixel)) {
-                        .@"enum" => @as(i32, @intCast(@intFromEnum(_subpixel))),
+                        .@"enum" => @as(i32, @intCast(@backingInt(_subpixel))),
                         .@"struct" => @bitCast(_subpixel),
                         else => unreachable,
                     } },
                     .{ .s = _make },
                     .{ .s = _model },
                     .{ .i = switch (@typeInfo(Transform)) {
-                        .@"enum" => @as(i32, @intCast(@intFromEnum(_transform))),
+                        .@"enum" => @as(i32, @intCast(@backingInt(_transform))),
                         .@"struct" => @bitCast(_transform),
                         else => unreachable,
                     } },
@@ -6833,7 +6833,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_output);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Mode)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_flags))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_flags))),
                         .@"struct" => @bitCast(_flags),
                         else => unreachable,
                     } },
@@ -7055,7 +7055,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_color_manager_v1)).getUserData();
             }
             pub inline fn postError(_color_manager_v1: *ColorManagerV1, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_color_manager_v1)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_color_manager_v1)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const destroy_since_version = 1;
@@ -7213,7 +7213,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_color_manager_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(RenderIntent)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_render_intent))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_render_intent))),
                         .@"struct" => @bitCast(_render_intent),
                         else => unreachable,
                     } },
@@ -7231,7 +7231,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_color_manager_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Feature)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_feature))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_feature))),
                         .@"struct" => @bitCast(_feature),
                         else => unreachable,
                     } },
@@ -7250,7 +7250,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_color_manager_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(TransferFunction)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_tf))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_tf))),
                         .@"struct" => @bitCast(_tf),
                         else => unreachable,
                     } },
@@ -7269,7 +7269,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_color_manager_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Primaries)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_primaries))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_primaries))),
                         .@"struct" => @bitCast(_primaries),
                         else => unreachable,
                     } },
@@ -7456,7 +7456,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_image_description_v1)).getUserData();
             }
             pub inline fn postError(_image_description_v1: *ImageDescriptionV1, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_image_description_v1)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_image_description_v1)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const destroy_since_version = 1;
@@ -7515,7 +7515,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_image_description_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(Cause)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_cause))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_cause))),
                         .@"struct" => @bitCast(_cause),
                         else => unreachable,
                     } },
@@ -7705,7 +7705,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_image_description_info_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(common.wp.color_manager_v1.Primaries)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_primaries))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_primaries))),
                         .@"struct" => @bitCast(_primaries),
                         else => unreachable,
                     } },
@@ -7736,7 +7736,7 @@ pub const server = struct {
                 const _resource: *server.wl.Resource = @ptrCast(_image_description_info_v1);
                 var _args = [_]common.Argument{
                     .{ .u = switch (@typeInfo(common.wp.color_manager_v1.TransferFunction)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_tf))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_tf))),
                         .@"struct" => @bitCast(_tf),
                         else => unreachable,
                     } },
@@ -7877,7 +7877,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_color_management_surface_v1)).getUserData();
             }
             pub inline fn postError(_color_management_surface_v1: *ColorManagementSurfaceV1, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_color_management_surface_v1)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_color_management_surface_v1)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const destroy_since_version = 1;
@@ -8000,7 +8000,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_color_management_surface_feedback_v1)).getUserData();
             }
             pub inline fn postError(_color_management_surface_feedback_v1: *ColorManagementSurfaceFeedbackV1, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_color_management_surface_feedback_v1)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_color_management_surface_feedback_v1)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const destroy_since_version = 1;
@@ -8166,7 +8166,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_image_description_creator_icc_v1)).getUserData();
             }
             pub inline fn postError(_image_description_creator_icc_v1: *ImageDescriptionCreatorIccV1, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_image_description_creator_icc_v1)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_image_description_creator_icc_v1)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const create_since_version = 1;
@@ -8337,7 +8337,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_image_description_creator_params_v1)).getUserData();
             }
             pub inline fn postError(_image_description_creator_params_v1: *ImageDescriptionCreatorParamsV1, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_image_description_creator_params_v1)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_image_description_creator_params_v1)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const create_since_version = 1;
@@ -8699,7 +8699,7 @@ pub const server = struct {
                 return @as(*server.wl.Resource, @ptrCast(_presentation)).getUserData();
             }
             pub inline fn postError(_presentation: *Presentation, _err: Error, _message: [*:0]const u8) void {
-                return @as(*server.wl.Resource, @ptrCast(_presentation)).postError(@intCast(@intFromEnum(_err)), _message);
+                return @as(*server.wl.Resource, @ptrCast(_presentation)).postError(@intCast(@backingInt(_err)), _message);
             }
             pub const Request = union(enum) {
                 pub const destroy_since_version = 1;
@@ -8916,7 +8916,7 @@ pub const server = struct {
                     .{ .u = _seq_hi },
                     .{ .u = _seq_lo },
                     .{ .u = switch (@typeInfo(Kind)) {
-                        .@"enum" => @as(u32, @intCast(@intFromEnum(_flags))),
+                        .@"enum" => @as(u32, @intCast(@backingInt(_flags))),
                         .@"struct" => @bitCast(_flags),
                         else => unreachable,
                     } },
@@ -9158,19 +9158,19 @@ const common = struct {
         _,
 
         pub fn toInt(f: Fixed) i24 {
-            return @truncate(@intFromEnum(f) >> 8);
+            return @truncate(@backingInt(f) >> 8);
         }
 
         pub fn fromInt(i: i24) Fixed {
-            return @enumFromInt(@as(i32, i) << 8);
+            return @fromBackingInt(@intCast(@as(i32, i) << 8));
         }
 
         pub fn toDouble(f: Fixed) f64 {
-            return @as(f64, @floatFromInt(@intFromEnum(f))) / 256;
+            return @as(f64, @floatFromInt(@backingInt(f))) / 256;
         }
 
         pub fn fromDouble(d: f64) Fixed {
-            return @enumFromInt(@as(i32, @intFromFloat(d * 256)));
+            return @fromBackingInt(@intCast(@as(i32, @intFromFloat(d * 256))));
         }
     };
 
@@ -9192,22 +9192,27 @@ const common = struct {
             fn dispatcher(
                 implementation: ?*const anyopaque,
                 object: if (client_side) *client.wl.Proxy else *server.wl.Resource,
-                opcode: u32,
+                runtime_opcode: u32,
                 _: *const Message,
                 args: [*]Argument,
             ) callconv(.c) c_int {
-                inline for (@typeInfo(Payload).@"union".fields, 0..) |payload_field, payload_num| {
-                    if (payload_num == opcode) {
-                        var payload_data: payload_field.type = undefined;
-                        if (payload_field.type != void) {
-                            inline for (@typeInfo(payload_field.type).@"struct".fields, 0..) |f, i| {
-                                switch (@typeInfo(f.type)) {
+                const payload_info = @typeInfo(Payload).@"union";
+                switch (runtime_opcode) {
+                    inline 0...(payload_info.field_types.len - 1) => |opcode| {
+                        const op_type = payload_info.field_types[opcode];
+                        const op_name = payload_info.field_names[opcode];
+
+                        var op_data: op_type = undefined;
+                        if (op_type != void) {
+                            const op_info = @typeInfo(op_type).@"struct";
+                            inline for (op_info.field_types, op_info.field_names, 0..) |T, name, i| {
+                                switch (@typeInfo(T)) {
                                     // signed/unsigned ints, fds, new_ids, bitfield enums
-                                    .int, .@"struct" => @field(payload_data, f.name) = @as(f.type, @bitCast(args[i].u)),
+                                    .int, .@"struct" => @field(op_data, name) = @as(T, @bitCast(args[i].u)),
                                     // objects, strings, arrays
-                                    .pointer, .optional => @field(payload_data, f.name) = @as(f.type, @ptrFromInt(@intFromPtr(args[i].o))),
+                                    .pointer, .optional => @field(op_data, name) = @as(T, @ptrCast(@alignCast(args[i].o))),
                                     // non-bitfield enums
-                                    .@"enum" => @field(payload_data, f.name) = @as(f.type, @enumFromInt(args[i].i)),
+                                    .@"enum" => @field(op_data, name) = @as(T, @fromBackingInt(@intCast(args[i].i))),
                                     else => unreachable,
                                 }
                             }
@@ -9216,14 +9221,14 @@ const common = struct {
                         const HandlerFn = fn (*Obj, Payload, Data) void;
                         @as(*const HandlerFn, @ptrCast(@alignCast(implementation)))(
                             @as(*Obj, @ptrCast(object)),
-                            @unionInit(Payload, payload_field.name, payload_data),
-                            @as(Data, @ptrFromInt(@intFromPtr(object.getUserData()))),
+                            @unionInit(Payload, op_name, op_data),
+                            @as(Data, @ptrCast(@alignCast(object.getUserData()))),
                         );
 
                         return 0;
-                    }
+                    },
+                    else => unreachable,
                 }
-                unreachable;
             }
         };
     }

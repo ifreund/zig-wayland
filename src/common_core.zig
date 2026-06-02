@@ -218,19 +218,19 @@ const Fixed = enum(i32) {
     _,
 
     pub fn toInt(f: Fixed) i24 {
-        return @truncate(@intFromEnum(f) >> 8);
+        return @truncate(@backingInt(f) >> 8);
     }
 
     pub fn fromInt(i: i24) Fixed {
-        return @enumFromInt(@as(i32, i) << 8);
+        return @fromBackingInt(@as(i32, i) << 8);
     }
 
     pub fn toDouble(f: Fixed) f64 {
-        return @as(f64, @floatFromInt(@intFromEnum(f))) / 256;
+        return @as(f64, @floatFromInt(@backingInt(f))) / 256;
     }
 
     pub fn fromDouble(d: f64) Fixed {
-        return @enumFromInt(@as(i32, @intFromFloat(d * 256)));
+        return @fromBackingInt(@intFromFloat(d * 256));
     }
 };
 
@@ -252,22 +252,27 @@ fn Dispatcher(comptime Obj: type, comptime Data: type) type {
         fn dispatcher(
             implementation: ?*const anyopaque,
             object: if (client_side) *client.wl.Proxy else *server.wl.Resource,
-            opcode: u32,
+            runtime_opcode: u32,
             _: *const Message,
             args: [*]Argument,
         ) callconv(.c) c_int {
-            inline for (@typeInfo(Payload).@"union".fields, 0..) |payload_field, payload_num| {
-                if (payload_num == opcode) {
-                    var payload_data: payload_field.type = undefined;
-                    if (payload_field.type != void) {
-                        inline for (@typeInfo(payload_field.type).@"struct".fields, 0..) |f, i| {
-                            switch (@typeInfo(f.type)) {
+            const payload_info = @typeInfo(Payload).@"union";
+            switch (runtime_opcode) {
+                inline 0...(payload_info.field_types.len - 1) => |opcode| {
+                    const op_type = payload_info.field_types[opcode];
+                    const op_name = payload_info.field_names[opcode];
+
+                    var op_data: op_type = undefined;
+                    if (op_type != void) {
+                        const op_info = @typeInfo(op_type).@"struct";
+                        inline for (op_info.field_types, op_info.field_names, 0..) |T, name, i| {
+                            switch (@typeInfo(T)) {
                                 // signed/unsigned ints, fds, new_ids, bitfield enums
-                                .int, .@"struct" => @field(payload_data, f.name) = @as(f.type, @bitCast(args[i].u)),
+                                .int, .@"struct" => @field(op_data, name) = @as(T, @bitCast(args[i].u)),
                                 // objects, strings, arrays
-                                .pointer, .optional => @field(payload_data, f.name) = @as(f.type, @ptrFromInt(@intFromPtr(args[i].o))),
+                                .pointer, .optional => @field(op_data, name) = @as(T, @ptrCast(@alignCast(args[i].o))),
                                 // non-bitfield enums
-                                .@"enum" => @field(payload_data, f.name) = @as(f.type, @enumFromInt(args[i].i)),
+                                .@"enum" => @field(op_data, name) = @as(T, @fromBackingInt(@intCast(args[i].i))),
                                 else => unreachable,
                             }
                         }
@@ -276,14 +281,14 @@ fn Dispatcher(comptime Obj: type, comptime Data: type) type {
                     const HandlerFn = fn (*Obj, Payload, Data) void;
                     @as(*const HandlerFn, @ptrCast(@alignCast(implementation)))(
                         @as(*Obj, @ptrCast(object)),
-                        @unionInit(Payload, payload_field.name, payload_data),
-                        @as(Data, @ptrFromInt(@intFromPtr(object.getUserData()))),
+                        @unionInit(Payload, op_name, op_data),
+                        @as(Data, @ptrCast(@alignCast(object.getUserData()))),
                     );
 
                     return 0;
-                }
+                },
+                else => unreachable,
             }
-            unreachable;
         }
     };
 }

@@ -36,7 +36,7 @@ pub const Server = opaque {
         // Don't use wayland-0
         var i: u32 = 1;
         while (i <= 32) : (i += 1) {
-            const name = std.fmt.bufPrintZ(buf, "wayland-{}", .{i}) catch unreachable;
+            const name = std.fmt.bufPrintSentinel(buf, "wayland-{}", .{i}, 0) catch unreachable;
             _server.addSocket(name.ptr) catch continue;
             return name;
         }

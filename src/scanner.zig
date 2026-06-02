@@ -65,7 +65,7 @@ pub fn main(init: std.process.Init) !void {
     const generated = try buffer.toOwnedSliceSentinel(0);
     defer gpa.free(generated);
 
-    var tree = try std.zig.Ast.parse(gpa, generated, .zig);
+    var tree = try std.zig.Ast.parse(gpa, generated, .{ .mode = .zig });
     defer tree.deinit(gpa);
 
     if (tree.errors.len != 0) {
@@ -195,10 +195,7 @@ const Scanner = struct {
         return Scanner{
             .io = io,
             .gpa = gpa,
-            .remaining_targets = .{
-                .items = try gpa.dupe(Target, targets),
-                .capacity = targets.len,
-            },
+            .remaining_targets = .fromOwnedSlice(try gpa.dupe(Target, targets)),
         };
     }
 
