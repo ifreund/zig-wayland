@@ -36,7 +36,8 @@ pub fn main(init: std.process.Init) !void {
     var ffi_import: ?[]const u8 = null;
     var out_path_opt: ?[]const u8 = null;
 
-    var args = init.minimal.args.iterate();
+    var args = try init.minimal.args.iterateAllocator(gpa);
+    defer args.deinit();
     while (args.next()) |arg| {
         if (mem.eql(u8, arg, "-i")) {
             const protocol_path = args.next() orelse return error.MissingArg;
